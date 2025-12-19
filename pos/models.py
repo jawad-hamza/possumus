@@ -18,6 +18,13 @@ class Supplier(models.Model):
 # Product model to represent items in the inventory ##################################################
 
 class Product(models.Model):
+    supplier = models.ForeignKey(
+    Supplier,
+    on_delete=models.SET_NULL,
+    null=True,
+    blank=True,
+    related_name="products"
+)
     name = models.CharField(max_length=100)
     sku = models.CharField(max_length=50, unique=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)

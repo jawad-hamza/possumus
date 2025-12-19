@@ -5,8 +5,8 @@ from .models import Product,Sale,SaleItem, Customer, Supplier
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ("name", "sku", "price", "stock", "is_active")
-    list_filter = ("is_active",)
+    list_display = ("name", "sku", "supplier", "price", "stock", "is_active")
+    list_filter = ("supplier", "is_active")
     search_fields = ("name", "sku")
     
 @admin.register(Sale)
