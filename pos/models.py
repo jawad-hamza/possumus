@@ -69,6 +69,18 @@ class SaleItem(models.Model):
         super().save(*args, **kwargs)
 
         self.sale.update_total()
+        
+    def delete(self, *args, **kwargs):
+        print("DELETE METHOD CALLED ✅")
+
+        self.product.stock += self.quantity
+        self.product.save()
+
+        sale = self.sale
+        super().delete(*args, **kwargs)
+
+        sale.update_total()
+
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
