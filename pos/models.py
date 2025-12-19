@@ -22,10 +22,17 @@ class Sale(models.Model):
         default=0
     )
 
+    def update_total(self):
+        total = 0
+        for item in self.items.all():
+            total += item.price * item.quantity
+
+        self.total_amount = total
+        self.save()
+
     def __str__(self):
         return f"Sale #{self.id}"
 ####################################################################################################
-
 class SaleItem(models.Model):
     sale = models.ForeignKey(
         Sale,
@@ -43,25 +50,29 @@ class SaleItem(models.Model):
     )
 
     def clean(self):
-        # Check stock before saving
-        if self.quantity > self.product.stock:
-            raise ValidationError(
-                f"Not enough stock for {self.product.name}"
-            )
+        # Check stock only when creating
+        if self.pk is None:
+            if self.quantity > self.product.stock:
+                raise ValidationError(
+                    f"Not enough stock for {self.product.name}"
+                )
 
     def save(self, *args, **kwargs):
-        # Run validation
         self.clean()
 
-        # Deduct stock only on first save
-        if self.pk is None:
+        is_new = self.pk is None
+
+        if is_new:
             self.product.stock -= self.quantity
             self.product.save()
 
         super().save(*args, **kwargs)
 
+        self.sale.update_total()
+
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
+
     ######################################################################
     
     
