@@ -4,6 +4,19 @@ from django.core.exceptions import ValidationError
 
 # Create your models here.
 
+## Supplier model to represent product suppliers ##################################################
+
+class Supplier(models.Model):
+    name = models.CharField(max_length=100)
+    phone = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
+# Product model to represent items in the inventory ##################################################
+
 class Product(models.Model):
     name = models.CharField(max_length=100)
     sku = models.CharField(max_length=50, unique=True)
@@ -13,8 +26,26 @@ class Product(models.Model):
 
     def __str__(self):
         return self.name
+##############################################################333   #############################
+class Customer(models.Model):
+    name = models.CharField(max_length=100)
+    phone = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+##################################################################################################
+
    #sale model to track sales transactions ####################################################################### 
 class Sale(models.Model):
+    customer = models.ForeignKey(
+        Customer,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="sales"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     total_amount = models.DecimalField(
         max_digits=10,
@@ -85,6 +116,7 @@ class SaleItem(models.Model):
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
 
-    ######################################################################
+    ##################################################################################################
     
-    
+
+    ##################################################################################################

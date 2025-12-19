@@ -1,0 +1,26 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard</title>
+</head>
+<body>
+
+<h1>POS Dashboard</h1>
+
+<h2>Total Sales</h2>
+<p><strong>{{ total_sales }}</strong></p>
+
+<h2>Low Stock Products (≤ 5)</h2>
+
+<ul>
+    {% for product in low_stock_products %}
+        <li>
+            {{ product.name }} — Stock: {{ product.stock }}
+        </li>
+    {% empty %}
+        <li>No low stock products 🎉</li>
+    {% endfor %}
+</ul>
+
+</body>
+</html>

@@ -1,6 +1,6 @@
 from urllib import request
 from django.contrib import admin
-from .models import Product,Sale,SaleItem
+from .models import Product,Sale,SaleItem, Customer, Supplier
 # Register your models here.
 
 @admin.register(Product)
@@ -11,7 +11,7 @@ class ProductAdmin(admin.ModelAdmin):
     
 @admin.register(Sale)
 class SaleAdmin(admin.ModelAdmin):
-    list_display = ("id", "created_at", "total_amount")
+    list_display = ("id", "customer", "created_at", "total_amount")
     
 @admin.register(SaleItem)
 class SaleItemAdmin(admin.ModelAdmin):
@@ -21,3 +21,16 @@ class SaleItemAdmin(admin.ModelAdmin):
         if "delete_selected" in actions:
             del actions["delete_selected"]
         return actions
+    
+    
+@admin.register(Customer)
+class CustomerAdmin(admin.ModelAdmin):
+    list_display = ("name", "phone", "email", "is_active")
+    search_fields = ("name", "phone")
+    list_filter = ("is_active",)
+    
+@admin.register(Supplier)
+class SupplierAdmin(admin.ModelAdmin):
+    list_display = ("name", "phone", "email", "is_active")
+    search_fields = ("name", "phone")
+    list_filter = ("is_active",)
