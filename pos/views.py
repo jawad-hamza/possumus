@@ -24,39 +24,64 @@ def product_list(request):
         {"products": products}
     )
 
+
 def dashboard(request):
     today = timezone.localdate()
 
-    today_sales = Sale.objects.filter(
+    # 1. Total Sales Today
+    total_sales = Sale.objects.filter(
         created_at__date=today
+    ).aggregate(total=Sum("total_amount"))["total"] or 0
+
+    # 2. Total Bills (transactions) Today
+    total_bills = Sale.objects.filter(created_at__date=today).count()
+
+    # 3. Average Sale Value Today
+    avg_sale = 0
+    if total_bills > 0:
+        avg_sale = total_sales / total_bills
+
+    # 4. Low Stock Count
+    low_stock_products = Product.objects.filter(stock__lte=5, is_active=True)
+    low_stock_count = low_stock_products.count()
+
+    # 5. Top 10 Low Stock Items
+    top_low_stock = low_stock_products.order_by("stock")[:10]
+
+    # 6. Best-Selling Products (all time)
+    best_selling = (
+        SaleItem.objects.values("product__id", "product__name")
+        .annotate(total_qty=Sum("quantity"))
+        .order_by("-total_qty")[:10]
     )
 
-    total_sales_amount = today_sales.aggregate(
-        total=Sum("total_amount")
-    )["total"] or 0
-
-    total_bills = today_sales.count()
-
-    low_stock_count = Product.objects.filter(
-        stock__lte=5,
-        is_active=True
-    ).count()
-
-    customer_count = Customer.objects.filter(
-        is_active=True
-    ).count()
-
-    return render(
-        request,
-        "pos/dashboard.html",
-        {
-            "total_sales_amount": total_sales_amount,
-            "total_bills": total_bills,
-            "low_stock_count": low_stock_count,
-            "customer_count": customer_count,
-        }
+    # 7. Best-Selling Products (this month)
+    month_start = today.replace(day=1)
+    best_selling_month = (
+        SaleItem.objects.filter(sale__created_at__date__gte=month_start)
+        .values("product__id", "product__name")
+        .annotate(total_qty=Sum("quantity"))
+        .order_by("-total_qty")[:10]
     )
 
+    # 8. Top 10 Customers by Spend
+    top_customers = (
+        Sale.objects.values("customer__id", "customer__name")
+        .annotate(total_spent=Sum("total_amount"))
+        .order_by("-total_spent")[:10]
+    )
+
+    context = {
+        "total_sales": total_sales,
+        "total_bills": total_bills,
+        "avg_sale": avg_sale,
+        "low_stock_count": low_stock_count,
+        "top_low_stock": top_low_stock,
+        "best_selling": best_selling,
+        "best_selling_month": best_selling_month,
+        "top_customers": top_customers,
+    }
+    return render(request, "pos/dashboard.html", context)
 
 def safe_decimal(value):
     try:

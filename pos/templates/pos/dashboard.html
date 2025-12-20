@@ -1,70 +1,204 @@
 {% extends "pos/base.html" %}
 {% block title %}Dashboard{% endblock %}
 
+{% block extra_css %}
+<style>
+    .kpi-card {
+        border-left: 5px solid;
+        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
+    }
+    .kpi-icon {
+        font-size: 2.4rem;
+        opacity: 0.8;
+    }
+    .table-section {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    }
+</style>
+{% endblock %}
+
 {% block content %}
-<h3 class="mb-4">Dashboard</h3>
+<h3 class="mb-4">📊 Dashboard Overview</h3>
 
 <div class="row g-3">
 
-    <!-- Total Sales -->
-    <div class="col-md-3">
-        <div class="card shadow-sm border-0">
+    <!-- TOTAL SALES -->
+    <div class="col-md-3 col-sm-6">
+        <div class="card kpi-card border-primary">
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="text-muted">Today Sales</h6>
-                        <h4 class="fw-bold">Rs {{ total_sales_amount }}</h4>
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-cash-stack text-primary kpi-icon"></i>
+                    <div class="ms-3">
+                        <h6 class="text-muted mb-1">Today Sales</h6>
+                        <h3 class="fw-bold">Rs {{ total_sales|floatformat:2 }}</h3>
+                        <small class="text-muted">Revenue generated today</small>
                     </div>
-                    <i class="bi bi-cash-stack fs-2 text-success"></i>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Total Bills -->
-    <div class="col-md-3">
-        <div class="card shadow-sm border-0">
+    <!-- TOTAL BILLS -->
+    <div class="col-md-3 col-sm-6">
+        <div class="card kpi-card border-success">
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="text-muted">Bills Today</h6>
-                        <h4 class="fw-bold">{{ total_bills }}</h4>
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-receipt text-success kpi-icon"></i>
+                    <div class="ms-3">
+                        <h6 class="text-muted mb-1">Today Bills</h6>
+                        <h3 class="fw-bold">{{ total_bills }}</h3>
+                        <small class="text-muted">Transactions completed</small>
                     </div>
-                    <i class="bi bi-receipt fs-2 text-primary"></i>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Low Stock -->
-    <div class="col-md-3">
-        <div class="card shadow-sm border-0">
+    <!-- AVERAGE SALE -->
+    <div class="col-md-3 col-sm-6">
+        <div class="card kpi-card border-warning">
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="text-muted">Low Stock Items</h6>
-                        <h4 class="fw-bold">{{ low_stock_count }}</h4>
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-graph-up text-warning kpi-icon"></i>
+                    <div class="ms-3">
+                        <h6 class="text-muted mb-1">Avg. Sale Value</h6>
+                        <h3 class="fw-bold">Rs {{ avg_sale|floatformat:2 }}</h3>
+                        <small class="text-muted">Avg revenue per bill</small>
                     </div>
-                    <i class="bi bi-exclamation-triangle fs-2 text-warning"></i>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Customers -->
-    <div class="col-md-3">
-        <div class="card shadow-sm border-0">
+    <!-- LOW STOCK -->
+    <div class="col-md-3 col-sm-6">
+        <div class="card kpi-card border-danger">
             <div class="card-body">
-                <div class="d-flex justify-content-between align-items-center">
-                    <div>
-                        <h6 class="text-muted">Active Customers</h6>
-                        <h4 class="fw-bold">{{ customer_count }}</h4>
+                <div class="d-flex align-items-center">
+                    <i class="bi bi-exclamation-circle text-danger kpi-icon"></i>
+                    <div class="ms-3">
+                        <h6 class="text-muted mb-1">Low Stock</h6>
+                        <h3 class="fw-bold">{{ low_stock_count }}</h3>
+                        <small class="text-muted">Products running low</small>
                     </div>
-                    <i class="bi bi-people fs-2 text-info"></i>
                 </div>
             </div>
         </div>
     </div>
 
 </div>
+
+<!-- TABLES SECTION -->
+<div class="row mt-4 g-4">
+
+    <!-- LOW STOCK TABLE -->
+    <div class="col-lg-6 col-md-12">
+        <div class="table-section">
+            <h5 class="fw-bold mb-3">📦 Top 10 Low Stock</h5>
+            <table class="table table-hover table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Product</th>
+                        <th>Stock</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for p in top_low_stock %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ p.name }}</td>
+                        <td>{{ p.stock }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- BEST SELLERS TABLE -->
+    <div class="col-lg-6 col-md-12">
+        <div class="table-section">
+            <h5 class="fw-bold mb-3">🔥 Top Selling Products</h5>
+            <table class="table table-hover table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Product</th>
+                        <th>Qty Sold</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in best_selling %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ item.product__name }}</td>
+                        <td>{{ item.total_qty }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<!-- SECOND ROW OF TABLES (optional) -->
+<div class="row mt-4 g-4">
+
+    <!-- BEST SELLERS THIS MONTH -->
+    <div class="col-lg-6 col-md-12">
+        <div class="table-section">
+            <h5 class="fw-bold mb-3">📅 Top Selling This Month</h5>
+            <table class="table table-hover table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Product</th>
+                        <th>Qty Sold</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in best_selling_month %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ item.product__name }}</td>
+                        <td>{{ item.total_qty }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- TOP CUSTOMERS -->
+    <div class="col-lg-6 col-md-12">
+        <div class="table-section">
+            <h5 class="fw-bold mb-3">👥 Top Customers</h5>
+            <table class="table table-hover table-sm">
+                <thead class="table-light">
+                    <tr>
+                        <th>#</th>
+                        <th>Customer</th>
+                        <th>Spent</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for c in top_customers %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ c.customer__name|default:"Walk-in" }}</td>
+                        <td>{{ c.total_spent|floatformat:2 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
 {% endblock %}
