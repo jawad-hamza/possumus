@@ -738,50 +738,77 @@ def products_by_category(request, category_id):
     )
     
 ##########################################################################################
+ 
 
 def daily_sales_report(request):
     from django.db.models import Q, F, Sum, Value, DecimalField
     from django.db.models.functions import Coalesce
+    from django.utils import timezone
     import datetime
 
-    start_date = request.GET.get("start_date")
-    end_date = request.GET.get("end_date")
     search = request.GET.get("search", "")
-    today = datetime.date.today()
+    # Get current date in Pakistan timezone
+    today = timezone.localtime(timezone.now()).date()
     yesterday = today - datetime.timedelta(days=1)
-
-    # default to today if no date provided
-    if not start_date and request.GET.get("date"):
-        start_date = end_date = request.GET.get("date")
-
-    if not start_date:
-        start_date = today
-    if not end_date:
+    
+    # Handle range parameter from Quick Presets buttons
+    range_param = request.GET.get("range")
+    
+    if range_param == "today":
+        start_date = end_date = today
+    elif range_param == "yesterday":
+        start_date = end_date = yesterday
+    elif range_param == "last_7":
+        start_date = today - datetime.timedelta(days=6)
         end_date = today
-    
-    # Convert strings to date objects if needed
-    if isinstance(start_date, str):
-        try:
-            start_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
-        except ValueError:
+    else:
+        # Handle manual date inputs
+        start_date = request.GET.get("start_date")
+        end_date = request.GET.get("end_date")
+        
+        # Handle single date parameter
+        if not start_date and not end_date and request.GET.get("date"):
+            start_date = end_date = request.GET.get("date")
+        
+        # Default to today if no dates provided
+        if not start_date:
+            start_date = today
+        if not end_date:
+            end_date = today
+        
+        # Convert strings to date objects if needed
+        if isinstance(start_date, str):
             try:
-                start_date = datetime.datetime.strptime(start_date, "%m/%d/%Y").date()
+                start_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
             except ValueError:
-                start_date = today
-    
-    if isinstance(end_date, str):
-        try:
-            end_date = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
-        except ValueError:
+                try:
+                    start_date = datetime.datetime.strptime(start_date, "%m/%d/%Y").date()
+                except ValueError:
+                    start_date = today
+        
+        if isinstance(end_date, str):
             try:
-                end_date = datetime.datetime.strptime(end_date, "%m/%d/%Y").date()
+                end_date = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
             except ValueError:
-                end_date = today
+                try:
+                    end_date = datetime.datetime.strptime(end_date, "%m/%d/%Y").date()
+                except ValueError:
+                    end_date = today
+
+    # Convert dates to timezone-aware datetime objects for proper filtering
+    # Start of day: 00:00:00 in local timezone
+    start_datetime = timezone.make_aware(
+        datetime.datetime.combine(start_date, datetime.time.min)
+    )
+    # End of day: 23:59:59.999999 in local timezone
+    end_datetime = timezone.make_aware(
+        datetime.datetime.combine(end_date, datetime.time.max)
+    )
 
     sales = Sale.objects.filter(
-        created_at__date__gte=start_date,
-        created_at__date__lte=end_date,
-    )
+        created_at__gte=start_datetime,
+        created_at__lte=end_datetime,
+    ).order_by('-created_at')
 
     if search:
         sales = sales.filter(
@@ -841,97 +868,4 @@ def daily_sales_report(request):
         "today": today,
         "yesterday": yesterday,
     }
-    return render(request, "pos/daily_sales_report.html", context)
-
-
-
-
-    start_date = request.GET.get("start_date")
-    end_date = request.GET.get("end_date")
-    search = request.GET.get("search", "")
-
-    today = datetime.date.today()
-    yesterday = today - datetime.timedelta(days=1)
-
-    # Support a single date param
-    if not start_date and request.GET.get("date"):
-        start_date = end_date = request.GET.get("date")
-
-    # Default to today
-    if not start_date:
-        start_date = end_date = today
-
-    sales = Sale.objects.filter(
-        created_at__date__gte=start_date,
-        created_at__date__lte=end_date,
-    )
-
-    if search:
-        sales = sales.filter(
-            Q(id__icontains=search) |
-            Q(customer__name__icontains=search)
-        )
-
-    # Make safe numeric fields
-    sales = sales.annotate(
-        discount_rate_safe=Coalesce("discount_rate", Value(0)),
-        tax_rate_safe=Coalesce("tax_rate", Value(0))
-    )
-
-    # Annotate computed monetary fields with output_field
-    sales = sales.annotate(
-        # discount amount = total_amount * discount_rate_safe / 100
-        discount_amount=ExpressionWrapper(
-            F("total_amount") * F("discount_rate_safe") / Value(100),
-            output_field=DecimalField(max_digits=18, decimal_places=2),
-        ),
-
-        # amount after discount
-        amount_after_discount=ExpressionWrapper(
-            F("total_amount") - (
-                F("total_amount") * F("discount_rate_safe") / Value(100)
-            ),
-            output_field=DecimalField(max_digits=18, decimal_places=2),
-        ),
-
-        # tax on amount after discount
-        tax_amount=ExpressionWrapper(
-            (F("total_amount") - (
-                F("total_amount") * F("discount_rate_safe") / Value(100)
-            )) * F("tax_rate_safe") / Value(100),
-            output_field=DecimalField(max_digits=18, decimal_places=2),
-        ),
-
-        # number of items
-        num_items=Coalesce(Sum("items__quantity"), Value(0)),
-    )
-
-    # Aggregate totals safely
-    totals = sales.aggregate(
-        subtotal=Coalesce(Sum("total_amount"), Value(0, output_field=DecimalField())),
-        discount=Coalesce(Sum("discount_amount"), Value(0, output_field=DecimalField())),
-        tax=Coalesce(Sum("tax_amount"), Value(0, output_field=DecimalField())),
-        total=Coalesce(Sum("total_amount"), Value(0, output_field=DecimalField())),
-    )
-
-    total_bills = sales.count()
-    avg_order_value = (totals["total"] / total_bills) if total_bills else 0
-
-    context = {
-        "sales": sales,
-        "totals": totals,
-        "start_date": start_date,
-        "end_date": end_date,
-        "selected_label": f"{start_date} → {end_date}",
-        "search_term": search,
-        "total_bills": total_bills,
-        "total_sales": totals["total"],
-        "avg_order_value": avg_order_value,
-        "total_tax": totals["tax"],
-        "total_discount": totals["discount"],
-        "net_revenue": (totals["total"] - totals["discount"]),
-        "today": today,
-        "yesterday": yesterday,
-    }
-
     return render(request, "pos/daily_sales_report.html", context)
