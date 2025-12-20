@@ -24,16 +24,20 @@
         </div>
     </div>
 
-    <!-- ================= PRODUCTS ================= -->
+    <!-- ================= PRODUCTS + SEARCH / BARCODE ================= -->
     <div class="col-md-6">
         <div class="card shadow-sm h-100">
             <div class="card-header fw-bold d-flex justify-content-between align-items-center">
                 <span>Products</span>
+
+                <!-- Search + Barcode Input (Single Field) -->
                 <input type="text"
-                       id="product-search"
+                       id="barcode-input"
                        class="form-control form-control-sm w-50"
-                       placeholder="Search / Scan barcode">
+                       placeholder="Search / Scan barcode"
+                       autofocus>
             </div>
+
             <div class="card-body">
                 <div id="product-area">
                     {% include "pos/partials/product_grid.html" %}
@@ -46,19 +50,20 @@
     <div class="col-md-4">
         <div class="card shadow-sm h-100">
             <div class="card-header fw-bold">Cart</div>
+
             <div class="card-body">
 
-                <!-- CART ITEMS -->
+                <!-- ================= CART ITEMS LIST ================= -->
                 <ul class="list-group mb-3" id="cart-items">
                     {% for pid, item in cart.items %}
                     <li class="list-group-item d-flex justify-content-between align-items-center">
                         <div>
                             <strong>{{ item.name }}</strong><br>
-                            <small class="text-muted">
-                                Rs {{ item.price }} × {{ item.quantity }}
-                            </small>
+                            <small class="text-muted">Rs {{ item.price }} × {{ item.quantity }}</small>
                         </div>
                         <div class="btn-group">
+
+                            <!-- Decrease -->
                             <form method="post">
                                 {% csrf_token %}
                                 <input type="hidden" name="action" value="decrease">
@@ -66,6 +71,7 @@
                                 <button class="btn btn-sm btn-outline-secondary">−</button>
                             </form>
 
+                            <!-- Increase -->
                             <form method="post">
                                 {% csrf_token %}
                                 <input type="hidden" name="action" value="add">
@@ -73,12 +79,14 @@
                                 <button class="btn btn-sm btn-outline-secondary">+</button>
                             </form>
 
+                            <!-- Remove All -->
                             <form method="post">
                                 {% csrf_token %}
                                 <input type="hidden" name="action" value="remove_all">
                                 <input type="hidden" name="product_id" value="{{ pid }}">
                                 <button class="btn btn-sm btn-outline-danger">🗑️</button>
                             </form>
+
                         </div>
                     </li>
                     {% empty %}
@@ -88,7 +96,7 @@
                     {% endfor %}
                 </ul>
 
-                <!-- TOTALS -->
+                <!-- ================= TOTALS ================= -->
                 <div class="mb-2 fw-bold">
                     Subtotal: Rs <span id="subtotal">{{ cart_total }}</span>
                 </div>
@@ -117,7 +125,7 @@
                     Grand Total: Rs <span id="grand-total">{{ cart_total }}</span>
                 </div>
 
-                <!-- CHECKOUT FORM -->
+                <!-- ================= CHECKOUT FORM ================= -->
                 <form method="post">
                     {% csrf_token %}
                     <input type="hidden" name="action" value="checkout">
@@ -132,7 +140,6 @@
                         </select>
                     </div>
 
-                    <!-- THESE ARE THE 2 FIELDS SENT TO BACKEND -->
                     <input type="hidden" name="discount_rate" id="discount_hidden">
                     <input type="hidden" name="tax_rate" id="tax_hidden">
 
@@ -150,70 +157,85 @@
 <script>
 document.addEventListener("DOMContentLoaded", function () {
 
-    /* ================= CATEGORY AJAX ================= */
+    // ================= CATEGORY AJAX =================
     document.querySelectorAll(".category-item").forEach(item => {
         item.addEventListener("click", function () {
-            document.querySelectorAll(".category-item")
-                .forEach(i => i.classList.remove("active"));
+            document.querySelectorAll(".category-item").forEach(i => i.classList.remove("active"));
             this.classList.add("active");
 
             const categoryId = this.dataset.id;
             const url = "{% url 'products_by_category' 0 %}".replace("0", categoryId);
 
             fetch(url)
-                .then(res => res.text())
+                .then(response => response.text())
                 .then(html => {
                     document.getElementById("product-area").innerHTML = html;
-                });
+                })
+                .catch(err => console.error(err));
         });
     });
 
-    /* ================= SEARCH / BARCODE ================= */
-    document.getElementById("product-search")
-        .addEventListener("input", function () {
-            const q = this.value.toLowerCase();
-            document.querySelectorAll("#product-area .col-md-4")
-                .forEach(card => {
-                    card.style.display =
-                        card.innerText.toLowerCase().includes(q)
-                        ? "" : "none";
-                });
-        });
 
-    /* ================= LIVE TOTALS ================= */
+    // ================= LIVE TOTALS CALCULATION =================
     function recalcTotals() {
-        const subtotal = parseFloat(
-            document.getElementById("subtotal").innerText
-        ) || 0;
+        const subtotal = parseFloat(document.getElementById("subtotal").innerText) || 0;
+        const discountPct = parseFloat(document.getElementById("discount").value) || 0;
+        const taxPct = parseFloat(document.getElementById("tax").value) || 0;
 
-        const discountPct = parseFloat(
-            document.getElementById("discount").value
-        ) || 0;
-
-        const taxPct = parseFloat(
-            document.getElementById("tax").value
-        ) || 0;
-
-        // compute amounts
         const discountAmount = subtotal * (discountPct / 100);
         const afterDiscount = subtotal - discountAmount;
         const taxAmount = afterDiscount * (taxPct / 100);
         const grandTotal = afterDiscount + taxAmount;
 
-        document.getElementById("grand-total").innerText =
-            grandTotal.toFixed(2);
+        document.getElementById("grand-total").innerText = grandTotal.toFixed(2);
 
-        // sync hidden fields to backend
         document.getElementById("discount_hidden").value = discountPct;
         document.getElementById("tax_hidden").value = taxPct;
     }
 
     document.getElementById("discount").addEventListener("input", recalcTotals);
     document.getElementById("tax").addEventListener("input", recalcTotals);
-
-    // initialize the hidden fields
-    recalcTotals();
+    recalcTotals(); // initialize values
 
 });
 </script>
+
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const barcodeInput = document.getElementById("barcode-input");
+
+    if (barcodeInput) {
+        barcodeInput.focus();
+        barcodeInput.select();
+
+        barcodeInput.addEventListener("keydown", function (e) {
+            if (e.key === "Enter") {
+                const val = this.value.trim();
+                if (!val) return;
+
+                // AJAX scan request
+                fetch(`/pos/ajax/scan/${val}/`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === "ok") {
+                        location.reload(); // refresh POS to update cart
+                    } else {
+                        // treat value as general search
+                        document.querySelectorAll("#product-area .col-md-4")
+                            .forEach(card => {
+                                card.style.display =
+                                    card.innerText.toLowerCase().includes(val.toLowerCase())
+                                    ? "" : "none";
+                            });
+                    }
+                })
+                .catch(console.error);
+
+                this.value = "";
+            }
+        });
+    }
+});
+</script>
+
 {% endblock %}

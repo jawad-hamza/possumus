@@ -1,0 +1,14 @@
+{% extends "pos/base.html" %}
+{% block title %}Delete Product{% endblock %}
+
+{% block content %}
+<h3 class="mb-4">🛑 Confirm Delete</h3>
+
+<p>Are you sure you want to delete <strong>{{ product.name }}</strong>?</p>
+
+<form method="post">
+    {% csrf_token %}
+    <button class="btn btn-danger">Yes, Delete</button>
+    <a href="{% url 'product_view' product.id %}" class="btn btn-secondary">Cancel</a>
+</form>
+{% endblock %}

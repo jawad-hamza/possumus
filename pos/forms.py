@@ -1,5 +1,5 @@
 from django import forms
-from .models import Customer
+from .models import Customer, Product
 
 
 class CustomerForm(forms.ModelForm):
@@ -11,3 +11,16 @@ class CustomerForm(forms.ModelForm):
             "phone": forms.TextInput(attrs={"class": "form-control"}),
             "email": forms.EmailInput(attrs={"class": "form-control"}),
         }
+
+class ProductForm(forms.ModelForm):
+    class Meta:
+        model = Product
+        fields = [
+            "name",
+            "sku",
+            "category",
+            "supplier",
+            "price",
+            "stock",
+            "is_active",
+        ]

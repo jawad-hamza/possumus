@@ -1,69 +1,166 @@
-<!DOCTYPE html>
-<html>
-<head>
-    <title>Daily Sales Report</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-</head>
-<body class="bg-light">
+{% extends "pos/base.html" %}
+{% load static %}
+{% block title %}📊 Daily Sales Report{% endblock %}
 
-<nav class="navbar navbar-dark bg-dark px-3">
-    <span class="navbar-brand">📊 Daily Sales Report</span>
-    <a href="{% url 'pos_screen' %}" class="btn btn-sm btn-outline-light">
-        Back to POS
-    </a>
-</nav>
+{% block extra_css %}
+<style>
+    /* Summary cards */
+    .report-card {
+        border-left: 5px solid #0d6efd;
+        box-shadow: 0px 2px 8px rgba(0,0,0,0.07);
+        transition: 0.3s ease;
+    }
+    .report-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0px 4px 12px rgba(0,0,0,0.13);
+    }
+    .report-card .card-body {
+        padding: 22px;
+    }
+    .table-responsive {
+        margin-top: 20px;
+    }
+    @media print {
+        .no-print {
+            display: none !important;
+        }
+    }
+</style>
+{% endblock %}
 
-<div class="container mt-4">
+{% block content %}
 
-    <!-- Date Filter -->
-    <form method="get" class="row g-3 mb-4">
-        <div class="col-auto">
-            <label class="form-label fw-bold">Select Date</label>
-            <input type="date" name="date" value="{{ selected_date }}" class="form-control">
+<div class="container-fluid mt-4">
+
+    <!-- Title + Back -->
+    <div class="d-flex justify-content-between align-items-center mb-4 no-print">
+        <h2 class="fw-bold">📊 Daily Sales Report</h2>
+        <div>
+            <a href="{% url 'pos_screen' %}" class="btn btn-outline-secondary">
+                ← Back to POS
+            </a>
+            <button onclick="window.print()" class="btn btn-outline-primary ms-2">
+                🖨️ Print Report
+            </button>
         </div>
-        <div class="col-auto align-self-end">
-            <button class="btn btn-primary">View</button>
-        </div>
-    </form>
+    </div>
 
-    <!-- Summary Cards -->
-    <div class="row mb-4">
-        <div class="col-md-6">
-            <div class="card shadow-sm">
+    <!-- FILTERS -->
+    <div class="card shadow-sm mb-4 no-print">
+        <div class="card-body">
+            <form method="get" class="row g-3 align-items-end">
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">Start Date</label>
+                    <input type="date" name="start_date"
+                           value="{{ start_date }}" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <label class="form-label fw-bold">End Date</label>
+                    <input type="date" name="end_date"
+                           value="{{ end_date }}" class="form-control">
+                </div>
+                <div class="col-md-3">
+                    <button class="btn btn-primary w-100">Filter</button>
+                </div>
+
+                <!-- QUICK PRESETS -->
+                <div class="col-md-3">
+                    <small class="text-muted">Quick Presets:</small>
+                    <div class="btn-group w-100">
+                        <a href="?date={{ today }}" class="btn btn-outline-secondary btn-sm">Today</a>
+                        <a href="?date={{ yesterday }}" class="btn btn-outline-secondary btn-sm">Yesterday</a>
+                        <a href="?range=last_7" class="btn btn-outline-secondary btn-sm">Last 7</a>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- SUMMARY CARDS -->
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="card report-card">
                 <div class="card-body text-center">
                     <h6 class="text-muted">Total Bills</h6>
-                    <h3>{{ total_bills }}</h3>
+                    <h3 class="fw-bold">{{ total_bills }}</h3>
                 </div>
             </div>
         </div>
 
-        <div class="col-md-6">
-            <div class="card shadow-sm">
+        <div class="col-md-4">
+            <div class="card report-card">
                 <div class="card-body text-center">
                     <h6 class="text-muted">Total Sales</h6>
-                    <h3>Rs {{ total_sales }}</h3>
+                    <h3 class="fw-bold">Rs {{ total_sales|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card report-card">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Average Order Value</h6>
+                    <h3 class="fw-bold">Rs {{ avg_order_value|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- Optional Extra Cards -->
+        <div class="col-md-4">
+            <div class="card report-card">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Total Tax Collected</h6>
+                    <h3 class="fw-bold">Rs {{ total_tax|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card report-card">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Total Discounts Given</h6>
+                    <h3 class="fw-bold">Rs {{ total_discount|floatformat:2 }}</h3>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="card report-card">
+                <div class="card-body text-center">
+                    <h6 class="text-muted">Net Revenue</h6>
+                    <h3 class="fw-bold">Rs {{ net_revenue|floatformat:2 }}</h3>
                 </div>
             </div>
         </div>
     </div>
 
-    <!-- Sales Table -->
-    <div class="card shadow">
-        <div class="card-header">
-            Sales List ({{ selected_date }})
+    <!-- SALES TABLE -->
+    <div class="card shadow-sm">
+        <div class="card-header bg-white d-flex justify-content-between align-items-center">
+            <h5 class="mb-0">Sales List ({{ selected_label }})</h5>
+            <form class="d-flex no-print" method="get">
+                <input type="hidden" name="start_date" value="{{ start_date }}">
+                <input type="hidden" name="end_date" value="{{ end_date }}">
+                <input type="text" name="search" class="form-control form-control-sm me-2"
+                       placeholder="Search invoice, customer..." value="{{ search_term }}">
+                <button class="btn btn-outline-secondary btn-sm">Search</button>
+            </form>
         </div>
 
-        <div class="card-body p-0">
-            <table class="table table-striped mb-0">
+        <div class="table-responsive">
+            <table class="table table-hover table-sm align-middle mb-0">
                 <thead class="table-light">
                     <tr>
                         <th>#</th>
-                        <th>Invoice</th>
-                        <th>Time</th>
+                        <th>Invoice #</th>
+                        <th>Date/Time</th>
                         <th>Customer</th>
-                        <th>Amount</th>
-                        <th>Invoice</th>
+                        <th class="text-end">Items</th>
+                        <th class="text-end">Subtotal</th>
+                        <th class="text-end">Discount</th>
+                        <th class="text-end">Tax</th>
+                        <th class="text-end">Total</th>
+                        <th class="text-center no-print">Action</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -71,34 +168,53 @@
                     <tr>
                         <td>{{ forloop.counter }}</td>
                         <td>#{{ sale.id }}</td>
-                        <td>{{ sale.created_at|date:"H:i" }}</td>
+                        <td>{{ sale.created_at|date:"d M Y, H:i" }}</td>
+
                         <td>
                             {% if sale.customer %}
-                                {{ sale.customer.name }}
+                                <span class="fw-semibold">{{ sale.customer.name }}</span>
                             {% else %}
-                                Walk-in
+                                <span class="text-muted">Walk-in</span>
                             {% endif %}
                         </td>
-                        <td>Rs {{ sale.total_amount }}</td>
-                        <td>
-                            <a href="{% url 'invoice' sale.id %}" class="btn btn-sm btn-outline-primary">
+
+                        <td class="text-end">{{ sale.num_items }}</td>
+                        <td class="text-end">Rs {{ sale.subtotal|floatformat:2 }}</td>
+                        <td class="text-end text-danger">-Rs {{ sale.discount_amount|floatformat:2 }}</td>
+                        <td class="text-end text-primary">Rs {{ sale.tax_amount|floatformat:2 }}</td>
+                        <td class="text-end fw-bold">Rs {{ sale.total_amount|floatformat:2 }}</td>
+
+                        <td class="text-center no-print">
+                            <a href="{% url 'invoice' sale.id %}" class="btn btn-sm btn-outline-success">
                                 View
                             </a>
                         </td>
                     </tr>
                     {% empty %}
                     <tr>
-                        <td colspan="6" class="text-center text-muted">
-                            No sales for this date
+                        <td colspan="10" class="text-center text-muted py-3">
+                            No sales found for this period
                         </td>
                     </tr>
                     {% endfor %}
                 </tbody>
+
+                {% if sales %}
+                <tfoot class="table-light">
+                    <tr>
+                        <th colspan="5" class="text-end">Totals:</th>
+                        <th class="text-end">Rs {{ totals.subtotal|floatformat:2 }}</th>
+                        <th class="text-end">Rs {{ totals.discount|floatformat:2 }}</th>
+                        <th class="text-end">Rs {{ totals.tax|floatformat:2 }}</th>
+                        <th class="text-end">Rs {{ totals.total|floatformat:2 }}</th>
+                        <th class="no-print"></th>
+                    </tr>
+                </tfoot>
+                {% endif %}
             </table>
         </div>
     </div>
 
 </div>
 
-</body>
-</html>
+{% endblock %}

@@ -1,29 +1,233 @@
 from django.shortcuts import render
 from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
-from .models import Category, Product, Sale, SaleItem , Customer
-from django.db.models import Sum,Count 
-from .forms import CustomerForm
+from .models import Category, Product, PurchaseItem, Sale, SaleItem , Customer
+from django.db.models import Sum,Count , F , Q , Value ,  DecimalField, ExpressionWrapper
+from .forms import CustomerForm , ProductForm
 from datetime import datetime
 from django.utils import timezone
 from reportlab.lib.pagesizes import mm
 from reportlab.pdfgen import canvas
 from decimal import Decimal, InvalidOperation
-
-
+from django.contrib import messages
+from django.core.paginator import Paginator
+from django.http import JsonResponse
+from django.db.models.functions import Coalesce
+import datetime
 
 # Create your views here.
-def home(request):
-    return HttpResponse("Welcome to the POS System")
+
+def test (request):
+    return render(request, "pos/test_template.html")
+
+
+def scan_barcode(request, sku):
+    """
+    Look up product by SKU. If found, add to cart
+    and return JSON status. Otherwise return error.
+    """
+    cart = request.session.get("cart", {})
+
+    try:
+        product = Product.objects.get(sku=sku, is_active=True)
+    except Product.DoesNotExist:
+        return JsonResponse({"status": "notfound"})
+
+    pid = str(product.id)
+
+    if pid in cart:
+        cart[pid]["quantity"] += 1
+    else:
+        cart[pid] = {
+            "name": product.name,
+            "price": str(product.price),
+            "quantity": 1,
+        }
+
+    request.session["cart"] = cart
+    return JsonResponse({"status": "ok"})
+
+def home (request):
+    return render(request, "pos/home.html")
+
 def product_list(request):
-    products = Product.objects.filter(is_active=True)
+    # base queryset
+    qs = Product.objects.select_related("category", "supplier").order_by("name")
+
+    # search
+    q = request.GET.get("q", "").strip()
+    if q:
+        qs = qs.filter(name__icontains=q)
+
+    # pagination
+    paginator = Paginator(qs, 20)  # 20 per page
+    page_num = request.GET.get("page")
+    products = paginator.get_page(page_num)
+
+    return render(request, "pos/product_list.html", {
+        "products": products,
+        "search_query": q,
+    })
+# ----------------------------------
+# ADD NEW PRODUCT
+# ----------------------------------
+def product_add(request):
+    form = ProductForm(request.POST or None)
+    if request.method == "POST":
+        if form.is_valid():
+            product = form.save()
+            messages.success(request, f"Product '{product.name}' added successfully!")
+            return redirect("product_view", pk=product.id)
+        else:
+            messages.error(request, "Please fix the errors below.")
+
+    return render(request, "pos/product_form.html", {
+        "form": form,
+        "title": "Add Product"
+    })
+
+    form = ProductForm(request.POST or None)
+    if request.method == "POST":
+        if form.is_valid():
+            form.save()
+            return redirect("product_list")
 
     return render(
         request,
-        "pos/product_list.html",
-        {"products": products}
+        "pos/product_form.html",
+        {"form": form, "title": "Add Product"}
+    )
+# ----------------------------------
+# VIEW SINGLE PRODUCT
+# ----------------------------------
+def product_view(request, pk):
+    product = get_object_or_404(Product, id=pk)
+
+    total_sold = (
+        SaleItem.objects.filter(product=product)
+        .aggregate(total=Sum("quantity"))["total"]
+        or 0
     )
 
+    total_purchased = (
+        PurchaseItem.objects.filter(product=product)
+        .aggregate(total=Sum("quantity"))["total"]
+        or 0
+    )
+
+    recent_sales = (
+        SaleItem.objects.filter(product=product)
+        .order_by("-sale__created_at")[:10]
+    )
+
+    recent_purchases = (
+        PurchaseItem.objects.filter(product=product)
+        .order_by("-purchase__created_at")[:10]
+    )
+
+    return render(request, "pos/product_view.html", {
+        "product": product,
+        "total_sold": total_sold,
+        "total_purchased": total_purchased,
+        "recent_sales": recent_sales,
+        "recent_purchases": recent_purchases,
+    })
+
+    product = get_object_or_404(Product, id=pk)
+
+    total_sold = (
+        SaleItem.objects.filter(product=product)
+        .aggregate(total=Sum("quantity"))["total"]
+        or 0
+    )
+
+    total_purchased = (
+        PurchaseItem.objects.filter(product=product)
+        .aggregate(total=Sum("quantity"))["total"]
+        or 0
+    )
+
+    recent_sales = (
+        SaleItem.objects.filter(product=product)
+        .order_by("-sale__created_at")[:10]
+    )
+
+    recent_purchases = (
+        PurchaseItem.objects.filter(product=product)
+        .order_by("-purchase__created_at")[:10]
+    )
+
+    return render(request, "pos/product_view.html", {
+        "product": product,
+        "total_sold": total_sold,
+        "total_purchased": total_purchased,
+        "recent_sales": recent_sales,
+        "recent_purchases": recent_purchases,
+    })
+
+# ----------------------------------
+# EDIT PRODUCT
+# ----------------------------------
+
+    product = get_object_or_404(Product, id=pk)
+    form = ProductForm(request.POST or None, instance=product)
+
+    if request.method == "POST":
+        if form.is_valid():
+            form.save()
+            return redirect("product_view", pk=product.id)
+
+    return render(
+        request,
+        "pos/product_form.html",
+        {"form": form, "title": "Edit Product"}
+    )
+
+def product_edit(request, pk):
+    product = get_object_or_404(Product, id=pk)
+    form = ProductForm(request.POST or None, instance=product)
+
+    if request.method == "POST":
+        if form.is_valid():
+            product = form.save()
+            messages.success(request, f"Product '{product.name}' updated!")
+            return redirect("product_view", pk=product.id)
+        else:
+            messages.error(request, "Please fix the errors below.")
+
+    return render(request, "pos/product_form.html", {
+        "form": form,
+        "title": "Edit Product"
+    })
+
+# ----------------------------------
+# DELETE PRODUCT
+# ----------------------------------
+def product_delete(request, pk):
+    product = get_object_or_404(Product, id=pk)
+
+    if request.method == "POST":
+        product_name = product.name
+        product.delete()
+        messages.success(request, f"Product '{product_name}' deleted successfully!")
+        return redirect("product_list")
+
+    return render(request, "pos/product_confirm_delete.html", {
+        "product": product
+    })
+
+    product = get_object_or_404(Product, id=pk)
+
+    if request.method == "POST":
+        product.delete()
+        return redirect("product_list")
+
+    return render(
+        request,
+        "pos/product_confirm_delete.html",
+        {"product": product}
+    )    
+    return render(request, "pos/home.html")
 
 def dashboard(request):
     today = timezone.localdate()
@@ -237,6 +441,7 @@ def invoice(request, sale_id):
     )
 
 def add_customer_from_pos(request):
+    
     if request.method == "POST":
         form = CustomerForm(request.POST)
         if form.is_valid():
@@ -250,37 +455,94 @@ def add_customer_from_pos(request):
         "pos/add_customer.html",
         {"form": form}
     )
-    
-def daily_sales_report(request):
-    # Get date from query (?date=YYYY-MM-DD)
-    date_str = request.GET.get("date")
 
-    if date_str:
-        selected_date = datetime.strptime(date_str, "%Y-%m-%d").date()
-    else:
-        selected_date = timezone.localdate()
+    
+    
+    from django.db.models import Q, F, Sum, Value
+    from django.db.models.functions import Coalesce
+    import datetime
+
+    start_date = request.GET.get("start_date")
+    end_date = request.GET.get("end_date")
+    search = request.GET.get("search", "")
+    today = datetime.date.today()
+    yesterday = today - datetime.timedelta(days=1)
+
+    # default to today if no date provided
+    if not start_date and request.GET.get("date"):
+        start_date = end_date = request.GET.get("date")
+
+    if not start_date:
+        start_date = end_date = today
+    
+    # Convert strings to date objects if needed
+    if isinstance(start_date, str):
+        start_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+    if isinstance(end_date, str):
+        end_date = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
 
     sales = Sale.objects.filter(
-        created_at__date=selected_date
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date,
     )
 
-    total_sales = sales.aggregate(
-        total=Sum("total_amount")
-    )["total"] or 0
+    if search:
+        sales = sales.filter(
+            Q(id__icontains=search) |
+            Q(customer__name__icontains=search)
+        )
 
+    sales = sales.annotate(
+        discount_rate_safe=Coalesce("discount_rate", Value(0)),
+        tax_rate_safe=Coalesce("tax_rate", Value(0)),
+    ).annotate(
+        discount_amount=Coalesce(
+            F("total_amount") * F("discount_rate_safe") / Value(100),
+            Value(0),
+        ),
+        tax_amount=Coalesce(
+            (F("total_amount") - (F("total_amount") * F("discount_rate_safe") / Value(100))) * F("tax_rate_safe") / Value(100),
+            Value(0),
+        ),
+        num_items=Coalesce(Sum("items__quantity"), Value(0)),
+    ).annotate(
+        final_total=F("total_amount") - F("discount_amount") + F("tax_amount")
+    )
+
+    totals = sales.aggregate(
+        subtotal=Coalesce(Sum("total_amount"), Value(0)),
+        discount=Coalesce(Sum("discount_amount"), Value(0)),
+        tax=Coalesce(Sum("tax_amount"), Value(0)),
+        total=Coalesce(Sum("final_total"), Value(0)),
+    )
+
+    # average needs safety
     total_bills = sales.count()
+    if total_bills > 0:
+        avg_order_value = totals["total"] / total_bills
+    else:
+        avg_order_value = 0
 
-    return render(
-        request,
-        "pos/daily_sales_report.html",
-        {
-            "sales": sales,
-            "total_sales": total_sales,
-            "total_bills": total_bills,
-            "selected_date": selected_date,
-        }
-    )
-    
+    # Net revenue is total after discount and tax
+    net_revenue = totals["total"]
+
+    context = {
+        "sales": sales,
+        "totals": totals,
+        "start_date": start_date,
+        "end_date": end_date,
+        "selected_label": f"{start_date} → {end_date}",
+        "search_term": search,
+        "total_bills": total_bills,
+        "total_sales": totals["total"],
+        "avg_order_value": avg_order_value,
+        "total_tax": totals["tax"],
+        "total_discount": totals["discount"],
+        "net_revenue": net_revenue,
+        "today": today,
+        "yesterday": yesterday,
+    }
+    return render(request, "pos/daily_sales_report.html", context)
 def invoice_pdf(request, sale_id):
     sale = get_object_or_404(Sale, id=sale_id)
     items = sale.items.all()
@@ -305,14 +567,14 @@ def invoice_pdf(request, sale_id):
     line_height = 12
 
     # Dynamic height (base + items)
-    paper_height = 120 + (len(items) * 15)
+    paper_height = 120 + (len(items) * 35)
     # -----------------------------------
 
     response = HttpResponse(content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="receipt_{sale.id}.pdf"'
 
     p = canvas.Canvas(response, pagesize=(paper_width, paper_height))
-    y = paper_height - 20
+    y = paper_height + 25
 
     # ---------- HEADER ----------
     p.setFont("Helvetica-Bold", 12)
@@ -474,3 +736,202 @@ def products_by_category(request, category_id):
         "pos/partials/product_grid.html",
         {"products": products}
     )
+    
+##########################################################################################
+
+def daily_sales_report(request):
+    from django.db.models import Q, F, Sum, Value, DecimalField
+    from django.db.models.functions import Coalesce
+    import datetime
+
+    start_date = request.GET.get("start_date")
+    end_date = request.GET.get("end_date")
+    search = request.GET.get("search", "")
+    today = datetime.date.today()
+    yesterday = today - datetime.timedelta(days=1)
+
+    # default to today if no date provided
+    if not start_date and request.GET.get("date"):
+        start_date = end_date = request.GET.get("date")
+
+    if not start_date:
+        start_date = today
+    if not end_date:
+        end_date = today
+    
+    # Convert strings to date objects if needed
+    if isinstance(start_date, str):
+        try:
+            start_date = datetime.datetime.strptime(start_date, "%Y-%m-%d").date()
+        except ValueError:
+            try:
+                start_date = datetime.datetime.strptime(start_date, "%m/%d/%Y").date()
+            except ValueError:
+                start_date = today
+    
+    if isinstance(end_date, str):
+        try:
+            end_date = datetime.datetime.strptime(end_date, "%Y-%m-%d").date()
+        except ValueError:
+            try:
+                end_date = datetime.datetime.strptime(end_date, "%m/%d/%Y").date()
+            except ValueError:
+                end_date = today
+
+    sales = Sale.objects.filter(
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date,
+    )
+
+    if search:
+        sales = sales.filter(
+            Q(id__icontains=search) |
+            Q(customer__name__icontains=search)
+        )
+
+    sales = sales.annotate(
+        discount_rate_safe=Coalesce("discount_rate", Value(0, output_field=DecimalField())),
+        tax_rate_safe=Coalesce("tax_rate", Value(0, output_field=DecimalField())),
+    ).annotate(
+        discount_amount=Coalesce(
+            F("total_amount") * F("discount_rate_safe") / Value(100, output_field=DecimalField()),
+            Value(0, output_field=DecimalField()),
+            output_field=DecimalField()
+        ),
+        tax_amount=Coalesce(
+            (F("total_amount") - (F("total_amount") * F("discount_rate_safe") / Value(100, output_field=DecimalField()))) * F("tax_rate_safe") / Value(100, output_field=DecimalField()),
+            Value(0, output_field=DecimalField()),
+            output_field=DecimalField()
+        ),
+        num_items=Coalesce(Sum("items__quantity"), Value(0)),
+    ).annotate(
+        final_total=F("total_amount") - F("discount_amount") + F("tax_amount")
+    )
+
+    totals = sales.aggregate(
+        subtotal=Coalesce(Sum("total_amount"), Value(0, output_field=DecimalField())),
+        discount=Coalesce(Sum("discount_amount"), Value(0, output_field=DecimalField())),
+        tax=Coalesce(Sum("tax_amount"), Value(0, output_field=DecimalField())),
+        total=Coalesce(Sum("final_total"), Value(0, output_field=DecimalField())),
+    )
+
+    # average needs safety
+    total_bills = sales.count()
+    if total_bills > 0:
+        avg_order_value = totals["total"] / total_bills
+    else:
+        avg_order_value = 0
+
+    # Net revenue is total after discount and tax
+    net_revenue = totals["total"]
+
+    context = {
+        "sales": sales,
+        "totals": totals,
+        "start_date": start_date,
+        "end_date": end_date,
+        "selected_label": f"{start_date} → {end_date}",
+        "search_term": search,
+        "total_bills": total_bills,
+        "total_sales": totals["total"],
+        "avg_order_value": avg_order_value,
+        "total_tax": totals["tax"],
+        "total_discount": totals["discount"],
+        "net_revenue": net_revenue,
+        "today": today,
+        "yesterday": yesterday,
+    }
+    return render(request, "pos/daily_sales_report.html", context)
+
+
+
+
+    start_date = request.GET.get("start_date")
+    end_date = request.GET.get("end_date")
+    search = request.GET.get("search", "")
+
+    today = datetime.date.today()
+    yesterday = today - datetime.timedelta(days=1)
+
+    # Support a single date param
+    if not start_date and request.GET.get("date"):
+        start_date = end_date = request.GET.get("date")
+
+    # Default to today
+    if not start_date:
+        start_date = end_date = today
+
+    sales = Sale.objects.filter(
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date,
+    )
+
+    if search:
+        sales = sales.filter(
+            Q(id__icontains=search) |
+            Q(customer__name__icontains=search)
+        )
+
+    # Make safe numeric fields
+    sales = sales.annotate(
+        discount_rate_safe=Coalesce("discount_rate", Value(0)),
+        tax_rate_safe=Coalesce("tax_rate", Value(0))
+    )
+
+    # Annotate computed monetary fields with output_field
+    sales = sales.annotate(
+        # discount amount = total_amount * discount_rate_safe / 100
+        discount_amount=ExpressionWrapper(
+            F("total_amount") * F("discount_rate_safe") / Value(100),
+            output_field=DecimalField(max_digits=18, decimal_places=2),
+        ),
+
+        # amount after discount
+        amount_after_discount=ExpressionWrapper(
+            F("total_amount") - (
+                F("total_amount") * F("discount_rate_safe") / Value(100)
+            ),
+            output_field=DecimalField(max_digits=18, decimal_places=2),
+        ),
+
+        # tax on amount after discount
+        tax_amount=ExpressionWrapper(
+            (F("total_amount") - (
+                F("total_amount") * F("discount_rate_safe") / Value(100)
+            )) * F("tax_rate_safe") / Value(100),
+            output_field=DecimalField(max_digits=18, decimal_places=2),
+        ),
+
+        # number of items
+        num_items=Coalesce(Sum("items__quantity"), Value(0)),
+    )
+
+    # Aggregate totals safely
+    totals = sales.aggregate(
+        subtotal=Coalesce(Sum("total_amount"), Value(0, output_field=DecimalField())),
+        discount=Coalesce(Sum("discount_amount"), Value(0, output_field=DecimalField())),
+        tax=Coalesce(Sum("tax_amount"), Value(0, output_field=DecimalField())),
+        total=Coalesce(Sum("total_amount"), Value(0, output_field=DecimalField())),
+    )
+
+    total_bills = sales.count()
+    avg_order_value = (totals["total"] / total_bills) if total_bills else 0
+
+    context = {
+        "sales": sales,
+        "totals": totals,
+        "start_date": start_date,
+        "end_date": end_date,
+        "selected_label": f"{start_date} → {end_date}",
+        "search_term": search,
+        "total_bills": total_bills,
+        "total_sales": totals["total"],
+        "avg_order_value": avg_order_value,
+        "total_tax": totals["tax"],
+        "total_discount": totals["discount"],
+        "net_revenue": (totals["total"] - totals["discount"]),
+        "today": today,
+        "yesterday": yesterday,
+    }
+
+    return render(request, "pos/daily_sales_report.html", context)

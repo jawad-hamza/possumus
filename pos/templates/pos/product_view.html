@@ -1,0 +1,188 @@
+{% extends "pos/base.html" %}
+{% load barcode_tags %}
+
+{% block title %}Product Detail{% endblock %}
+
+{% block extra_css %}
+<style>
+    .product-header {
+        border-bottom: 2px solid #eee;
+        padding-bottom: 12px;
+        margin-bottom: 20px;
+    }
+    .product-info dt {
+        width: 130px;
+    }
+    .product-info dd {
+        margin-left: 140px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<div class="d-flex justify-content-between align-items-center mb-3">
+    <h2>📦 {{ product.name }}</h2>
+    <div>
+        <a href="{% url 'product_edit' product.id %}" class="btn btn-primary">
+            <i class="bi bi-pencil-square"></i> Edit
+        </a>
+
+        <a href="{% url 'product_delete' product.id %}" class="btn btn-outline-danger">
+            <i class="bi bi-trash"></i> Delete
+        </a>
+    </div>
+</div>
+
+<div class="product-header">
+    <dl class="row product-info">
+        <!-- Barcode Image -->
+        <dt class="col-sm-3 text-muted">Barcode Image</dt>
+        <dd class="col-sm-9">
+            {% barcode_image product.sku 200 %}
+        </dd>
+
+        <!-- SKU Text -->
+        <dt class="col-sm-3 text-muted">SKU</dt>
+        <dd class="col-sm-9">{{ product.sku }}</dd>
+
+        <!-- Category -->
+        <dt class="col-sm-3 text-muted">Category</dt>
+        <dd class="col-sm-9">
+            {% if product.category %}
+                {{ product.category.name }}
+            {% else %}
+                -
+            {% endif %}
+        </dd>
+
+        <!-- Supplier -->
+        <dt class="col-sm-3 text-muted">Supplier</dt>
+        <dd class="col-sm-9">
+            {% if product.supplier %}
+                {{ product.supplier.name }}
+            {% else %}
+                -
+            {% endif %}
+        </dd>
+
+        <!-- Price -->
+        <dt class="col-sm-3 text-muted">Price</dt>
+        <dd class="col-sm-9">Rs {{ product.price|floatformat:2 }}</dd>
+
+        <!-- Stock -->
+        <dt class="col-sm-3 text-muted">Stock</dt>
+        <dd class="col-sm-9">{{ product.stock }}</dd>
+
+        <!-- Status -->
+        <dt class="col-sm-3 text-muted">Status</dt>
+        <dd class="col-sm-9">
+            {% if product.is_active %}
+                <span class="badge bg-success">Active</span>
+            {% else %}
+                <span class="badge bg-secondary">Inactive</span>
+            {% endif %}
+        </dd>
+    </dl>
+</div>
+
+<div class="row g-4">
+
+    <!-- Summary -->
+    <div class="col-md-6">
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">📊 Summary</h5>
+                <ul class="list-group list-group-flush">
+                    <li class="list-group-item">
+                        <strong>Total Sold:</strong> {{ total_sold }}
+                    </li>
+                    <li class="list-group-item">
+                        <strong>Total Purchased:</strong> {{ total_purchased }}
+                    </li>
+                    <li class="list-group-item">
+                        <strong>Current Stock:</strong> {{ product.stock }}
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent Sales & Purchases -->
+    <div class="col-md-6">
+
+        <div class="card shadow-sm mb-3">
+            <div class="card-body">
+                <h5 class="card-title">🛒 Recent Sales</h5>
+                <table class="table table-sm table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Sale ID</th>
+                            <th>Date</th>
+                            <th>Qty</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sale_item in recent_sales %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>
+                                <a href="{% url 'invoice' sale_item.sale.id %}">
+                                    {{ sale_item.sale.id }}
+                                </a>
+                            </td>
+                            <td>{{ sale_item.sale.created_at|date:"d M Y" }}</td>
+                            <td>{{ sale_item.quantity }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">
+                                No recent sales
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <div class="card shadow-sm">
+            <div class="card-body">
+                <h5 class="card-title">📦 Recent Purchases</h5>
+                <table class="table table-sm table-hover">
+                    <thead class="table-light">
+                        <tr>
+                            <th>#</th>
+                            <th>Purchase ID</th>
+                            <th>Date</th>
+                            <th>Qty</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for purchase_item in recent_purchases %}
+                        <tr>
+                            <td>{{ forloop.counter }}</td>
+                            <td>
+                                <!-- If you have a URL for purchase invoice, replace # -->
+                                <a href="#">{{ purchase_item.purchase.id }}</a>
+                            </td>
+                            <td>{{ purchase_item.purchase.created_at|date:"d M Y" }}</td>
+                            <td>{{ purchase_item.quantity }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="4" class="text-center text-muted">
+                                No recent purchases
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+
+{% endblock %}
