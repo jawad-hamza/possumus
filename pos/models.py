@@ -54,6 +54,7 @@ class Sale(models.Model):
         related_name="sales"
     )
     created_at = models.DateTimeField(auto_now_add=True)
+    tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     total_amount = models.DecimalField(
         max_digits=10,
         decimal_places=2,
@@ -124,6 +125,77 @@ class SaleItem(models.Model):
         return f"{self.product.name} x {self.quantity}"
 
     ##################################################################################################
-    
+class Purchase(models.Model):
+    supplier = models.ForeignKey(
+        Supplier,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="purchases"
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    total_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        default=0
+    )
 
-    ##################################################################################################
+    def update_total(self):
+        total = 0
+        for item in self.items.all():
+            total += item.cost_price * item.quantity
+        self.total_amount = total
+        self.save()
+
+    def __str__(self):
+        return f"Purchase #{self.id}"
+
+##################################################################################################
+class PurchaseItem(models.Model):
+    purchase = models.ForeignKey(
+        Purchase,
+        related_name="items",
+        on_delete=models.CASCADE
+    )
+    product = models.ForeignKey(
+        Product,
+        on_delete=models.PROTECT
+    )
+    quantity = models.PositiveIntegerField()
+    cost_price = models.DecimalField(
+        max_digits=10,
+        decimal_places=2
+    )
+
+    def save(self, *args, **kwargs):
+        is_new = self.pk is None
+
+        if not is_new:
+            old_item = PurchaseItem.objects.get(pk=self.pk)
+            stock_change = self.quantity - old_item.quantity
+        else:
+            stock_change = self.quantity
+
+        # Increase stock
+        self.product.stock += stock_change
+        self.product.save()
+
+        super().save(*args, **kwargs)
+
+        # Update purchase total
+        self.purchase.update_total()
+
+    def delete(self, *args, **kwargs):
+        # Restore stock
+        self.product.stock -= self.quantity
+        self.product.save()
+
+        purchase = self.purchase
+        super().delete(*args, **kwargs)
+
+        purchase.update_total()
+
+    def __str__(self):
+        return f"{self.product.name} x {self.quantity}"
+
+#####`#############################################################################################`
