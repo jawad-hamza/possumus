@@ -3,6 +3,7 @@
 <head>
     <title>Invoice</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
+
     <style>
         body {
             font-family: "Segoe UI", sans-serif;
@@ -16,7 +17,7 @@
             border: 1px solid #ddd;
         }
         h2 {
-            margin-bottom: 0;
+            margin-bottom: 5px;
         }
         table {
             width: 100%;
@@ -26,14 +27,28 @@
         table th, table td {
             border: 1px solid #ddd;
             padding: 10px;
+            text-align: left;
         }
         table th {
             background: #f0f0f0;
         }
-        .total {
+        .summary-table {
+            width: 100%;
+            margin-top: 20px;
+        }
+        .summary-table td {
+            padding: 8px;
+        }
+        .summary-table .label {
             text-align: right;
-            margin-top: 15px;
+            font-weight: bold;
+        }
+        .summary-table .value {
+            text-align: right;
+        }
+        .grand-total {
             font-size: 18px;
+            font-weight: bold;
         }
         .actions {
             text-align: center;
@@ -49,11 +64,12 @@
 <body>
 
 <div class="invoice-box">
+
     <h2>🧾 INVOICE</h2>
 
     <p>
-        <strong>Invoice #:</strong> {{ sale.id }} <br>
-        <strong>Date:</strong> {{ sale.created_at|date:"d M Y, H:i" }} <br>
+        <strong>Invoice #:</strong> {{ sale.id }}<br>
+        <strong>Date:</strong> {{ sale.created_at|date:"d M Y, H:i" }}<br>
         <strong>Customer:</strong>
         {% if sale.customer %}
             {{ sale.customer.name }}
@@ -62,14 +78,15 @@
         {% endif %}
     </p>
 
+    <!-- ITEMS TABLE -->
     <table>
         <thead>
             <tr>
                 <th>#</th>
                 <th>Product</th>
                 <th>Qty</th>
-                <th>Price</th>
-                <th>Total</th>
+                <th>Unit Price</th>
+                <th>Line Total</th>
             </tr>
         </thead>
         <tbody>
@@ -78,26 +95,61 @@
                 <td>{{ forloop.counter }}</td>
                 <td>{{ item.product.name }}</td>
                 <td>{{ item.quantity }}</td>
-                <td>Rs {{ item.price }}</td>
-                <td>Rs {{ item.price|floatformat:2 }} × {{ item.quantity }}</td>
+                <td>Rs {{ item.price|floatformat:2 }}</td>
+                <td>
+                    Rs {{ item.price|floatformat:2 }} × {{ item.quantity }}
+                </td>
             </tr>
             {% endfor %}
         </tbody>
     </table>
 
-    <div class="total">
-        <strong>Grand Total: Rs {{ sale.total_amount }}</strong>
-    </div>
+    <!-- SUMMARY -->
+    <table class="summary-table">
+        <tr>
+            <td class="label">Subtotal</td>
+            <td class="value">Rs {{ subtotal|floatformat:2 }}</td>
+        </tr>
 
+        {% if discount_rate and discount_rate > 0 %}
+        <tr>
+            <td class="label">
+                Discount ({{ discount_rate }}%)
+            </td>
+            <td class="value">
+                − Rs {{ discount_amount|floatformat:2 }}
+            </td>
+        </tr>
+        {% endif %}
+
+        {% if tax_rate and tax_rate > 0 %}
+        <tr>
+            <td class="label">
+                Tax ({{ tax_rate }}%)
+            </td>
+            <td class="value">
+                Rs {{ tax_amount|floatformat:2 }}
+            </td>
+        </tr>
+        {% endif %}
+
+        <tr>
+            <td class="label grand-total">Grand Total</td>
+            <td class="value grand-total">
+                Rs {{ grand_total|floatformat:2 }}
+            </td>
+        </tr>
+    </table>
+
+    <!-- ACTIONS -->
     <div class="actions">
         <button onclick="window.print()">🖨️ Print Invoice</button>
-        <a href="{% url 'invoice_pdf' sale.id %}" class="btn btn-secondary">
-    Download PDF
-</a>
-
+        <br><br>
+        <a href="{% url 'invoice_pdf' sale.id %}">⬇ Download Receipt (PDF)</a>
         <br><br>
         <a href="{% url 'pos_screen' %}">← Back to POS</a>
     </div>
+
 </div>
 
 </body>

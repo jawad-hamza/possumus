@@ -1,8 +1,16 @@
 from django.db import models
 from django.core.exceptions import ValidationError
+from decimal import Decimal, InvalidOperation
 
 
 # Create your models here.
+class Category(models.Model):
+    name = models.CharField(max_length=100)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
+
 
 ## Supplier model to represent product suppliers ##################################################
 
@@ -18,6 +26,13 @@ class Supplier(models.Model):
 # Product model to represent items in the inventory ##################################################
 
 class Product(models.Model):
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="products"
+    )
     supplier = models.ForeignKey(
     Supplier,
     on_delete=models.SET_NULL,
@@ -27,6 +42,7 @@ class Product(models.Model):
 )
     name = models.CharField(max_length=100)
     sku = models.CharField(max_length=50, unique=True)
+    barcode = models.CharField(max_length=50, unique=True, blank=True, null=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     stock = models.PositiveIntegerField(default=0)
     is_active = models.BooleanField(default=True)
@@ -45,33 +61,59 @@ class Customer(models.Model):
 ##################################################################################################
 
    #sale model to track sales transactions ####################################################################### 
+
 class Sale(models.Model):
     customer = models.ForeignKey(
         Customer,
         on_delete=models.SET_NULL,
         null=True,
         blank=True,
-        related_name="sales"
+        related_name="sales",
     )
     created_at = models.DateTimeField(auto_now_add=True)
+
+    discount_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
     total_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
-        default=0
+        max_digits=12, decimal_places=2, default=0
     )
-
-    def update_total(self):
-        total = 0
-        for item in self.items.all():
-            total += item.price * item.quantity
-
-        self.total_amount = total
-        self.save()
 
     def __str__(self):
         return f"Sale #{self.id}"
-####################################################################################################
+
+    def safe_decimal(self, value):
+        try:
+            return Decimal(value)
+        except (TypeError, InvalidOperation):
+            return Decimal("0")
+
+    def update_total(self):
+        subtotal = Decimal("0")
+        for item in self.items.all():
+            subtotal += item.price * item.quantity
+
+        # clean values
+        discount_rate = self.safe_decimal(self.discount_rate)
+        if discount_rate < 0:
+            discount_rate = Decimal("0")
+        if discount_rate > 100:
+            discount_rate = Decimal("100")
+
+        tax_rate = self.safe_decimal(self.tax_rate)
+        if tax_rate < 0:
+            tax_rate = Decimal("0")
+        if tax_rate > 100:
+            tax_rate = Decimal("100")
+
+        # compute
+        discount_amount = subtotal * (discount_rate / Decimal("100"))
+        after_discount = subtotal - discount_amount
+        tax_amount = after_discount * (tax_rate / Decimal("100"))
+
+        self.total_amount = after_discount + tax_amount
+        self.save(update_fields=["total_amount"])
+        ####################################################################################################
 class SaleItem(models.Model):
     sale = models.ForeignKey(
         Sale,
