@@ -1,0 +1,237 @@
+{% extends "pos/base.html" %}
+{% load static %}
+{% block title %}Add Supplier{% endblock %}
+
+{% block extra_css %}
+<style>
+    .add-form-container {
+        max-width: 700px;
+        margin: 0 auto;
+    }
+    .form-card {
+        border: none;
+        border-radius: 15px;
+        box-shadow: 0 5px 20px rgba(0,0,0,0.1);
+        overflow: hidden;
+    }
+    .form-header {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        color: white;
+        padding: 30px;
+        text-align: center;
+    }
+    .form-header i {
+        font-size: 3rem;
+        margin-bottom: 10px;
+    }
+    .form-body {
+        padding: 40px;
+        background: white;
+    }
+    .form-label {
+        font-weight: 600;
+        color: #2d3748;
+        margin-bottom: 8px;
+    }
+    .form-control, .form-select {
+        border: 2px solid #e2e8f0;
+        border-radius: 8px;
+        padding: 12px 15px;
+        transition: all 0.3s ease;
+    }
+    .form-control:focus, .form-select:focus {
+        border-color: #11998e;
+        box-shadow: 0 0 0 3px rgba(17, 153, 142, 0.1);
+    }
+    .required-field::after {
+        content: " *";
+        color: #e53e3e;
+    }
+    .btn-submit {
+        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+        border: none;
+        padding: 12px 30px;
+        font-weight: 600;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+        color: white;
+    }
+    .btn-submit:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 15px rgba(17, 153, 142, 0.4);
+        color: white;
+    }
+    .btn-cancel {
+        border: 2px solid #e2e8f0;
+        padding: 12px 30px;
+        font-weight: 600;
+        border-radius: 8px;
+        transition: all 0.3s ease;
+    }
+    .btn-cancel:hover {
+        background: #f7fafc;
+        border-color: #cbd5e0;
+    }
+    .form-icon {
+        position: absolute;
+        right: 15px;
+        top: 50%;
+        transform: translateY(-50%);
+        color: #a0aec0;
+    }
+    .input-with-icon {
+        position: relative;
+    }
+    .input-with-icon .form-control {
+        padding-right: 45px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="container-fluid mt-4">
+    <div class="add-form-container">
+        <!-- Breadcrumb -->
+        <nav aria-label="breadcrumb" class="mb-4">
+            <ol class="breadcrumb">
+                <li class="breadcrumb-item"><a href="{% url 'parties_home' %}">Parties</a></li>
+                <li class="breadcrumb-item"><a href="{% url 'supplier_list' %}">Suppliers</a></li>
+                <li class="breadcrumb-item active">Add Supplier</li>
+            </ol>
+        </nav>
+
+        <!-- Form Card -->
+        <div class="card form-card">
+            <div class="form-header">
+                <i class="bi bi-building-fill-add"></i>
+                <h3 class="mb-0 fw-bold">Add New Supplier</h3>
+                <p class="mb-0 mt-2 opacity-75">Fill in the details below to add a new supplier</p>
+            </div>
+
+            <div class="form-body">
+                <form method="post" id="supplierForm">
+                    {% csrf_token %}
+                    
+                    <div class="row g-4">
+                        <!-- Supplier Name -->
+                        <div class="col-12">
+                            <label class="form-label required-field">Supplier/Company Name</label>
+                            <div class="input-with-icon">
+                                {{ form.name }}
+                                <i class="bi bi-building form-icon"></i>
+                            </div>
+                        </div>
+
+                        <!-- Phone Number -->
+                        <div class="col-md-6">
+                            <label class="form-label">Phone Number</label>
+                            <div class="input-with-icon">
+                                {{ form.phone }}
+                                <i class="bi bi-telephone form-icon"></i>
+                            </div>
+                        </div>
+
+                        <!-- Email -->
+                        <div class="col-md-6">
+                            <label class="form-label">Email Address</label>
+                            <div class="input-with-icon">
+                                {{ form.email }}
+                                <i class="bi bi-envelope form-icon"></i>
+                            </div>
+                        </div>
+
+                        <!-- Address (if form has it) -->
+                        {% if form.address %}
+                        <div class="col-12">
+                            <label class="form-label">Business Address</label>
+                            <div class="input-with-icon">
+                                {{ form.address }}
+                                <i class="bi bi-geo-alt form-icon"></i>
+                            </div>
+                        </div>
+                        {% endif %}
+
+                        <!-- Additional Info -->
+                        <div class="col-12">
+                            <div class="alert alert-success d-flex align-items-center" role="alert">
+                                <i class="bi bi-info-circle me-2"></i>
+                                <div>
+                                    <strong>Note:</strong> Only supplier name is required. Other fields are optional but recommended.
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="col-12">
+                            <div class="d-flex gap-3 justify-content-end">
+                                <a href="{% url 'supplier_list' %}" class="btn btn-cancel">
+                                    <i class="bi bi-x-circle me-2"></i>Cancel
+                                </a>
+                                <button type="submit" class="btn btn-submit">
+                                    <i class="bi bi-check-circle me-2"></i>Save Supplier
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+            </div>
+        </div>
+
+        <!-- Quick Tips -->
+        <div class="card mt-4 border-0 bg-light">
+            <div class="card-body">
+                <h6 class="fw-bold mb-3"><i class="bi bi-lightbulb text-warning me-2"></i>Quick Tips</h6>
+                <ul class="mb-0 small text-muted">
+                    <li>Maintain accurate supplier contact information for smooth communication</li>
+                    <li>Email is useful for purchase orders and business correspondence</li>
+                    <li>Complete address helps with shipment coordination</li>
+                    <li>You can always update supplier details later</li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    // Add Bootstrap classes to form fields
+    document.addEventListener('DOMContentLoaded', function() {
+        const inputs = document.querySelectorAll('input, textarea, select');
+        inputs.forEach(input => {
+            input.classList.add('form-control');
+        });
+        
+        // Set placeholders
+        const nameInput = document.querySelector('input[name="name"]');
+        if (nameInput) nameInput.placeholder = 'Enter supplier or company name';
+        
+        const phoneInput = document.querySelector('input[name="phone"]');
+        if (phoneInput) phoneInput.placeholder = 'e.g., 03001234567';
+        
+        const emailInput = document.querySelector('input[name="email"]');
+        if (emailInput) emailInput.placeholder = 'supplier@company.com';
+        
+        const addressInput = document.querySelector('textarea[name="address"]');
+        if (addressInput) addressInput.placeholder = 'Enter complete business address';
+    });
+
+    // Form validation
+    document.getElementById('supplierForm').addEventListener('submit', function(e) {
+        const name = document.querySelector('input[name="name"]').value.trim();
+        if (!name) {
+            e.preventDefault();
+            alert('Please enter supplier name');
+            return false;
+        }
+    });
+
+    // Auto-format phone number
+    const phoneInput = document.querySelector('input[name="phone"]');
+    if (phoneInput) {
+        phoneInput.addEventListener('input', function(e) {
+            this.value = this.value.replace(/[^0-9+]/g, '');
+        });
+    }
+</script>
+{% endblock %}

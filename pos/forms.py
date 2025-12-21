@@ -1,5 +1,5 @@
 from django import forms
-from .models import Customer, Product
+from .models import Customer, Product , Supplier
 
 
 class CustomerForm(forms.ModelForm):
@@ -10,6 +10,17 @@ class CustomerForm(forms.ModelForm):
             "name": forms.TextInput(attrs={"class": "form-control"}),
             "phone": forms.TextInput(attrs={"class": "form-control"}),
             "email": forms.EmailInput(attrs={"class": "form-control"}),
+        }
+
+class SupplierForm(forms.ModelForm):
+    class Meta:
+        model = Supplier
+        fields = ["name", "phone", "email" , "address"]
+        widgets = {
+            "name": forms.TextInput(attrs={"class": "form-control"}),
+            "phone": forms.TextInput(attrs={"class": "form-control"}),
+            "email": forms.EmailInput(attrs={"class": "form-control"}),
+            "address": forms.Textarea(attrs={"class": "form-control", "rows": 3}),
         }
 
 class ProductForm(forms.ModelForm):

@@ -31,7 +31,7 @@ class CustomerAdmin(admin.ModelAdmin):
     
 @admin.register(Supplier)
 class SupplierAdmin(admin.ModelAdmin):
-    list_display = ("name", "phone", "email", "is_active")
+    list_display = ("name", "phone", "email", "address","is_active")
     search_fields = ("name", "phone")
     list_filter = ("is_active",)
     
@@ -53,3 +53,6 @@ class PurchaseItemAdmin(admin.ModelAdmin):
 @admin.register(Category)
 class CategoryAdmin(admin.ModelAdmin):
     list_display = ("name", "is_active")
+    
+
+

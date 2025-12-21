@@ -1,9 +1,9 @@
 from django.shortcuts import render
 from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
-from .models import Category, Product, PurchaseItem, Sale, SaleItem , Customer
+from .models import Category, Product, PurchaseItem, Sale, SaleItem , Customer ,Supplier , Purchase
 from django.db.models import Sum,Count , F , Q , Value ,  DecimalField, ExpressionWrapper
-from .forms import CustomerForm , ProductForm
+from .forms import CustomerForm , ProductForm, SupplierForm
 from datetime import datetime
 from django.utils import timezone
 from reportlab.lib.pagesizes import mm
@@ -456,6 +456,24 @@ def add_customer_from_pos(request):
         {"form": form}
     )
 
+
+def add_supplier_from_pos(request):
+    
+    if request.method == "POST":
+        form = SupplierForm(request.POST)
+        if form.is_valid():
+            form.save()
+            return redirect("pos_screen")
+    else:
+        form = SupplierForm()
+
+    return render(
+        request,
+        "pos/add_supplier.html",
+        {"form": form}
+    )
+
+
     
     
     from django.db.models import Q, F, Sum, Value
@@ -741,6 +759,7 @@ def products_by_category(request, category_id):
  
 
 def daily_sales_report(request):
+    
     from django.db.models import Q, F, Sum, Value, DecimalField
     from django.db.models.functions import Coalesce
     from django.utils import timezone
@@ -869,3 +888,106 @@ def daily_sales_report(request):
         "yesterday": yesterday,
     }
     return render(request, "pos/daily_sales_report.html", context)
+#############################################PARTIES APP VIEW ##########################################
+
+def parties_home(request):
+    """Landing page for parties management"""
+    total_customers = Customer.objects.count()
+    total_suppliers = Supplier.objects.count()
+    
+    # Recent customers and suppliers
+    recent_customers = Customer.objects.all().order_by('-id')[:5]
+    recent_suppliers = Supplier.objects.all().order_by('-id')[:5]
+    
+    context = {
+        'total_customers': total_customers,
+        'total_suppliers': total_suppliers,
+        'recent_customers': recent_customers,
+        'recent_suppliers': recent_suppliers,
+    }
+    return render(request, 'parties/parties_home.html', context)
+
+
+def customer_list(request):
+    """List all customers with search functionality"""
+    search = request.GET.get('search', '')
+    
+    customers = Customer.objects.all()
+    
+    if search:
+        customers = customers.filter(
+            Q(name__icontains=search) |
+            Q(phone__icontains=search) |
+            Q(email__icontains=search)
+        )
+    
+    customers = customers.order_by('-id')
+    
+    context = {
+        'customers': customers,
+        'search_term': search,
+        'total_customers': customers.count(),
+    }
+    return render(request, 'parties/customer_list.html', context)
+
+
+def supplier_list(request):
+    """List all suppliers with search functionality"""
+    search = request.GET.get('search', '')
+    
+    suppliers = Supplier.objects.all()
+    
+    if search:
+        suppliers = suppliers.filter(
+            Q(name__icontains=search) |
+            Q(phone__icontains=search) |
+            Q(email__icontains=search)
+        )
+    
+    suppliers = suppliers.order_by('-id')
+    
+    context = {
+        'suppliers': suppliers,
+        'search_term': search,
+        'total_suppliers': suppliers.count(),
+    }
+    return render(request, 'parties/supplier_list.html', context)
+
+
+def customer_detail(request, id):
+    """Customer detail page with sales history"""
+    customer = get_object_or_404(Customer, id=id)
+    
+    # Get customer's sales history
+    sales = Sale.objects.filter(customer=customer).order_by('-created_at')
+    
+    # Calculate statistics
+    total_sales = sales.aggregate(
+        total=Coalesce(Sum('total_amount'), Value(0, output_field=DecimalField()))
+    )['total']
+    
+    total_transactions = sales.count()
+    
+    context = {
+        'customer': customer,
+        'sales': sales,
+        'total_sales': total_sales,
+        'total_transactions': total_transactions,
+    }
+    return render(request, 'parties/customer_detail.html', context)
+
+
+def supplier_detail(request, id):
+    """Supplier detail page with purchase history"""
+    supplier = get_object_or_404(Supplier, id=id)
+    
+    # Get supplier's purchase history if you have a Purchase model
+    # Otherwise, you can show products supplied by this supplier
+    products = Product.objects.filter(supplier=supplier).order_by('-id')
+    
+    context = {
+        'supplier': supplier,
+        'products': products,
+        'total_products': products.count(),
+    }
+    return render(request, 'parties/supplier_detail.html', context)
