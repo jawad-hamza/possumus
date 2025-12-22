@@ -1,6 +1,7 @@
 from urllib import request
 from django.contrib import admin
-from .models import Product,Sale,SaleItem, Customer, Supplier , Purchase, PurchaseItem, Category
+from .models import Product,Sale,SaleItem, Customer, Supplier , Purchase, PurchaseItem, Category, LedgerEntry, CompanyProfile
+from django.contrib.contenttypes.models import ContentType
 # Register your models here.
 
 @admin.register(Product)
@@ -56,3 +57,75 @@ class CategoryAdmin(admin.ModelAdmin):
     
 
 
+@admin.register(LedgerEntry)
+class LedgerEntryAdmin(admin.ModelAdmin):
+    list_display = (
+        'party_name',
+        'party_type',
+        'entry_type',
+        'amount',
+        'reference',
+        'created_at',
+    )
+
+    list_filter = (
+        'entry_type',
+        'reference',
+        'content_type',
+        'created_at',
+    )
+
+    search_fields = (
+        'note',
+        'reference',
+        'object_id',
+    )
+
+    date_hierarchy = 'created_at'
+
+    ordering = ('-created_at',)
+
+    readonly_fields = ('created_at',)
+
+    fieldsets = (
+        ("Party", {
+            "fields": ("content_type", "object_id")
+        }),
+        ("Transaction", {
+            "fields": ("entry_type", "amount", "reference", "note")
+        }),
+        ("Meta", {
+            "fields": ("created_at",)
+        }),
+    )
+
+    # -----------------------------
+    # Custom display helpers
+    # -----------------------------
+    def party_name(self, obj):
+        return str(obj.party)
+    party_name.short_description = "Party"
+
+    def party_type(self, obj):
+        return obj.content_type.model.capitalize()
+    party_type.short_description = "Type"
+    
+    
+@admin.register(CompanyProfile)
+class CompanyProfileAdmin(admin.ModelAdmin):
+    list_display = ("name", "phone", "is_active")
+    list_filter = ("is_active",)
+    search_fields = ("name", "phone", "email")
+
+    fieldsets = (
+        ("Company Info", {
+            "fields": ("name", "logo", "address", "phone", "email")
+        }),
+        ("Invoice Settings", {
+            "fields": ("invoice_footer", "show_qr", "qr_note")
+        }),
+        ("Status", {
+            "fields": ("is_active",)
+        }),
+    )
+    

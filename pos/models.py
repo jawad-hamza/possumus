@@ -71,8 +71,11 @@ class Sale(models.Model):
         blank=True,
         related_name="sales",
     )
+    is_credit = models.BooleanField(
+        default=False,
+        help_text="Sale on loan / udhaar"
+    )
     created_at = models.DateTimeField(auto_now_add=True)
-
     discount_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
@@ -244,3 +247,84 @@ class PurchaseItem(models.Model):
 #####`#############################################################################################`
 
 
+from django.db import models
+from django.contrib.contenttypes.fields import GenericForeignKey
+from django.contrib.contenttypes.models import ContentType
+
+class LedgerEntry(models.Model):
+    DEBIT = 'debit'
+    CREDIT = 'credit'
+
+    ENTRY_TYPE_CHOICES = (
+        (DEBIT, 'Debit'),
+        (CREDIT, 'Credit'),
+    )
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    party = GenericForeignKey('content_type', 'object_id')
+
+    entry_type = models.CharField(
+        max_length=6,
+        choices=ENTRY_TYPE_CHOICES
+    )
+
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+
+    reference = models.CharField(
+        max_length=50,
+        blank=True,
+        help_text="Sale / Purchase / Payment / Loan"
+    )
+
+    note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ['-created_at']
+
+    def __str__(self):
+        return f"{self.party} | {self.entry_type} | {self.amount}"
+    
+########################
+class CompanyProfile(models.Model):
+    """
+    Single source of truth for invoice branding & company info
+    """
+
+    name = models.CharField(max_length=200)
+    logo = models.ImageField(
+        upload_to="company_logos/",
+        blank=True,
+        null=True
+    )
+
+    address = models.TextField(blank=True)
+    phone = models.CharField(max_length=50, blank=True)
+    email = models.EmailField(blank=True)
+
+    invoice_footer = models.TextField(
+        blank=True,
+        help_text="Text shown at bottom of invoice"
+    )
+
+    show_qr = models.BooleanField(default=True)
+    qr_note = models.CharField(
+        max_length=255,
+        blank=True,
+        help_text="Text below QR code"
+    )
+
+    is_active = models.BooleanField(
+        default=True,
+        help_text="Only one company profile should be active"
+    )
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        verbose_name = "Company Profile"
+        verbose_name_plural = "Company Profile"
+
+    def __str__(self):
+        return self.name

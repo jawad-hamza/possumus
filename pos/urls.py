@@ -1,6 +1,8 @@
+from django.conf import settings
 from django.contrib import admin
 from django.urls import path
 from . import views
+from django.conf.urls.static import static
 
 urlpatterns = [
     path('', views.home, name='home'),
@@ -28,8 +30,11 @@ urlpatterns = [
     path('parties/suppliers/', views.supplier_list, name='supplier_list'),
     path('parties/customer/<int:id>/', views.customer_detail, name='customer_detail'),
     path('parties/supplier/<int:id>/', views.supplier_detail, name='supplier_detail'),
+    
+    path('accounts/', views.accounts_home, name='accounts_home'),
+    path('accounts/party/<str:party_type>/<int:id>/',views.party_ledger,name='party_ledger'),
 
 
 
 
-]
+]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

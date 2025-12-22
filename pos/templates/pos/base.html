@@ -209,6 +209,10 @@
             <i class="bi bi-people"></i>
             <span>Parties</span>
         </a>
+        <a href="{% url 'accounts_home' %}" class="{% if 'accounts_home' in request.path %}active{% endif %}">
+            <i class="bi-journal-text"></i>
+            <span>Accounts</span>
+        </a>
 
         <a href="{% url 'daily_sales_report' %}" class="{% if 'reports' in request.path %}active{% endif %}">
             <i class="bi bi-bar-chart"></i>

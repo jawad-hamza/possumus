@@ -1,0 +1,46 @@
+{% extends "pos/base.html" %}
+
+{% block title %}Accounts{% endblock %}
+
+{% block content %}
+<div class="container mt-4">
+    <h2>Accounts Summary</h2>
+
+    <table class="table table-bordered table-hover">
+        <thead>
+            <tr>
+                <th>Party</th>
+                <th>Type</th>
+                <th>Debit</th>
+                <th>Credit</th>
+                <th>Balance</th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for row in rows %}
+            <tr>
+                <td>
+                    <a href="{% url 'party_ledger' row.type row.party.id %}">
+                        {{ row.party.name }}
+                    </a>
+                </td>
+                <td>{{ row.type|title }}</td>
+                <td>{{ row.debit }}</td>
+                <td>{{ row.credit }}</td>
+                <td>
+                    {% if row.balance > 0 %}
+                        <span class="text-danger">{{ row.balance }}</span>
+                    {% else %}
+                        <span class="text-success">{{ row.balance }}</span>
+                    {% endif %}
+                </td>
+            </tr>
+        {% empty %}
+            <tr>
+                <td colspan="5">No accounting data</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+{% endblock %}

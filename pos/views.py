@@ -1,7 +1,6 @@
-from django.shortcuts import render
 from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
-from .models import Category, Product, PurchaseItem, Sale, SaleItem , Customer ,Supplier , Purchase
+from .models import Category, Product, PurchaseItem, Sale, SaleItem , Customer ,Supplier , Purchase,LedgerEntry , CompanyProfile
 from django.db.models import Sum,Count , F , Q , Value ,  DecimalField, ExpressionWrapper
 from .forms import CustomerForm , ProductForm, SupplierForm
 from datetime import datetime
@@ -14,6 +13,7 @@ from django.core.paginator import Paginator
 from django.http import JsonResponse
 from django.db.models.functions import Coalesce
 import datetime
+from django.contrib.contenttypes.models import ContentType
 
 # Create your views here.
 
@@ -293,8 +293,12 @@ def safe_decimal(value):
     except (TypeError, InvalidOperation):
         return Decimal("0")
 
+
 def pos_screen(request):
     cart = request.session.get("cart", {})
+
+    # ✅ Category filter (simple GET)
+    selected_category = request.GET.get("category")  # string or None
 
     # =========================
     # HANDLE POST ACTIONS
@@ -309,12 +313,18 @@ def pos_screen(request):
         if action == "add" and product_id:
             product = get_object_or_404(Product, id=product_id)
 
+            current_qty = cart.get(product_id, {}).get("quantity", 0)
+
+            # ✅ BLOCK add if no stock OR qty exceeds stock
+            if product.stock <= 0 or current_qty >= product.stock:
+                # messages.error(request, f"Not enough stock for {product.name}")  # optional
+                return redirect("pos_screen")
+
             if product_id in cart:
                 cart[product_id]["quantity"] += 1
             else:
                 cart[product_id] = {
                     "name": product.name,
-                    # store price as string to avoid float issues
                     "price": str(product.price),
                     "quantity": 1,
                 }
@@ -330,7 +340,6 @@ def pos_screen(request):
                 cart[product_id]["quantity"] -= 1
                 if cart[product_id]["quantity"] <= 0:
                     cart.pop(product_id, None)
-
                 request.session["cart"] = cart
             return redirect("pos_screen")
 
@@ -350,19 +359,33 @@ def pos_screen(request):
             if not cart:
                 return redirect("pos_screen")
 
-            # Read discount & tax correctly
+            # ✅ SERVER-SIDE STOCK VALIDATION (must-have)
+            # Ensure every cart qty <= current product stock
+            for pid, item in cart.items():
+                product = get_object_or_404(Product, id=pid)
+                if item["quantity"] > product.stock:
+                    # messages.error(request, f"Not enough stock for {product.name}")  # optional
+                    return redirect("pos_screen")
+
             discount_rate = safe_decimal(request.POST.get("discount_rate"))
             tax_rate = safe_decimal(request.POST.get("tax_rate"))
+
+            is_credit = request.POST.get("is_credit") == "on"
             customer_id = request.POST.get("customer_id") or None
 
-            # create Sale once, with correct rates
+            # ✅ Credit sale only allowed if registered customer selected
+            if is_credit and not customer_id:
+                # messages.error(request, "Select a registered customer for loan sale.")  # optional
+                return redirect("pos_screen")
+
             sale = Sale.objects.create(
                 customer_id=customer_id,
+                is_credit=is_credit,
                 discount_rate=discount_rate,
                 tax_rate=tax_rate
             )
 
-            # create SaleItem objects
+            # Create SaleItem objects (SaleItem.clean will also protect)
             for pid, item in cart.items():
                 SaleItem.objects.create(
                     sale=sale,
@@ -371,28 +394,39 @@ def pos_screen(request):
                     quantity=item["quantity"],
                 )
 
-            # now that items are created, calculate total properly
             sale.update_total()
 
-            # clear cart
             request.session["cart"] = {}
-
-            # redirect to invoice
             return redirect("invoice", sale_id=sale.id)
 
     # =========================
     # GET REQUEST (DISPLAY POS)
     # =========================
+    products_qs = Product.objects.filter(is_active=True)
 
-    products = Product.objects.filter(is_active=True)
-    customers = Customer.objects.filter(is_active=True)
-    categories = Category.objects.filter(is_active=True)
+    if selected_category:
+        products_qs = products_qs.filter(category_id=selected_category)
 
-    # calculate UI cart total for display
+    products = products_qs.order_by("name")
+    categories = Category.objects.filter(is_active=True).order_by("name")
+    customers = Customer.objects.filter(is_active=True).order_by("name")
+
+    # Build a stock_map for template checks
+    stock_map = {str(p.id): p.stock for p in Product.objects.only("id", "stock")}
+
+    # cart total
     cart_total = sum(
         Decimal(item["price"]) * item["quantity"]
         for item in cart.values()
     )
+
+    # ✅ Determine if checkout should be disabled (front-end safety)
+    checkout_disabled = False
+    for pid, item in cart.items():
+        available = stock_map.get(str(pid), 0)
+        if item["quantity"] > available or available <= 0:
+            checkout_disabled = True
+            break
 
     return render(
         request,
@@ -403,27 +437,29 @@ def pos_screen(request):
             "categories": categories,
             "customers": customers,
             "cart_total": cart_total,
+            "selected_category": str(selected_category) if selected_category else "",
+            "stock_map": stock_map,
+            "checkout_disabled": checkout_disabled,
         }
     )
+
 def invoice(request, sale_id):
     sale = get_object_or_404(Sale, id=sale_id)
     items = sale.items.all()
 
-    # Calculate subtotal (for display only)
-    subtotal = Decimal("0")
-    for item in items:
-        subtotal += item.price * item.quantity
+    # calculations (same as before)
+    subtotal = sum(item.price * item.quantity for item in items)
 
     discount_rate = sale.discount_rate or Decimal("0")
     tax_rate = sale.tax_rate or Decimal("0")
 
     discount_amount = subtotal * (discount_rate / Decimal("100"))
     after_discount = subtotal - discount_amount
-
     tax_amount = after_discount * (tax_rate / Decimal("100"))
 
-    # ✅ FINAL TOTAL COMES FROM MODEL (SOURCE OF TRUTH)
     grand_total = sale.total_amount
+
+    company = CompanyProfile.objects.filter(is_active=True).first()
 
     return render(
         request,
@@ -437,9 +473,10 @@ def invoice(request, sale_id):
             "tax_rate": tax_rate,
             "tax_amount": tax_amount,
             "grand_total": grand_total,
+            "company": company,
+            "payments": [],  # later
         }
     )
-
 def add_customer_from_pos(request):
     
     if request.method == "POST":
@@ -561,14 +598,15 @@ def add_supplier_from_pos(request):
         "yesterday": yesterday,
     }
     return render(request, "pos/daily_sales_report.html", context)
+
 def invoice_pdf(request, sale_id):
     sale = get_object_or_404(Sale, id=sale_id)
     items = sale.items.all()
 
-    # -------- Calculations (DISPLAY ONLY) --------
-    subtotal = Decimal("0")
-    for item in items:
-        subtotal += item.price * item.quantity
+    # =========================
+    # CALCULATIONS
+    # =========================
+    subtotal = sum(item.price * item.quantity for item in items)
 
     discount_rate = sale.discount_rate or Decimal("0")
     tax_rate = sale.tax_rate or Decimal("0")
@@ -577,24 +615,44 @@ def invoice_pdf(request, sale_id):
     after_discount = subtotal - discount_amount
     tax_amount = after_discount * (tax_rate / Decimal("100"))
 
-    grand_total = sale.total_amount  # source of truth
-    # --------------------------------------------
+    grand_total = sale.total_amount
 
-    # -------- THERMAL PAPER SIZE --------
-    paper_width = 80 * mm          # 80mm roll
+    previous_balance = Decimal("0")
+    new_balance = None
+
+    if sale.customer and sale.is_credit:
+        previous_balance = getattr(sale.customer, "balance", Decimal("0"))
+        new_balance = previous_balance + grand_total
+
+    # =========================
+    # THERMAL PAPER SETUP
+    # =========================
+    paper_width = 80 * mm
     line_height = 12
 
-    # Dynamic height (base + items)
-    paper_height = 120 + (len(items) * 35)
-    # -----------------------------------
+    BASE_LINES = 14
+    ITEM_LINES = 2
+    CREDIT_LINES = 5 if sale.is_credit else 0
+    FOOTER_LINES = 3
+
+    total_lines = (
+        BASE_LINES +
+        (len(items) * ITEM_LINES) +
+        CREDIT_LINES +
+        FOOTER_LINES
+    )
+
+    paper_height = (total_lines * line_height) + 20
+    y = paper_height - line_height
 
     response = HttpResponse(content_type="application/pdf")
     response["Content-Disposition"] = f'attachment; filename="receipt_{sale.id}.pdf"'
 
     p = canvas.Canvas(response, pagesize=(paper_width, paper_height))
-    y = paper_height + 25
 
-    # ---------- HEADER ----------
+    # =========================
+    # HEADER
+    # =========================
     p.setFont("Helvetica-Bold", 12)
     p.drawCentredString(paper_width / 2, y, "POS IMS")
     y -= line_height
@@ -603,7 +661,7 @@ def invoice_pdf(request, sale_id):
     p.drawCentredString(paper_width / 2, y, "Sales Receipt")
     y -= line_height * 2
 
-    p.drawString(10, y, f"Bill #: {sale.id}")
+    p.drawString(10, y, f"Invoice #: {sale.id}")
     y -= line_height
 
     p.drawString(10, y, sale.created_at.strftime("%d-%m-%Y %H:%M"))
@@ -616,15 +674,17 @@ def invoice_pdf(request, sale_id):
     p.line(10, y, paper_width - 10, y)
     y -= line_height
 
-    # ---------- ITEMS ----------
+    # =========================
+    # ITEMS
+    # =========================
     p.setFont("Helvetica", 9)
 
     for item in items:
-        p.drawString(10, y, item.product.name)
+        p.drawString(10, y, item.product.name[:32])
         y -= line_height
 
-        p.drawString(
-            10,
+        p.drawRightString(
+            paper_width - 10,
             y,
             f"{item.quantity} x {item.price} = {item.price * item.quantity}"
         )
@@ -633,21 +693,52 @@ def invoice_pdf(request, sale_id):
     p.line(10, y, paper_width - 10, y)
     y -= line_height
 
-    # ---------- TOTALS ----------
-    p.drawString(10, y, f"Subtotal: Rs {subtotal}")
+    # =========================
+    # TOTALS
+    # =========================
+    p.drawString(10, y, "Subtotal:")
+    p.drawRightString(paper_width - 10, y, f"Rs {subtotal:.2f}")
     y -= line_height
 
-    p.drawString(10, y, f"Discount ({discount_rate}%): -Rs {discount_amount}")
-    y -= line_height
+    if discount_rate > 0:
+        p.drawString(10, y, f"Discount ({discount_rate}%):")
+        p.drawRightString(paper_width - 10, y, f"- Rs {discount_amount:.2f}")
+        y -= line_height
 
-    p.drawString(10, y, f"Tax ({tax_rate}%): Rs {tax_amount}")
-    y -= line_height
+    if tax_rate > 0:
+        p.drawString(10, y, f"Tax ({tax_rate}%):")
+        p.drawRightString(paper_width - 10, y, f"Rs {tax_amount:.2f}")
+        y -= line_height
 
     p.setFont("Helvetica-Bold", 11)
-    p.drawString(10, y, f"TOTAL: Rs {grand_total}")
-    y -= line_height * 2
+    p.drawString(10, y, "TOTAL:")
+    p.drawRightString(paper_width - 10, y, f"Rs {grand_total:.2f}")
+    y -= line_height
 
-    # ---------- FOOTER ----------
+    # =========================
+    # CREDIT BALANCE
+    # =========================
+    if sale.is_credit and sale.customer:
+        p.line(10, y, paper_width - 10, y)
+        y -= line_height
+
+        p.setFont("Helvetica", 9)
+        p.drawString(10, y, "Previous Balance:")
+        p.drawRightString(paper_width - 10, y, f"Rs {previous_balance:.2f}")
+        y -= line_height
+
+        p.drawString(10, y, "This Sale:")
+        p.drawRightString(paper_width - 10, y, f"Rs {grand_total:.2f}")
+        y -= line_height
+
+        p.setFont("Helvetica-Bold", 10)
+        p.drawString(10, y, "New Balance:")
+        p.drawRightString(paper_width - 10, y, f"Rs {new_balance:.2f}")
+        y -= line_height
+
+    # =========================
+    # FOOTER
+    # =========================
     p.setFont("Helvetica", 8)
     p.drawCentredString(paper_width / 2, y, "Thank you for your purchase!")
     y -= line_height
@@ -658,92 +749,8 @@ def invoice_pdf(request, sale_id):
     p.save()
 
     return response
-    
-    sale = get_object_or_404(Sale, id=sale_id)
-    items = sale.items.all()
 
-    # -------- Calculations (DISPLAY ONLY) --------
-    subtotal = Decimal("0")
-    for item in items:
-        subtotal += item.price * item.quantity
-
-    discount_rate = sale.discount_rate or Decimal("0")
-    tax_rate = sale.tax_rate or Decimal("0")
-
-    discount_amount = subtotal * (discount_rate / Decimal("100"))
-    after_discount = subtotal - discount_amount
-    tax_amount = after_discount * (tax_rate / Decimal("100"))
-
-    grand_total = sale.total_amount  # ✅ SOURCE OF TRUTH
-    # --------------------------------------------
-
-    response = HttpResponse(content_type="application/pdf")
-    response["Content-Disposition"] = f'attachment; filename="invoice_{sale.id}.pdf"'
-
-    p = canvas.Canvas(response, pagesize=A4)
-    width, height = A4
-    y = height - 50
-
-    # ---------- HEADER ----------
-    p.setFont("Helvetica-Bold", 16)
-    p.drawString(50, y, "INVOICE")
-    y -= 30
-
-    p.setFont("Helvetica", 10)
-    p.drawString(50, y, f"Invoice #: {sale.id}")
-    y -= 15
-    p.drawString(50, y, f"Date: {sale.created_at.strftime('%d-%m-%Y %H:%M')}")
-
-    customer_name = sale.customer.name if sale.customer else "Walk-in Customer"
-    y -= 15
-    p.drawString(50, y, f"Customer: {customer_name}")
-    y -= 30
-
-    # ---------- TABLE HEADER ----------
-    p.setFont("Helvetica-Bold", 10)
-    p.drawString(50, y, "Product")
-    p.drawString(250, y, "Qty")
-    p.drawString(300, y, "Price")
-    p.drawString(370, y, "Total")
-    y -= 15
-
-    p.setFont("Helvetica", 10)
-
-    # ---------- ITEMS ----------
-    for item in items:
-        p.drawString(50, y, item.product.name)
-        p.drawString(250, y, str(item.quantity))
-        p.drawString(300, y, f"Rs {item.price}")
-        p.drawString(370, y, f"Rs {item.price * item.quantity}")
-        y -= 15
-
-        if y < 120:
-            p.showPage()
-            y = height - 50
-
-    # ---------- SUMMARY ----------
-    y -= 20
-    p.setFont("Helvetica", 10)
-    p.drawString(300, y, "Subtotal:")
-    p.drawString(400, y, f"Rs {subtotal}")
-
-    y -= 15
-    p.drawString(300, y, f"Discount ({discount_rate}%):")
-    p.drawString(400, y, f"- Rs {discount_amount}")
-
-    y -= 15
-    p.drawString(300, y, f"Tax ({tax_rate}%):")
-    p.drawString(400, y, f"Rs {tax_amount}")
-
-    y -= 20
-    p.setFont("Helvetica-Bold", 12)
-    p.drawString(300, y, "Grand Total:")
-    p.drawString(400, y, f"Rs {grand_total}")
-
-    p.showPage()
-    p.save()
-
-    return response
+###################################################################################
 def products_by_category(request, category_id):
     products = Product.objects.filter(
         category_id=category_id,
@@ -991,3 +998,103 @@ def supplier_detail(request, id):
         'total_products': products.count(),
     }
     return render(request, 'parties/supplier_detail.html', context)
+
+###################################################################################################
+
+def accounts_home(request):
+    from django.db.models import Sum
+
+    rows = []
+
+    for model, ptype in [(Customer, 'customer'), (Supplier, 'supplier')]:
+        for party in model.objects.filter(is_active=True):
+            ct = ContentType.objects.get_for_model(party)
+
+            debit = LedgerEntry.objects.filter(
+                content_type=ct,
+                object_id=party.id,
+                entry_type='debit'
+            ).aggregate(total=Sum('amount'))['total'] or 0
+
+            credit = LedgerEntry.objects.filter(
+                content_type=ct,
+                object_id=party.id,
+                entry_type='credit'
+            ).aggregate(total=Sum('amount'))['total'] or 0
+
+            rows.append({
+                'party': party,
+                'type': ptype,
+                'balance': debit - credit
+            })
+
+    return render(request, 'accounts/index.html', {'rows': rows})
+
+
+def party_ledger(request, party_type, id):
+    if party_type == 'customer':
+        party = get_object_or_404(Customer, id=id)
+    else:
+        party = get_object_or_404(Supplier, id=id)
+
+    ct = ContentType.objects.get_for_model(party)
+
+    ledger = LedgerEntry.objects.filter(
+        content_type=ct,
+        object_id=party.id
+    )
+
+    debit = ledger.filter(entry_type='debit').aggregate(
+        total=Sum('amount')
+    )['total'] or 0
+
+    credit = ledger.filter(entry_type='credit').aggregate(
+        total=Sum('amount')
+    )['total'] or 0
+
+    balance = debit - credit
+
+    return render(request, 'accounts/party_ledger.html', {
+        'party': party,
+        'party_type': party_type,
+        'ledger': ledger,
+        'debit': debit,
+        'credit': credit,
+        'balance': balance,
+    })
+
+def create_sale_ledger(sale):
+    """
+    Create ledger entry ONLY for credit sales
+    """
+    if not sale.is_credit:
+        return
+
+    if not sale.customer:
+        return
+
+    ct = ContentType.objects.get_for_model(sale.customer)
+
+    LedgerEntry.objects.create(
+        content_type=ct,
+        object_id=sale.customer.id,
+        entry_type=LedgerEntry.DEBIT,
+        amount=sale.total_amount,
+        reference="Sale",
+        note=f"Sale #{sale.id} (Credit)"
+    )
+
+def create_purchase_ledger(purchase):
+    if not purchase.supplier:
+        return
+
+    ct = ContentType.objects.get_for_model(purchase.supplier)
+
+    LedgerEntry.objects.create(
+        content_type=ct,
+        object_id=purchase.supplier.id,
+        entry_type=LedgerEntry.CREDIT,
+        amount=purchase.total_amount,
+        reference="Purchase",
+        note=f"Purchase #{purchase.id}"
+    )
