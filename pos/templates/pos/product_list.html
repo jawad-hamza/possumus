@@ -38,6 +38,12 @@
     <a href="{% url 'product_add' %}" class="btn btn-primary">
         <i class="bi bi-plus-circle"></i> Add Product
     </a>
+    <a href="{% url 'brand_add' %}" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-plus-circle"></i> Add Brand
+    </a>
+    <a href="{% url 'category_add' %}" class="btn btn-sm btn-outline-primary">
+        <i class="bi bi-plus-circle"></i> Add Category
+    </a>
 </div>
 
 <!-- TABLE -->
@@ -47,7 +53,7 @@
             <tr>
                 <th>#</th>
                 <th>Barcode</th>
-                <th>SKU</th>
+                <th>Brand</th>
                 <th>Name</th>
                 <th>Category</th>
                 <th>Supplier</th>
@@ -66,7 +72,7 @@
                 <td>{% barcode_image product.sku 80 %}</td>
 
                 <!-- SKU text -->
-                <td>{{ product.sku }}</td>
+                <td>{{ product.brand }}</td>
 
                 <td>
                     <a href="{% url 'product_view' product.id %}">

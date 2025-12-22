@@ -10,6 +10,14 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name
+    
+#####################################################################
+class Brand(models.Model):
+    name = models.CharField(max_length=100, unique=True)
+    is_active = models.BooleanField(default=True)
+
+    def __str__(self):
+        return self.name
 
 
 ## Supplier model to represent product suppliers ##################################################
@@ -34,6 +42,16 @@ class Product(models.Model):
         blank=True,
         related_name="products"
     )
+    
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="products"
+    )
+
+    
     supplier = models.ForeignKey(
     Supplier,
     on_delete=models.SET_NULL,
@@ -328,3 +346,9 @@ class CompanyProfile(models.Model):
 
     def __str__(self):
         return self.name
+    
+    #######################################################################
+    
+
+    
+    

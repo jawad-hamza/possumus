@@ -34,6 +34,8 @@ urlpatterns = [
     path('accounts/', views.accounts_home, name='accounts_home'),
     path('accounts/party/<str:party_type>/<int:id>/',views.party_ledger,name='party_ledger'),
 
+    path("brands/add/", views.brand_add, name="brand_add"),
+    path("categories/add/", views.category_add, name="category_add"),
 
 
 

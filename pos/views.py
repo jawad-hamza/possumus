@@ -2,7 +2,7 @@ from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from .models import Category, Product, PurchaseItem, Sale, SaleItem , Customer ,Supplier , Purchase,LedgerEntry , CompanyProfile
 from django.db.models import Sum,Count , F , Q , Value ,  DecimalField, ExpressionWrapper
-from .forms import CustomerForm , ProductForm, SupplierForm
+from .forms import CustomerForm , ProductForm, SupplierForm , BrandForm , CategoryForm
 from datetime import datetime
 from django.utils import timezone
 from reportlab.lib.pagesizes import mm
@@ -1098,3 +1098,44 @@ def create_purchase_ledger(purchase):
         reference="Purchase",
         note=f"Purchase #{purchase.id}"
     )
+
+##################################################################################
+
+def brand_add(request):
+    if request.method == "POST":
+        form = BrandForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Brand added successfully.")
+            return redirect("product_list")  # or brand list later
+    else:
+        form = BrandForm()
+
+    return render(
+        request,
+        "pos/brand_form.html",
+        {
+            "form": form,
+        }
+    )
+    
+################################################################################
+
+def category_add(request):
+    if request.method == "POST":
+        form = CategoryForm(request.POST)
+        if form.is_valid():
+            form.save()
+            messages.success(request, "Category added successfully.")
+            return redirect("product_list")  # or category list later
+    else:
+        form = CategoryForm()
+
+    return render(
+        request,
+        "pos/category_form.html",
+        {
+            "form": form,
+        }
+    )
+    

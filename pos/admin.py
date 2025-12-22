@@ -1,13 +1,13 @@
 from urllib import request
 from django.contrib import admin
-from .models import Product,Sale,SaleItem, Customer, Supplier , Purchase, PurchaseItem, Category, LedgerEntry, CompanyProfile
+from .models import Brand, Product,Sale,SaleItem, Customer, Supplier , Purchase, PurchaseItem, Category, LedgerEntry, CompanyProfile
 from django.contrib.contenttypes.models import ContentType
 # Register your models here.
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ("name", "sku","barcode", "category", "supplier", "price", "stock", "is_active")
-    list_filter = ("supplier", "is_active")
+    list_display = ("name", "brand", "sku","barcode", "category", "supplier", "price", "stock", "is_active")
+    list_filter = ("brand", "supplier", "is_active")
     search_fields = ("name", "sku", "barcode")
     
 @admin.register(Sale)
@@ -129,3 +129,8 @@ class CompanyProfileAdmin(admin.ModelAdmin):
         }),
     )
     
+@admin.register(Brand)
+class BrandAdmin(admin.ModelAdmin):
+    list_display = ("name", "is_active")
+    search_fields = ("name",)
+    list_filter = ("is_active",)
