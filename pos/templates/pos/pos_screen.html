@@ -4,11 +4,49 @@
 {% block title %}POS{% endblock %}
 
 {% block content %}
+<style>
+ /* ===== TOUCH FRIENDLY CART BUTTONS ===== */
+
+.cart-actions {
+    display: flex;
+    gap: 10px;          /* space between buttons */
+    justify-content: center;
+}
+
+.cart-btn {
+    width: 48px;
+    height: 48px;
+    font-size: 22px;
+    font-weight: bold;
+    border-radius: 8px;
+    padding: 0;
+    line-height: 1;
+}
+
+/* Optional: even better touch feel */
+.cart-btn:active {
+    transform: scale(0.92);
+}
+
+
+  </style>
 <div class="container-fluid mt-3">
   <div class="row">
+    <!-- Search Bar -->
+     <!-- Barcode / SKU Scan Input -->
+<div class="mb-3">
+  <input
+    type="text"
+    id="barcode-input"
+    class="form-control form-control-lg"
+    placeholder="Scan barcode or type SKU..."
+    autocomplete="off"
+  >
+</div>
+
 
     <!-- ================= PRODUCTS ================= -->
-    <div class="col-md-8">
+    <div class="col-lg-8 col-md-7">
       <h4>Products</h4>
 
       <!-- Categories -->
@@ -66,7 +104,7 @@
     </div>
 
     <!-- ================= CART ================= -->
-    <div class="col-md-4">
+    <div class="col-lg-4 col-md-5">
       <h4>Cart</h4>
 
       {% if cart %}
@@ -99,7 +137,7 @@
                   {% csrf_token %}
                   <input type="hidden" name="action" value="add">
                   <input type="hidden" name="product_id" value="{{ pid }}">
-                  <button class="btn btn-sm btn-success"
+                  <button class="btn btn-success cart-btn"
                           {% if item.quantity >= stock_map|get_item:pid %}disabled{% endif %}>
                     +
                   </button>
@@ -110,7 +148,7 @@
                   {% csrf_token %}
                   <input type="hidden" name="action" value="decrease">
                   <input type="hidden" name="product_id" value="{{ pid }}">
-                  <button class="btn btn-sm btn-warning">-</button>
+                  <button class="btn btn-warning cart-btn">-</button>
                 </form>
 
                 <!-- Remove -->
@@ -118,7 +156,7 @@
                   {% csrf_token %}
                   <input type="hidden" name="action" value="remove_all">
                   <input type="hidden" name="product_id" value="{{ pid }}">
-                  <button class="btn btn-sm btn-danger">x</button>
+                  <button class="btn btn-danger cart-btn">x</button>
                 </form>
               </td>
             </tr>
@@ -240,4 +278,35 @@
     </div>
   </div>
 </div>
+<!-- -search bar script-->
+<script>
+document.addEventListener("DOMContentLoaded", function () {
+    const barcodeInput = document.getElementById("barcode-input");
+
+    // Focus on load (good for barcode scanner)
+    barcodeInput.focus();
+
+    barcodeInput.addEventListener("keydown", function (e) {
+        if (e.key === "Enter") {
+            e.preventDefault();
+
+            const sku = barcodeInput.value.trim();
+            if (!sku) return;
+
+            fetch(`/pos/ajax/scan/${sku}/`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.status === "ok") {
+                        window.location.reload();
+                    } else {
+                        alert("Product not found");
+                    }
+                });
+
+            barcodeInput.value = "";
+        }
+    });
+});
+</script>
+
 {% endblock %}

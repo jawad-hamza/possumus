@@ -48,7 +48,7 @@ def scan_barcode(request, sku):
     return JsonResponse({"status": "ok"})
 
 def home (request):
-    return render(request, "pos/home.html")
+    return render(request, "pos/pos_screen.html")
 
 def product_list(request):
     # base queryset
