@@ -1,5 +1,4 @@
 from django.utils import timezone
-
 from django.db import models
 from django.core.exceptions import ValidationError
 from django.db.models import Sum
@@ -64,7 +63,7 @@ class Voucher(models.Model):
     narration = models.CharField(max_length=255, blank=True)
 
     # Optional references (we’ll use later when integrating with POS)
-    ref_model = models.CharField(max_length=50, blank=True)  # e.g. "Sale"
+    ref_model = models.CharField(max_length=50, blank=True, null=True)  # e.g. "Sale"
     ref_id = models.PositiveIntegerField(null=True, blank=True)  # e.g. sale.id
 
     def __str__(self):
@@ -203,3 +202,106 @@ class LoanTransactions(models.Model):
     class Meta:
         verbose_name = "LoanTransaction"
         verbose_name_plural = "LoanTransactions"
+        
+class AccountingEvent(models.Model):
+    """
+    Immutable business event that must be posted to accounts.
+    """
+    SALE = "sale"
+    PURCHASE = "purchase"
+    PAYMENT = "payment"
+    RECEIPT = "receipt"
+
+    EVENT_TYPE_CHOICES = (
+        (SALE, "Sale"),
+        (PURCHASE, "Purchase"),
+        (PAYMENT, "Payment"),
+        (RECEIPT, "Receipt"),
+    )
+
+    event_type = models.CharField(max_length=20, choices=EVENT_TYPE_CHOICES)
+
+    ref_model = models.CharField(max_length=50)
+    ref_id = models.PositiveIntegerField()
+
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    is_credit = models.BooleanField(default=False)
+
+    processed = models.BooleanField(default=False)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.event_type} | {self.ref_model}#{self.ref_id}"
+
+
+class Settlement(models.Model):
+    """
+    Money movement to settle AR/AP:
+    - RECEIPT: customer pays us -> Cash/Bank DR, Accounts Receivable CR
+    - PAYMENT: we pay supplier -> Accounts Payable DR, Cash/Bank CR
+    """
+
+    RECEIPT = "receipt"
+    PAYMENT = "payment"
+
+    SETTLEMENT_TYPE_CHOICES = (
+        (RECEIPT, "Receipt (Customer paid)"),
+        (PAYMENT, "Payment (Paid supplier)"),
+    )
+
+    CASH = "cash"
+    BANK = "bank"
+    PAYMENT_METHOD_CHOICES = (
+        (CASH, "Cash"),
+        (BANK, "Bank"),
+    )
+
+    date = models.DateField(default=timezone.now)
+    settlement_type = models.CharField(max_length=10, choices=SETTLEMENT_TYPE_CHOICES)
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default=CASH)
+
+    # Link to POS party (Customer or Supplier)
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    party = GenericForeignKey("content_type", "object_id")
+
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    notes = models.CharField(max_length=255, blank=True)
+
+    # auto-created accounting voucher
+    voucher = models.ForeignKey("Voucher", null=True, blank=True, on_delete=models.SET_NULL)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def clean(self):
+        if self.amount <= 0:
+            raise ValidationError("Amount must be greater than zero.")
+
+    def __str__(self):
+        return f"{self.settlement_type} #{self.id} - {self.party} - {self.amount}"
+    
+
+class PartyLedgerEntry(models.Model):
+    """
+    Sub-ledger for Customers & Suppliers.
+    Breaks AR/AP control accounts per party.
+    """
+
+    voucher = models.ForeignKey(
+        "Voucher",
+        on_delete=models.CASCADE,
+        related_name="party_entries"
+    )
+
+    # Link to Customer or Supplier
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    party = GenericForeignKey("content_type", "object_id")
+
+    debit = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    credit = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    def __str__(self):
+        return f"{self.party} | D:{self.debit} C:{self.credit}"

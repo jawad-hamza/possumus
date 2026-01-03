@@ -1,5 +1,5 @@
 from django.contrib import admin
-from .models import Account, Voucher, VoucherLine, Loans, LoanTransactions
+from .models import Account, PartyLedgerEntry, Voucher, VoucherLine, Loans, LoanTransactions , Settlement
 
 
 class VoucherLineInline(admin.TabularInline):
@@ -38,3 +38,22 @@ class LoanTransactionAdmin(admin.ModelAdmin):
     list_display = ("id", "loan", "date", "tx_type", "payment_method", "amount", "voucher")
     list_filter = ("tx_type", "payment_method", "date")
     search_fields = ("loan__party_name",)
+    
+@admin.register(Settlement)
+class SettlementAdmin(admin.ModelAdmin):
+    list_display = ("id", "date", "settlement_type", "party", "payment_method", "amount", "voucher")
+    list_filter = ("settlement_type", "payment_method", "date")
+    search_fields = ("object_id",)
+    
+@admin.register(PartyLedgerEntry)
+class PartyLedgerEntryAdmin(admin.ModelAdmin):
+    list_display = (
+        "id",
+        "party",
+        "voucher",
+        "debit",
+        "credit",
+        "created_at",
+    )
+    list_filter = ("content_type", "created_at")
+    search_fields = ("object_id",)

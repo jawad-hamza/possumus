@@ -1,6 +1,7 @@
 from django.db import models
 from django.core.exceptions import ValidationError
 from decimal import Decimal, InvalidOperation
+from accounts.models import AccountingEvent
 
 
 # Create your models here.
@@ -135,6 +136,41 @@ class Sale(models.Model):
 
         self.total_amount = after_discount + tax_amount
         self.save(update_fields=["total_amount"])
+    def update_total(self):
+        subtotal = Decimal("0")
+        for item in self.items.all():
+            subtotal += item.price * item.quantity
+
+        discount_rate = self.safe_decimal(self.discount_rate)
+        if discount_rate < 0:
+            discount_rate = Decimal("0")
+        if discount_rate > 100:
+            discount_rate = Decimal("100")
+
+        tax_rate = self.safe_decimal(self.tax_rate)
+        if tax_rate < 0:
+            tax_rate = Decimal("0")
+        if tax_rate > 100:
+            tax_rate = Decimal("100")
+
+        discount_amount = subtotal * (discount_rate / Decimal("100"))
+        after_discount = subtotal - discount_amount
+        tax_amount = after_discount * (tax_rate / Decimal("100"))
+
+        self.total_amount = after_discount + tax_amount
+        self.save(update_fields=["total_amount"])
+
+        # 🔒 PERMANENT ACCOUNTING EVENT
+        AccountingEvent.objects.get_or_create(
+            event_type=AccountingEvent.SALE,
+            ref_model="Sale",
+            ref_id=self.id,
+            defaults={
+                "amount": self.total_amount,
+                "is_credit": self.is_credit,
+            },
+        )
+
         ####################################################################################################
 class SaleItem(models.Model):
     sale = models.ForeignKey(
@@ -213,8 +249,24 @@ class Purchase(models.Model):
 
     def __str__(self):
         return f"Purchase #{self.id}"
+    def update_total(self):
+        total = 0
+        for item in self.items.all():
+            total += item.price * item.quantity  # works for product or service
 
-##################################################################################################
+        self.total_amount = total
+        self.save(update_fields=["total_amount"])
+
+        AccountingEvent.objects.get_or_create(
+            event_type=AccountingEvent.PURCHASE,
+            ref_model="Purchase",
+            ref_id=self.id,
+            defaults={
+                "amount": self.total_amount,
+                "is_credit": True,  # purchases create payables by default
+            },
+        )
+        ##################################################################################################
 class PurchaseItem(models.Model):
     purchase = models.ForeignKey(
         Purchase,
