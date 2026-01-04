@@ -116,8 +116,8 @@ class Loans(models.Model):
     GIVEN = "given"
 
     LOAN_TYPE_CHOICES = (
-        (TAKEN, "Taken (We received)"),
-        (GIVEN, "Given (We gave out)"),
+        (TAKEN, "Taken"),
+        (GIVEN, "Given"),
     )
 
     # 🔗 Link to POS parties (Customer / Supplier)

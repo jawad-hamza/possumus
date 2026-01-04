@@ -1,42 +1,37 @@
 {% extends "pos/base.html" %}
-
-{% block title %}Ledger{% endblock %}
+{% block title %}Party Ledger{% endblock %}
 
 {% block content %}
-<div class="container mt-4">
-    <h2>{{ party.name }} ({{ party_type|title }})</h2>
+<h3 class="mb-3">👥 Party Ledger: {{ party }}</h3>
 
-    <p>
-        <strong>Debit:</strong> {{ debit }} |
-        <strong>Credit:</strong> {{ credit }} |
-        <strong>Balance:</strong> {{ balance }}
-    </p>
-
-    <table class="table table-sm table-bordered">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Type</th>
-                <th>Amount</th>
-                <th>Reference</th>
-                <th>Note</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for entry in ledger %}
-            <tr>
-                <td>{{ entry.created_at|date:"Y-m-d" }}</td>
-                <td>{{ entry.entry_type|title }}</td>
-                <td>{{ entry.amount }}</td>
-                <td>{{ entry.reference }}</td>
-                <td>{{ entry.note }}</td>
-            </tr>
+<div class="card shadow-sm">
+  <div class="table-responsive">
+    <table class="table table-sm mb-0">
+      <thead class="table-dark">
+        <tr>
+          <th>Date</th>
+          <th>Voucher</th>
+          <th class="text-end">Debit</th>
+          <th class="text-end">Credit</th>
+          <th class="text-end">Balance</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for row in rows %}
+        <tr>
+          <td>{{ row.date }}</td>
+          <td>#{{ row.voucher.id }} ({{ row.voucher.voucher_type }})</td>
+          <td class="text-end">{{ row.debit }}</td>
+          <td class="text-end">{{ row.credit }}</td>
+          <td class="text-end fw-bold">{{ row.balance }} {{ row.drcr }}</td>
+        </tr>
         {% empty %}
-            <tr>
-                <td colspan="5">No ledger entries</td>
-            </tr>
+        <tr>
+          <td colspan="5" class="text-center text-muted py-4">No party ledger entries.</td>
+        </tr>
         {% endfor %}
-        </tbody>
+      </tbody>
     </table>
+  </div>
 </div>
 {% endblock %}

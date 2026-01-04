@@ -1,6 +1,6 @@
 from django.conf import settings
 from django.contrib import admin
-from django.urls import path
+from django.urls import include, path
 from . import views
 from django.conf.urls.static import static
 
@@ -31,11 +31,11 @@ urlpatterns = [
     path('parties/customer/<int:id>/', views.customer_detail, name='customer_detail'),
     path('parties/supplier/<int:id>/', views.supplier_detail, name='supplier_detail'),
     
-    path('accounts/', views.accounts_home, name='accounts_home'),
-    path('accounts/party/<str:party_type>/<int:id>/',views.party_ledger,name='party_ledger'),
 
     path("brands/add/", views.brand_add, name="brand_add"),
     path("categories/add/", views.category_add, name="category_add"),
+
+    path("accounts/", include("accounts.urls")),
 
 
 

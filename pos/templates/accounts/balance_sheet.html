@@ -1,0 +1,81 @@
+{% extends "pos/base.html" %}
+{% block title %}Balance Sheet{% endblock %}
+
+{% block content %}
+<div class="d-flex align-items-center justify-content-between mb-3">
+  <div>
+    <h3 class="mb-0">🧮 Balance Sheet</h3>
+    <div class="text-muted">As of date snapshot</div>
+  </div>
+
+  <form class="d-flex gap-2">
+    <input type="date" class="form-control form-control-sm" name="as_of" value="{{ request.GET.as_of }}">
+    <button class="btn btn-sm btn-primary">Apply</button>
+  </form>
+</div>
+
+{% if balanced %}
+  <div class="alert alert-success py-2">✔ Balance Sheet Balanced</div>
+{% else %}
+  <div class="alert alert-danger py-2">✖ Balance Sheet Not Balanced</div>
+{% endif %}
+
+<div class="row g-3">
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-header fw-bold">Assets</div>
+      <ul class="list-group list-group-flush">
+        {% for row in assets %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span>{{ row.account }}</span>
+            <span class="fw-bold">{{ row.balance }}</span>
+          </li>
+        {% empty %}
+          <li class="list-group-item text-muted">No assets.</li>
+        {% endfor %}
+        <li class="list-group-item fw-bold d-flex justify-content-between">
+          <span>Total Assets</span><span>{{ total_assets }}</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-header fw-bold">Liabilities</div>
+      <ul class="list-group list-group-flush">
+        {% for row in liabilities %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span>{{ row.account }}</span>
+            <span class="fw-bold">{{ row.balance }}</span>
+          </li>
+        {% empty %}
+          <li class="list-group-item text-muted">No liabilities.</li>
+        {% endfor %}
+        <li class="list-group-item fw-bold d-flex justify-content-between">
+          <span>Total Liabilities</span><span>{{ total_liabilities }}</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="col-md-4">
+    <div class="card shadow-sm">
+      <div class="card-header fw-bold">Equity</div>
+      <ul class="list-group list-group-flush">
+        {% for row in equity %}
+          <li class="list-group-item d-flex justify-content-between">
+            <span>{{ row.account }}</span>
+            <span class="fw-bold">{{ row.balance }}</span>
+          </li>
+        {% empty %}
+          <li class="list-group-item text-muted">No equity.</li>
+        {% endfor %}
+        <li class="list-group-item fw-bold d-flex justify-content-between">
+          <span>Total Equity</span><span>{{ total_equity }}</span>
+        </li>
+      </ul>
+    </div>
+  </div>
+</div>
+{% endblock %}

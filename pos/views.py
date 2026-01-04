@@ -1001,67 +1001,8 @@ def supplier_detail(request, id):
 
 ###################################################################################################
 
-def accounts_home(request):
-    from django.db.models import Sum
-
-    rows = []
-
-    for model, ptype in [(Customer, 'customer'), (Supplier, 'supplier')]:
-        for party in model.objects.filter(is_active=True):
-            ct = ContentType.objects.get_for_model(party)
-
-            debit = LedgerEntry.objects.filter(
-                content_type=ct,
-                object_id=party.id,
-                entry_type='debit'
-            ).aggregate(total=Sum('amount'))['total'] or 0
-
-            credit = LedgerEntry.objects.filter(
-                content_type=ct,
-                object_id=party.id,
-                entry_type='credit'
-            ).aggregate(total=Sum('amount'))['total'] or 0
-
-            rows.append({
-                'party': party,
-                'type': ptype,
-                'balance': debit - credit
-            })
-
-    return render(request, 'accounts/index.html', {'rows': rows})
 
 
-def party_ledger(request, party_type, id):
-    if party_type == 'customer':
-        party = get_object_or_404(Customer, id=id)
-    else:
-        party = get_object_or_404(Supplier, id=id)
-
-    ct = ContentType.objects.get_for_model(party)
-
-    ledger = LedgerEntry.objects.filter(
-        content_type=ct,
-        object_id=party.id
-    )
-
-    debit = ledger.filter(entry_type='debit').aggregate(
-        total=Sum('amount')
-    )['total'] or 0
-
-    credit = ledger.filter(entry_type='credit').aggregate(
-        total=Sum('amount')
-    )['total'] or 0
-
-    balance = debit - credit
-
-    return render(request, 'accounts/party_ledger.html', {
-        'party': party,
-        'party_type': party_type,
-        'ledger': ledger,
-        'debit': debit,
-        'credit': credit,
-        'balance': balance,
-    })
 
 def create_sale_ledger(sale):
     """
