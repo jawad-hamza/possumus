@@ -205,6 +205,12 @@
             <span>Products</span>
         </a>
 
+
+    <a href="{% url 'purchase_list' %}" class="nav-link">
+        <i class="bi bi-cart-plus"></i>
+        <span>Purchases</span>
+    </a>
+
         <a href="{% url 'parties_home' %}" class="{% if 'parties' in request.path %}active{% endif %}">
             <i class="bi bi-people"></i>
             <span>Parties</span>

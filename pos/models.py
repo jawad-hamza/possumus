@@ -244,28 +244,22 @@ class Purchase(models.Model):
         total = 0
         for item in self.items.all():
             total += item.cost_price * item.quantity
-        self.total_amount = total
-        self.save()
-
-    def __str__(self):
-        return f"Purchase #{self.id}"
-    def update_total(self):
-        total = 0
-        for item in self.items.all():
-            total += item.price * item.quantity  # works for product or service
 
         self.total_amount = total
         self.save(update_fields=["total_amount"])
 
+        # ✅ CREATE ACCOUNTING EVENT (THIS WAS MISSING)
         AccountingEvent.objects.get_or_create(
             event_type=AccountingEvent.PURCHASE,
             ref_model="Purchase",
             ref_id=self.id,
             defaults={
                 "amount": self.total_amount,
-                "is_credit": True,  # purchases create payables by default
+                "is_credit": True,  # supplier payable by default
             },
         )
+
+    
         ##################################################################################################
 class PurchaseItem(models.Model):
     purchase = models.ForeignKey(

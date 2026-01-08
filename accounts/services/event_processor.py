@@ -22,6 +22,12 @@ def process_event(event: AccountingEvent):
     elif event.event_type == AccountingEvent.PURCHASE:
         _process_purchase(event)
 
+    else :
+        return
+
+    # mark event as processed
+    event.processed = True
+    event.save(update_fields=["processed"])
 
 
 def _process_sale(event: AccountingEvent):

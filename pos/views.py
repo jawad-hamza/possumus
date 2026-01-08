@@ -1,3 +1,4 @@
+from django.forms import modelform_factory
 from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
 from .models import Category, Product, PurchaseItem, Sale, SaleItem , Customer ,Supplier , Purchase,LedgerEntry , CompanyProfile
@@ -14,6 +15,7 @@ from django.http import JsonResponse
 from django.db.models.functions import Coalesce
 import datetime
 from django.contrib.contenttypes.models import ContentType
+from django.db import transaction
 
 # Create your views here.
 
@@ -1080,3 +1082,44 @@ def category_add(request):
         }
     )
     
+
+def purchase_list(request):
+    purchases = Purchase.objects.select_related("supplier").order_by("-id")
+    return render(request, "pos/purchase_list.html", {
+        "purchases": purchases
+    })
+
+
+@transaction.atomic
+def purchase_add(request):
+    PurchaseForm = modelform_factory(Purchase, fields=["supplier"])
+    PurchaseItemForm = modelform_factory(
+        PurchaseItem,
+        fields=["product", "quantity", "cost_price"]
+    )
+
+    if request.method == "POST":
+        purchase_form = PurchaseForm(request.POST)
+        item_form = PurchaseItemForm(request.POST)
+
+        if purchase_form.is_valid() and item_form.is_valid():
+            purchase = purchase_form.save()
+            item = item_form.save(commit=False)
+            item.purchase = purchase
+            item.save()
+            return redirect("purchase_list")
+    else:
+        purchase_form = PurchaseForm()
+        item_form = PurchaseItemForm()
+
+    return render(request, "pos/purchase_add.html", {
+        "purchase_form": purchase_form,
+        "item_form": item_form
+    })
+
+
+def purchase_detail(request, pk):
+    purchase = get_object_or_404(Purchase, pk=pk)
+    return render(request, "pos/purchase_detail.html", {
+        "purchase": purchase
+    })
