@@ -1,0 +1,92 @@
+{% extends "pos/base.html" %}
+{% block content %}
+
+<div class="container py-4">
+    <div class="card shadow-sm border-0">
+        <div class="card-body">
+
+            <h4 class="fw-bold mb-3">
+                Edit Purchase #{{ purchase.id }}
+            </h4>
+
+            {% if error %}
+                <div class="alert alert-danger">{{ error }}</div>
+            {% endif %}
+
+            <form method="post">
+                {% csrf_token %}
+
+                <!-- Supplier -->
+                <div class="mb-3">
+                    <label class="form-label fw-semibold">Supplier</label>
+                    <select name="supplier" class="form-select">
+                        <option value="">Cash Purchase</option>
+                        {% for s in suppliers %}
+                            <option value="{{ s.id }}"
+                                {% if purchase.supplier and s.id == purchase.supplier.id %}selected{% endif %}>
+                                {{ s.name }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                </div>
+
+                <!-- Purchase Items -->
+                <h6 class="fw-bold mt-4">Purchase Items</h6>
+
+                {{ formset.management_form }}
+
+                <table class="table table-bordered mt-2">
+                    <thead class="table-light">
+                        <tr>
+                            <th>Product</th>
+                            <th width="120">Qty</th>
+                            <th width="150">Cost Price</th>
+                            <th width="90" class="text-center">Remove</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for form in formset %}
+                        <tr>
+                            <td>{{ form.product }}</td>
+                            <td>{{ form.quantity }}</td>
+                            <td>{{ form.cost_price }}</td>
+                            <td class="text-center">
+                                <div class="form-check d-flex justify-content-center">
+                                    {{ form.DELETE }}
+                                </div>
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+
+                <!-- Reason -->
+                <div class="mb-3 mt-4">
+                    <label class="form-label fw-semibold text-danger">
+                        Reason for Edit *
+                    </label>
+                    <textarea
+                        name="reason"
+                        class="form-control"
+                        rows="3"
+                        required
+                        placeholder="Explain why this purchase is being edited..."></textarea>
+                </div>
+
+                <div class="d-flex justify-content-end gap-2">
+                    <a href="{% url 'purchase_detail' purchase.id %}"
+                       class="btn btn-secondary">
+                        Cancel
+                    </a>
+                    <button type="submit" class="btn btn-warning">
+                        Save Changes
+                    </button>
+                </div>
+
+            </form>
+
+        </div>
+    </div>
+</div>
+
+{% endblock %}

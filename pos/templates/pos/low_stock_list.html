@@ -1,0 +1,60 @@
+{% extends "pos/base.html" %}
+{% block title %}Low Stock Products{% endblock %}
+
+{% block content %}
+<h3 class="mb-3">⚠️ Low Stock Products</h3>
+
+<button class="btn btn-danger mb-3" onclick="window.print()">
+    🖨 Print
+</button>
+
+<div class="table-section">
+    <table class="table table-hover table-sm">
+        <thead class="table-light">
+            <tr>
+                <th>#</th>
+                <th>Product</th>
+                <th>Category</th>
+                <th>Stock</th>
+                <th>Threshold</th>
+                <th>Location</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in products %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ p.name }}</td>
+                <td>{{ p.category|default:"—" }}</td>
+
+                <!-- Current stock -->
+                <td class="fw-bold text-danger">
+                    {{ p.stock }}
+                </td>
+
+                <!-- Product-specific threshold -->
+                <td>
+                    {{ p.low_stock_threshold }}
+                </td>
+
+                <td>{{ p.location|default:"—" }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="text-center text-muted">
+                    No low stock products 🎉
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<style>
+@media print {
+    button {
+        display: none;
+    }
+}
+</style>
+{% endblock %}

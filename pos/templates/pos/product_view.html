@@ -74,6 +74,18 @@
         <dt class="col-sm-3 text-muted">Stock</dt>
         <dd class="col-sm-9">{{ product.stock }}</dd>
 
+        <!-- Location -->
+        <dt class="col-sm-3 text-muted">Location</dt>
+        <dd class="col-sm-9">
+            {% if product.location %}
+                {{ product.location }}
+            {% else %}
+                -
+            {% endif %}
+        </dd>
+
+    
+
         <!-- Status -->
         <dt class="col-sm-3 text-muted">Status</dt>
         <dd class="col-sm-9">

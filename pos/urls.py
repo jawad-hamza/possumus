@@ -40,8 +40,9 @@ urlpatterns = [
     path("purchases/", views.purchase_list, name="purchase_list"),
     path("purchases/add/", views.purchase_add, name="purchase_add"),
     path("purchases/<int:pk>/", views.purchase_detail, name="purchase_detail"),
+    path("purchases/<int:pk>/edit/", views.purchase_edit, name="purchase_edit"),
 
-
+path("reports/low-stock/", views.low_stock_list, name="low_stock_list"),
 
 
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

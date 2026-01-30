@@ -6,7 +6,7 @@ from django.contrib.contenttypes.models import ContentType
 
 @admin.register(Product)
 class ProductAdmin(admin.ModelAdmin):
-    list_display = ("name", "brand", "sku","barcode", "category", "supplier", "price", "stock", "is_active")
+    list_display = ("name", "brand", "sku","barcode", "category", "supplier", "price", "stock","low_stock_threshold","location", "is_active")
     list_filter = ("brand", "supplier", "is_active")
     search_fields = ("name", "sku", "barcode")
     

@@ -59,6 +59,8 @@
                 <th>Supplier</th>
                 <th class="text-end">Price</th>
                 <th class="text-end">Stock</th>
+                <th>Location</th>
+
                 <th>Status</th>
                 <th class="text-center">Actions</th>
             </tr>
@@ -98,6 +100,15 @@
 
                 <td class="text-end">Rs {{ product.price|floatformat:2 }}</td>
                 <td class="text-end">{{ product.stock }}</td>
+
+                <td>
+    {% if product.location %}
+        {{ product.location }}
+    {% else %}
+        -
+    {% endif %}
+</td>
+
 
                 <td>
                     {% if product.is_active %}

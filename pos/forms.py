@@ -34,8 +34,16 @@ class ProductForm(forms.ModelForm):
             "supplier",
             "price",
             "stock",
+            "low_stock_threshold",
+            "location",
             "is_active",
         ]
+        labels = {
+            'location': 'Storage Location',
+        }
+        help_texts = {
+            'location': 'Example: Warehouse A / Rack 3',
+        }
 
 class BrandForm(forms.ModelForm):
     class Meta:

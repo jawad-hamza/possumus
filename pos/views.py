@@ -1,7 +1,7 @@
-from django.forms import modelform_factory
+from django.forms import modelform_factory, modelformset_factory
 from django.http import HttpResponse
 from django.shortcuts import render, redirect, get_object_or_404
-from .models import Category, Product, PurchaseItem, Sale, SaleItem , Customer ,Supplier , Purchase,LedgerEntry , CompanyProfile
+from .models import Category, Product, PurchaseEditLog, PurchaseItem, Sale, SaleItem , Customer ,Supplier , Purchase,LedgerEntry , CompanyProfile
 from django.db.models import Sum,Count , F , Q , Value ,  DecimalField, ExpressionWrapper
 from .forms import CustomerForm , ProductForm, SupplierForm , BrandForm , CategoryForm
 from datetime import datetime
@@ -248,7 +248,7 @@ def dashboard(request):
         avg_sale = total_sales / total_bills
 
     # 4. Low Stock Count
-    low_stock_products = Product.objects.filter(stock__lte=5, is_active=True)
+    low_stock_products = Product.objects.filter(stock__lte=F("low_stock_threshold"),is_active=True)
     low_stock_count = low_stock_products.count()
 
     # 5. Top 10 Low Stock Items
@@ -1123,3 +1123,96 @@ def purchase_detail(request, pk):
     return render(request, "pos/purchase_detail.html", {
         "purchase": purchase
     })
+    
+    
+
+@transaction.atomic
+def purchase_edit(request, pk):
+    purchase = get_object_or_404(Purchase, pk=pk)
+    suppliers = Supplier.objects.filter(is_active=True).order_by("name")
+
+    PurchaseItemFormSet = modelformset_factory(
+        PurchaseItem,
+        fields=("product", "quantity", "cost_price"),
+        extra=0,
+        can_delete=True
+    )
+
+    if request.method == "POST":
+        reason = request.POST.get("reason", "").strip()
+        if not reason:
+            formset = PurchaseItemFormSet(
+                request.POST,
+                queryset=purchase.items.all()
+            )
+            return render(request, "pos/purchase_edit.html", {
+                "purchase": purchase,
+                "suppliers": suppliers,
+                "formset": formset,
+                "error": "Reason for edit is required.",
+            })
+
+        old_total = purchase.total_amount
+
+        # Update purchase header
+        purchase.supplier_id = request.POST.get("supplier") or None
+        purchase.last_edited_by = request.user
+        purchase.last_edited_at = timezone.now()
+        purchase.edit_reason = reason
+        purchase.save()
+
+        formset = PurchaseItemFormSet(
+            request.POST,
+            queryset=purchase.items.all()
+        )
+
+        if formset.is_valid():
+            # Handle deleted items
+            for obj in formset.deleted_objects:
+                obj.delete()
+
+            # Save edited items
+            items = formset.save(commit=False)
+            for item in items:
+                item.purchase = purchase
+                item.save()  # triggers stock + total + accounting
+
+            # Audit log
+            PurchaseEditLog.objects.create(
+                purchase=purchase,
+                edited_by=request.user,
+                reason=reason,
+                old_total=old_total,
+                new_total=purchase.total_amount,
+            )
+
+            return redirect("purchase_detail", pk=purchase.id)
+
+        # If formset invalid
+        return render(request, "pos/purchase_edit.html", {
+            "purchase": purchase,
+            "suppliers": suppliers,
+            "formset": formset,
+        })
+
+    # GET request
+    formset = PurchaseItemFormSet(queryset=purchase.items.all())
+
+    return render(request, "pos/purchase_edit.html", {
+        "purchase": purchase,
+        "suppliers": suppliers,
+        "formset": formset,
+    })
+    
+
+def low_stock_list(request):
+    products = Product.objects.filter(
+        stock__lte=F("low_stock_threshold"),
+        is_active=True
+    ).order_by("stock", "name")
+
+    return render(
+        request,
+        "pos/low_stock_list.html",
+        {"products": products}
+    )

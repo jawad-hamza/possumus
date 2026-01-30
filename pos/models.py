@@ -2,7 +2,8 @@ from django.db import models
 from django.core.exceptions import ValidationError
 from decimal import Decimal, InvalidOperation
 from accounts.models import AccountingEvent
-
+from django.conf import settings
+from django.utils import timezone
 
 # Create your models here.
 class Category(models.Model):
@@ -65,6 +66,11 @@ class Product(models.Model):
     barcode = models.CharField(max_length=50, unique=True, blank=True, null=True)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     stock = models.PositiveIntegerField(default=0)
+    low_stock_threshold = models.PositiveIntegerField(
+        default=5,
+        help_text="Alert when stock falls to this level"
+    )
+    location = models.CharField(max_length=100, blank=True)
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
@@ -111,31 +117,6 @@ class Sale(models.Model):
         except (TypeError, InvalidOperation):
             return Decimal("0")
 
-    def update_total(self):
-        subtotal = Decimal("0")
-        for item in self.items.all():
-            subtotal += item.price * item.quantity
-
-        # clean values
-        discount_rate = self.safe_decimal(self.discount_rate)
-        if discount_rate < 0:
-            discount_rate = Decimal("0")
-        if discount_rate > 100:
-            discount_rate = Decimal("100")
-
-        tax_rate = self.safe_decimal(self.tax_rate)
-        if tax_rate < 0:
-            tax_rate = Decimal("0")
-        if tax_rate > 100:
-            tax_rate = Decimal("100")
-
-        # compute
-        discount_amount = subtotal * (discount_rate / Decimal("100"))
-        after_discount = subtotal - discount_amount
-        tax_amount = after_discount * (tax_rate / Decimal("100"))
-
-        self.total_amount = after_discount + tax_amount
-        self.save(update_fields=["total_amount"])
     def update_total(self):
         subtotal = Decimal("0")
         for item in self.items.all():
@@ -239,27 +220,37 @@ class Purchase(models.Model):
         decimal_places=2,
         default=0
     )
-
+    last_edited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="edited_purchases"
+    )
+    last_edited_at = models.DateTimeField(null=True, blank=True)
+    edit_reason = models.TextField(blank=True)
     def update_total(self):
-        total = 0
+        total = Decimal("0")
         for item in self.items.all():
             total += item.cost_price * item.quantity
 
         self.total_amount = total
         self.save(update_fields=["total_amount"])
 
-        # ✅ CREATE ACCOUNTING EVENT (THIS WAS MISSING)
-        AccountingEvent.objects.get_or_create(
+        event, created = AccountingEvent.objects.get_or_create(
             event_type=AccountingEvent.PURCHASE,
             ref_model="Purchase",
             ref_id=self.id,
             defaults={
                 "amount": self.total_amount,
-                "is_credit": True,  # supplier payable by default
+                "is_credit": True,
             },
         )
 
-    
+        if not created:
+            event.amount = self.total_amount
+            event.save(update_fields=["amount"])
+
         ##################################################################################################
 class PurchaseItem(models.Model):
     purchase = models.ForeignKey(
@@ -280,22 +271,40 @@ class PurchaseItem(models.Model):
     def save(self, *args, **kwargs):
         is_new = self.pk is None
 
+        # Calculate stock change & old total (for audit)
         if not is_new:
             old_item = PurchaseItem.objects.get(pk=self.pk)
             stock_change = self.quantity - old_item.quantity
+            old_total = self.purchase.total_amount
         else:
             stock_change = self.quantity
+            old_total = Decimal("0")
 
-        # Increase stock
+        # Update stock
         self.product.stock += stock_change
         self.product.save()
 
+        # Save item
         super().save(*args, **kwargs)
 
-        # Update purchase total
+        # Update purchase total (also updates AccountingEvent)
         self.purchase.update_total()
 
+        # Audit log ONLY when editing existing item
+        if not is_new:
+            PurchaseEditLog.objects.create(
+                purchase=self.purchase,
+                edited_by=None,  # set from view/admin later
+                reason="Purchase item modified",
+                old_total=old_total,
+                new_total=self.purchase.total_amount,
+            )
+
     def delete(self, *args, **kwargs):
+        # Prevent negative stock
+        if self.product.stock < self.quantity:
+            raise ValidationError("Cannot reduce stock below zero")
+
         # Restore stock
         self.product.stock -= self.quantity
         self.product.save()
@@ -303,14 +312,37 @@ class PurchaseItem(models.Model):
         purchase = self.purchase
         super().delete(*args, **kwargs)
 
+        # Recalculate purchase total
         purchase.update_total()
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
 
+
 #####`#############################################################################################`
 
+class PurchaseEditLog(models.Model):
+    purchase = models.ForeignKey(
+        Purchase,
+        on_delete=models.CASCADE,
+        related_name="edit_logs"
+    )
+    edited_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True
+    )
+    edited_at = models.DateTimeField(auto_now_add=True)
+    reason = models.TextField()
 
+    old_total = models.DecimalField(max_digits=10, decimal_places=2)
+    new_total = models.DecimalField(max_digits=10, decimal_places=2)
+
+    def __str__(self):
+        return f"Purchase #{self.purchase.id} edited by {self.edited_by}"
+
+
+#############################################################################33
 from django.db import models
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
