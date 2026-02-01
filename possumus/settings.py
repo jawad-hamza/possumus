@@ -40,6 +40,7 @@ INSTALLED_APPS = [
     'pos',
     'accounts.apps.AccountsConfig',
     'django.contrib.humanize',
+    'rest_framework',
     
 ]
 

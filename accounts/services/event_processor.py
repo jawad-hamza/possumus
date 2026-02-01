@@ -13,6 +13,24 @@ def get_account(title):
 
 @transaction.atomic
 def process_event(event: AccountingEvent):
+    """
+    IMPORTANT ARCHITECTURE RULE
+    ---------------------------
+    POS-originated Sales and Purchases MUST NOT be processed here.
+
+    POS transactions are posted via:
+        accounts.services.pos_posting
+
+    This processor is ONLY for:
+    - legacy data
+    - background imports
+    - manual / admin-triggered AccountingEvents
+    """
+
+    # 🔒 HARD GUARD: POS must NEVER come here
+    if event.ref_model in ("Sale", "Purchase"):
+        return
+
     if event.processed:
         return
 
@@ -22,13 +40,12 @@ def process_event(event: AccountingEvent):
     elif event.event_type == AccountingEvent.PURCHASE:
         _process_purchase(event)
 
-    else :
+    else:
         return
 
     # mark event as processed
     event.processed = True
     event.save(update_fields=["processed"])
-
 
 def _process_sale(event: AccountingEvent):
     if Voucher.objects.filter(
