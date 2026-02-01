@@ -1222,3 +1222,82 @@ from django.shortcuts import render
 
 def party_statement_page(request):
     return render(request, "parties/party_statement.html")
+
+from django.db.models import Q
+from django.shortcuts import render
+
+from pos.models import Customer
+from accounts.services.party_badges import get_customer_badge
+
+
+
+from django.db.models import Q
+from django.shortcuts import render
+
+from pos.models import Customer
+from accounts.services.party_badges import get_customer_badge
+
+
+def customer_list(request):
+    search = request.GET.get("search", "").strip()
+
+    qs = Customer.objects.all().order_by("name")
+
+    if search:
+        qs = qs.filter(
+            Q(name__icontains=search) |
+            Q(phone__icontains=search) |
+            Q(email__icontains=search)
+        )
+
+    customers = []
+    for customer in qs:
+        badge = get_customer_badge(customer)
+        customer.balance_type = badge["balance_type"]
+        customer.balance_amount = badge["amount"]
+        customers.append(customer)
+
+    return render(
+        request,
+        "parties/customer_list.html",
+        {
+            "customers": customers,
+            "total_customers": qs.count(),
+            "search_term": search,
+        },
+    )    
+from django.db.models import Q
+from django.shortcuts import render
+
+from pos.models import Supplier
+from accounts.services.party_badges import get_supplier_badge
+
+
+def supplier_list(request):
+    search = request.GET.get("search", "").strip()
+
+    qs = Supplier.objects.all().order_by("name")
+
+    if search:
+        qs = qs.filter(
+            Q(name__icontains=search) |
+            Q(phone__icontains=search) |
+            Q(email__icontains=search)
+        )
+
+    suppliers = []
+    for supplier in qs:
+        badge = get_supplier_badge(supplier)
+        supplier.balance_type = badge["balance_type"]
+        supplier.balance_amount = badge["amount"]
+        suppliers.append(supplier)
+
+    return render(
+        request,
+        "parties/supplier_list.html",
+        {
+            "suppliers": suppliers,
+            "total_suppliers": qs.count(),
+            "search_term": search,
+        },
+    )

@@ -1,159 +1,121 @@
 {% extends "pos/base.html" %}
 {% load static %}
-{% block title %}{{ supplier.name }} - Supplier Details{% endblock %}
+{% block title %}{{ supplier.name }} – Supplier{% endblock %}
 
 {% block extra_css %}
 <style>
-    .profile-header {
-        background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
-        color: white;
-        border-radius: 15px;
-        padding: 40px;
-        margin-bottom: 30px;
-    }
-    .profile-avatar {
-        width: 100px;
-        height: 100px;
-        border-radius: 50%;
-        background: white;
-        color: #11998e;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 3rem;
-        font-weight: bold;
-        margin-bottom: 20px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.2);
-    }
-    .stat-card {
-        border: none;
-        border-radius: 10px;
-        box-shadow: 0 2px 10px rgba(0,0,0,0.08);
-        transition: all 0.3s ease;
-    }
-    .stat-card:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 4px 15px rgba(0,0,0,0.12);
-    }
-    .info-item {
-        padding: 15px;
-        background: #f8f9fa;
-        border-radius: 8px;
-        margin-bottom: 10px;
-    }
-    .product-item {
-        border-bottom: 1px solid #e9ecef;
-        padding: 15px;
-        transition: all 0.2s;
-    }
-    .product-item:hover {
-        background: #f8f9fa;
-    }
-    .product-item:last-child {
-        border-bottom: none;
-    }
+.profile-header {
+    background: linear-gradient(135deg,#11998e,#38ef7d);
+    color:#fff;border-radius:16px;padding:35px;margin-bottom:25px;
+}
+.avatar {
+    width:90px;height:90px;border-radius:50%;
+    background:#fff;color:#11998e;
+    display:flex;align-items:center;justify-content:center;
+    font-size:42px;font-weight:bold;
+}
+.stat-card{border-radius:14px;box-shadow:0 4px 12px rgba(0,0,0,.08)}
 </style>
 {% endblock %}
 
 {% block content %}
 <div class="container-fluid mt-4">
-    <!-- Back Button -->
-    <div class="mb-3">
-        <a href="{% url 'supplier_list' %}" class="btn btn-outline-secondary">
-            ← Back to Suppliers
-        </a>
-    </div>
+<a href="{% url 'supplier_list' %}" class="btn btn-outline-secondary mb-3">← Back</a>
 
-    <!-- Profile Header -->
-    <div class="profile-header">
-        <div class="d-flex align-items-center">
-            <div class="profile-avatar">
-                {{ supplier.name|slice:":1"|upper }}
-            </div>
-            <div class="ms-4">
-                <h1 class="mb-2">{{ supplier.name }}</h1>
-                <p class="mb-0 opacity-75">Supplier ID: #{{ supplier.id }}</p>
+<div class="profile-header d-flex align-items-center">
+    <div class="avatar">{{ supplier.name|slice:":1"|upper }}</div>
+    <div class="ms-4">
+        <h2>{{ supplier.name }}</h2>
+        <div class="opacity-75">Supplier ID #{{ supplier.id }}</div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="card stat-card text-center">
+            <div class="card-body">
+                <small class="text-muted">Closing Balance</small>
+                <h4 id="closing_balance">—</h4>
+                <span id="balance_badge" class="badge"></span>
             </div>
         </div>
     </div>
 
-    <!-- Stats Cards -->
-    <div class="row g-4 mb-4">
-        <div class="col-md-12">
-            <div class="card stat-card">
-                <div class="card-body text-center">
-                    <h6 class="text-muted">Total Products Supplied</h6>
-                    <h2 class="fw-bold text-success">{{ total_products }}</h2>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Supplier Information -->
-    <div class="row g-4">
-        <div class="col-md-4">
-            <div class="card shadow-sm">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0">📋 Supplier Information</h5>
-                </div>
-                <div class="card-body">
-                    {% if supplier.phone %}
-                    <div class="info-item">
-                        <small class="text-muted d-block">Phone Number</small>
-                        <strong>{{ supplier.phone }}</strong>
-                    </div>
-                    {% endif %}
-                    
-                    {% if supplier.email %}
-                    <div class="info-item">
-                        <small class="text-muted d-block">Email Address</small>
-                        <strong>{{ supplier.email }}</strong>
-                    </div>
-                    {% endif %}
-                    
-                    {% if supplier.address %}
-                    <div class="info-item">
-                        <small class="text-muted d-block">Address</small>
-                        <strong>{{ supplier.address }}</strong>
-                    </div>
-                    {% endif %}
-
-                    <div class="info-item">
-                        <small class="text-muted d-block">Supplier Since</small>
-                        <strong>{{ supplier.created_at|date:"d M Y" }}</strong>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <div class="col-md-8">
-            <div class="card shadow-sm">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0">📦 Products Supplied</h5>
-                </div>
-                <div class="card-body">
-                    {% for product in products %}
-                    <div class="product-item">
-                        <div class="d-flex justify-content-between align-items-center">
-                            <div>
-                                <h6 class="mb-1">{{ product.name }}</h6>
-                                <small class="text-muted">SKU: {{ product.sku }}</small>
-                            </div>
-                            <div class="text-end">
-                                <div class="fw-bold">Rs {{ product.price|floatformat:2 }}</div>
-                                <small class="text-muted">Stock: {{ product.stock }}</small>
-                            </div>
-                        </div>
-                    </div>
-                    {% empty %}
-                    <div class="text-center text-muted py-4">
-                        <div class="mb-3" style="font-size: 3rem;">📦</div>
-                        <p>No products from this supplier yet</p>
-                    </div>
-                    {% endfor %}
-                </div>
+    <div class="col-md-4">
+        <div class="card stat-card text-center">
+            <div class="card-body">
+                <small class="text-muted">Settlement</small>
+                <button class="btn btn-success w-100" onclick="openSettlement()">Pay Supplier</button>
             </div>
         </div>
     </div>
 </div>
+
+<div class="card shadow-sm">
+    <div class="card-header bg-white d-flex justify-content-between">
+        <span>🧾 Supplier Ledger</span>
+        <button class="btn btn-sm btn-outline-secondary" onclick="loadStatement()">Refresh</button>
+    </div>
+    <div class="card-body table-responsive">
+        <table class="table table-sm table-bordered">
+            <thead>
+                <tr>
+                    <th>Date</th><th>Voucher</th><th>Ref</th>
+                    <th class="text-end">Debit</th>
+                    <th class="text-end">Credit</th>
+                    <th class="text-end">Balance</th>
+                </tr>
+            </thead>
+            <tbody id="ledger"></tbody>
+        </table>
+    </div>
+</div>
+
+<!-- MODAL -->
+<div class="modal fade" id="settlementModal">
+<div class="modal-dialog"><div class="modal-content">
+<div class="modal-header"><h5>Pay Supplier</h5></div>
+<div class="modal-body">
+<input class="form-control mb-2" id="amount">
+<select class="form-control" id="method">
+<option value="cash">Cash</option><option value="bank">Bank</option>
+</select>
+</div>
+<div class="modal-footer">
+<button class="btn btn-success" onclick="submitSettlement()">Pay</button>
+</div>
+</div></div></div>
+
+<script>
+function loadStatement(){
+fetch(`/api/party-statement/?supplier_id={{ supplier.id }}`)
+.then(r=>r.json()).then(d=>{
+document.getElementById("closing_balance").innerText=d.closing_balance;
+const b=document.getElementById("balance_badge");
+b.className="badge "+d.balance_type; b.innerText=d.balance_type.toUpperCase();
+const body=document.getElementById("ledger"); body.innerHTML="";
+d.rows.forEach(r=>{
+body.innerHTML+=`
+<tr><td>${r.date}</td>
+<td>${r.voucher_type} #${r.voucher_id}</td>
+<td>${r.ref}</td>
+<td class="text-end">${r.debit}</td>
+<td class="text-end">${r.credit}</td>
+<td class="text-end">${r.display_balance}</td></tr>`;
+});
+});
+}
+function openSettlement(){ new bootstrap.Modal(document.getElementById("settlementModal")).show(); }
+function submitSettlement(){
+fetch("/api/settlements/",{
+method:"POST",headers:{'Content-Type':'application/json'},
+body:JSON.stringify({
+supplier_id:{{ supplier.id }},
+amount:document.getElementById("amount").value,
+payment_method:document.getElementById("method").value
+})
+}).then(()=>location.reload());
+}
+loadStatement();
+</script>
 {% endblock %}
