@@ -1,6 +1,7 @@
 from django.urls import path
 from . import views
 
+
 urlpatterns = [
     path("", views.accounts_home, name="accounts_home"),
 
@@ -10,4 +11,5 @@ urlpatterns = [
 
     path("ledger/<int:account_id>/", views.account_ledger, name="account_ledger"),
     path("party/<str:model>/<int:pk>/", views.party_statement, name="party_statement"),
+    
 ]

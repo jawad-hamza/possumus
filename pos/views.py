@@ -1216,3 +1216,9 @@ def low_stock_list(request):
         "pos/low_stock_list.html",
         {"products": products}
     )
+    
+# parties/views.py
+from django.shortcuts import render
+
+def party_statement_page(request):
+    return render(request, "parties/party_statement.html")

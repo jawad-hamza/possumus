@@ -31,6 +31,7 @@ urlpatterns = [
     path('parties/customer/<int:id>/', views.customer_detail, name='customer_detail'),
     path('parties/supplier/<int:id>/', views.supplier_detail, name='supplier_detail'),
     
+    path("parties/statement/", views.party_statement_page , name="party_statement_page"),
 
     path("brands/add/", views.brand_add, name="brand_add"),
     path("categories/add/", views.category_add, name="category_add"),
@@ -43,6 +44,9 @@ urlpatterns = [
     path("purchases/<int:pk>/edit/", views.purchase_edit, name="purchase_edit"),
 
 path("reports/low-stock/", views.low_stock_list, name="low_stock_list"),
+
+# parties/urls.py
+
 
 
 ]+ static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
