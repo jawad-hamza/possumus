@@ -1,152 +1,53 @@
 {% extends "pos/base.html" %}
+
+{% block title %}New Purchase{% endblock %}
+
 {% block content %}
-
-<div class="container-fluid py-4">
-    <div class="row justify-content-center">
-        <div class="col-lg-10 col-xl-8">
-            
-            <!-- Page Header -->
-            <div class="d-flex align-items-center mb-4">
-                <div class="bg-primary bg-gradient rounded-3 p-3 me-3 shadow-sm">
-                    <svg xmlns="http://www.w3.org/2000/svg" width="28" height="28" fill="white" viewBox="0 0 16 16">
-                        <path d="M0 2.5A.5.5 0 0 1 .5 2H2a.5.5 0 0 1 .485.379L2.89 4H14.5a.5.5 0 0 1 .485.621l-1.5 6A.5.5 0 0 1 13 11H4a.5.5 0 0 1-.485-.379L1.61 3H.5a.5.5 0 0 1-.5-.5zM3.14 5l1.25 5h8.22l1.25-5H3.14zM5 13a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm-2 1a2 2 0 1 1 4 0 2 2 0 0 1-4 0zm9-1a1 1 0 1 0 0 2 1 1 0 0 0 0-2zm-2 1a2 2 0 1 1 4 0 2 2 0 0 1-4 0z"/>
-                    </svg>
-                </div>
-                <div>
-                    <h2 class="mb-0 fw-bold">New Purchase Order</h2>
-                    <p class="text-muted mb-0 small">Create a new purchase order from supplier</p>
-                </div>
-            </div>
-
-            <!-- Main Form Card -->
-            <form method="post">
-                {% csrf_token %}
-                
-                <!-- Supplier Information Section -->
-                <div class="card shadow-sm border-0 mb-4">
-                    <div class="card-header bg-white border-bottom py-3">
-                        <div class="d-flex align-items-center">
-                            <div class="bg-primary bg-opacity-10 rounded-circle p-2 me-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="text-primary" viewBox="0 0 16 16">
-                                    <path d="M8 8a3 3 0 1 0 0-6 3 3 0 0 0 0 6zm2-3a2 2 0 1 1-4 0 2 2 0 0 1 4 0zm4 8c0 1-1 1-1 1H3s-1 0-1-1 1-4 6-4 6 3 6 4zm-1-.004c-.001-.246-.154-.986-.832-1.664C11.516 10.68 10.289 10 8 10c-2.29 0-3.516.68-4.168 1.332-.678.678-.83 1.418-.832 1.664h10z"/>
-                                </svg>
-                            </div>
-                            <h5 class="mb-0 fw-semibold">Supplier Information</h5>
-                        </div>
-                    </div>
-                    <div class="card-body p-4">
-                        <div class="row g-3">
-                            {{ purchase_form.as_p }}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Purchase Items Section -->
-                <div class="card shadow-sm border-0 mb-4">
-                    <div class="card-header bg-white border-bottom py-3">
-                        <div class="d-flex align-items-center">
-                            <div class="bg-success bg-opacity-10 rounded-circle p-2 me-2">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" class="text-success" viewBox="0 0 16 16">
-                                    <path d="M8 1a2.5 2.5 0 0 1 2.5 2.5V4h-5v-.5A2.5 2.5 0 0 1 8 1zm3.5 3v-.5a3.5 3.5 0 1 0-7 0V4H1v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V4h-3.5zM2 5h12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V5z"/>
-                                </svg>
-                            </div>
-                            <h5 class="mb-0 fw-semibold">Purchase Items</h5>
-                        </div>
-                    </div>
-                    <div class="card-body p-4">
-                        <div class="row g-3">
-                            {{ item_form.as_p }}
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Action Buttons -->
-                <div class="card shadow-sm border-0">
-                    <div class="card-body p-4">
-                        <div class="d-flex gap-2 justify-content-end">
-                            <a href="{% url 'purchase_list' %}" class="btn btn-lg btn-outline-secondary px-4">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="me-2" viewBox="0 0 16 16">
-                                    <path fill-rule="evenodd" d="M15 8a.5.5 0 0 0-.5-.5H2.707l3.147-3.146a.5.5 0 1 0-.708-.708l-4 4a.5.5 0 0 0 0 .708l4 4a.5.5 0 0 0 .708-.708L2.707 8.5H14.5A.5.5 0 0 0 15 8z"/>
-                                </svg>
-                                Cancel
-                            </a>
-                            <button type="submit" class="btn btn-lg btn-success px-5 shadow-sm">
-                                <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="currentColor" class="me-2" viewBox="0 0 16 16">
-                                    <path d="M10.97 4.97a.75.75 0 0 1 1.07 1.05l-3.99 4.99a.75.75 0 0 1-1.08.02L4.324 8.384a.75.75 0 1 1 1.06-1.06l2.094 2.093 3.473-4.425a.267.267 0 0 1 .02-.022z"/>
-                                </svg>
-                                Save Purchase Order
-                            </button>
-                        </div>
-                    </div>
-                </div>
-
-            </form>
-
-        </div>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h2 class="mb-1">New Purchase</h2>
+        <p class="text-muted mb-0">Receive stock, update pricing, and keep supplier balances aligned in one workspace.</p>
+    </div>
+    <div class="d-flex flex-wrap gap-2">
+        <a href="{{ supplier_add_url }}" class="btn btn-outline-primary"><i class="bi bi-building-add"></i> Full Supplier Form</a>
+        <a href="{% url 'purchase_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Purchases</a>
     </div>
 </div>
 
-<style>
-    /* Custom styling for form fields */
-    .card {
-        transition: box-shadow 0.3s ease;
-    }
-    
-    .card:hover {
-        box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.08) !important;
-    }
-    
-    form p {
-        margin-bottom: 1rem;
-    }
-    
-    form label {
-        font-weight: 600;
-        color: #495057;
-        margin-bottom: 0.5rem;
-        display: block;
-    }
-    
-    form input,
-    form select,
-    form textarea {
-        border-radius: 0.5rem;
-        border: 1px solid #dee2e6;
-        padding: 0.75rem 1rem;
-        width: 100%;
-        transition: all 0.2s ease;
-    }
-    
-    form input:focus,
-    form select:focus,
-    form textarea:focus {
-        border-color: #0d6efd;
-        box-shadow: 0 0 0 0.2rem rgba(13, 110, 253, 0.15);
-        outline: none;
-    }
-    
-    form .helptext {
-        font-size: 0.875rem;
-        color: #6c757d;
-        margin-top: 0.25rem;
-        display: block;
-    }
-    
-    form .errorlist {
-        list-style: none;
-        padding: 0;
-        margin: 0.25rem 0 0 0;
-    }
-    
-    form .errorlist li {
-        color: #dc3545;
-        font-size: 0.875rem;
-    }
-    
-    .btn-lg {
-        font-weight: 600;
-        letter-spacing: 0.02em;
-    }
-</style>
+{% include "pos/partials/_purchase_quick_setup.html" %}
 
+<form method="post" class="page-card p-4 p-lg-5" id="purchaseForm">
+    {% csrf_token %}
+    {{ formset.management_form }}
+
+    <div class="row g-4 mb-4">
+        <div class="col-lg-4">{% include "pos/partials/_field.html" with field=purchase_form.supplier %}</div>
+        <div class="col-lg-4">{% include "pos/partials/_field.html" with field=purchase_form.payment_method %}</div>
+        <div class="col-lg-4">{% include "pos/partials/_field.html" with field=purchase_form.bank_account %}</div>
+        <div class="col-lg-4">{% include "pos/partials/_field.html" with field=purchase_form.paid_amount %}</div>
+    </div>
+
+    {% if purchase_form.non_field_errors %}
+    <div class="alert alert-danger">{{ purchase_form.non_field_errors }}</div>
+    {% endif %}
+    {% if formset.non_form_errors %}
+    <div class="alert alert-danger">{{ formset.non_form_errors }}</div>
+    {% endif %}
+
+    {% include "pos/partials/_purchase_line_editor.html" with formset=formset %}
+
+    <div class="alert alert-light border mt-4 mb-0">
+        Business rule: if any balance remains unpaid, choose a supplier so Accounts Payable and the supplier statement stay correct.
+    </div>
+
+    <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
+        <a href="{% url 'purchase_list' %}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-dark">Save Purchase</button>
+    </div>
+</form>
 {% endblock %}
+
+{% block extra_js %}
+    {% include "pos/partials/_purchase_workspace_js.html" %}
+{% endblock %}
+

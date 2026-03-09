@@ -1,0 +1,208 @@
+{% extends "pos/base.html" %}
+{% load accounting_tags %}
+
+{% block title %}Stock Adjustments{% endblock %}
+
+{% block extra_css %}
+<style>
+    .reason-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 1rem;
+    }
+
+    .reason-tile {
+        border: 1px solid #e2e8f0;
+        border-radius: 16px;
+        padding: 14px 16px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    }
+
+    .reason-tile strong {
+        display: block;
+        margin-bottom: 4px;
+        font-size: 0.96rem;
+    }
+
+    .reason-tile span {
+        color: #64748b;
+        font-size: 0.86rem;
+    }
+
+    .stock-guide {
+        border: 1px dashed #cbd5e1;
+        border-radius: 18px;
+        padding: 16px 18px;
+        background: #f8fafc;
+    }
+
+    .stock-guide h3 {
+        font-size: 0.98rem;
+        margin-bottom: 10px;
+    }
+
+    .stock-guide p:last-child {
+        margin-bottom: 0;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon warning"><i class="bi bi-boxes"></i></span>
+        <div>
+            <h1 class="page-title">Stock Adjustments</h1>
+            <p class="page-subtitle">Use this page for stock take and manual quantity corrections. Inventory value is posted automatically when the product has a cost price.</p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <a href="{% url 'product_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Products</a>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-5">
+        <div class="page-card p-4 h-100">
+            <div class="section-heading mb-3">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-warning"><i class="bi bi-sliders2"></i></span>
+                    <div>
+                        <h2 class="section-title">Adjust Stock</h2>
+                        <p class="section-copy">Choose a product, then either add/remove quantity or set the final counted stock after a physical stock take.</p>
+                    </div>
+                </div>
+            </div>
+
+            <div class="reason-grid">
+                <div class="reason-tile">
+                    <strong><i class="bi bi-exclamation-octagon me-1 text-danger"></i>Damaged / Expired</strong>
+                    <span>Remove unusable stock from the shelf.</span>
+                </div>
+                <div class="reason-tile">
+                    <strong><i class="bi bi-question-diamond me-1 text-warning"></i>Lost / Missing</strong>
+                    <span>Use when stock is missing after verification.</span>
+                </div>
+                <div class="reason-tile">
+                    <strong><i class="bi bi-box-arrow-in-down me-1 text-primary"></i>Opening Balance Correction</strong>
+                    <span>Fix initial stock entered incorrectly at setup.</span>
+                </div>
+                <div class="reason-tile">
+                    <strong><i class="bi bi-clipboard2-check me-1 text-success"></i>Stock Take Difference</strong>
+                    <span>Use after a physical count to match shelf reality.</span>
+                </div>
+            </div>
+
+            <form method="post" id="stock-adjustment-form">
+                {% csrf_token %}
+                {% if request.GET.next %}<input type="hidden" name="next" value="{{ request.GET.next }}">{% endif %}
+                <div class="mb-3">{% include "pos/partials/_field.html" with field=form.product %}</div>
+                <div class="mb-3">{% include "pos/partials/_field.html" with field=form.adjustment_mode %}</div>
+                <div class="mb-3 quantity-delta-wrap">{% include "pos/partials/_field.html" with field=form.quantity_delta %}</div>
+                <div class="mb-3 quantity-after-wrap">{% include "pos/partials/_field.html" with field=form.quantity_after %}</div>
+                <div class="mb-3">{% include "pos/partials/_field.html" with field=form.reason_preset %}</div>
+                <div class="mb-3 custom-reason-wrap">{% include "pos/partials/_field.html" with field=form.custom_reason %}</div>
+                {{ form.reason }}
+                <div class="mb-3">{% include "pos/partials/_field.html" with field=form.notes %}</div>
+                {% if form.non_field_errors %}<div class="text-danger small mb-3">{{ form.non_field_errors|join:', ' }}</div>{% endif %}
+
+                <div class="stock-guide mb-3">
+                    <h3><i class="bi bi-lightbulb me-1 text-warning"></i>Which option should I use?</h3>
+                    <p class="small text-muted mb-2"><strong>Stock Adjustment</strong>: when you already know how many units to add or remove, like damaged, lost, or opening balance fixes.</p>
+                    <p class="small text-muted"><strong>Stock Take</strong>: when staff counted the shelf and you want the system stock to become that final counted quantity.</p>
+                </div>
+
+                <div class="alert alert-light border small mb-0">Positive adjustments increase stock. Negative adjustments decrease stock. Stock take sets the final stock count exactly as counted.</div>
+                <div class="d-flex justify-content-end mt-4"><button class="btn btn-dark"><i class="bi bi-save"></i> Save Adjustment</button></div>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-xl-7">
+        <div class="page-card p-0 overflow-hidden h-100">
+            <div class="section-heading p-4 border-bottom mb-0">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon"><i class="bi bi-clock-history"></i></span>
+                    <div>
+                        <h2 class="section-title">Recent Adjustments</h2>
+                        <p class="section-copy">Latest stock corrections with the user, quantity change, and linked voucher.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Product</th>
+                            <th>Mode</th>
+                            <th class="text-end">Before</th>
+                            <th class="text-end">After</th>
+                            <th class="text-end">Delta</th>
+                            <th>Reason</th>
+                            <th>Voucher</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for adjustment in adjustments %}
+                        <tr>
+                            <td class="ps-4"><a href="{% url 'product_view' adjustment.product.id %}">{{ adjustment.product.name }}</a></td>
+                            <td>{{ adjustment.get_adjustment_mode_display }}</td>
+                            <td class="text-end">{{ adjustment.quantity_before }}</td>
+                            <td class="text-end">{{ adjustment.quantity_after }}</td>
+                            <td class="text-end">{{ adjustment.quantity_delta }}</td>
+                            <td>{{ adjustment.reason }}</td>
+                            <td>{% if adjustment.voucher_id %}#{{ adjustment.voucher_id }}{% else %}-{% endif %}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="7" class="text-center text-muted py-5">No stock adjustments recorded yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        const modeField = document.getElementById("id_adjustment_mode");
+        const reasonField = document.getElementById("id_reason_preset");
+        const customReasonField = document.getElementById("id_custom_reason");
+        const deltaWrap = document.querySelector(".quantity-delta-wrap");
+        const afterWrap = document.querySelector(".quantity-after-wrap");
+        const customWrap = document.querySelector(".custom-reason-wrap");
+
+        function syncStockAdjustmentUi() {
+            const mode = modeField ? modeField.value : "";
+            const reason = reasonField ? reasonField.value : "";
+
+            if (deltaWrap) {
+                deltaWrap.style.display = mode === "stock_take" ? "none" : "block";
+            }
+            if (afterWrap) {
+                afterWrap.style.display = mode === "stock_take" ? "block" : "none";
+            }
+            if (customWrap) {
+                customWrap.style.display = reason === "other" ? "block" : "none";
+            }
+            if (mode === "stock_take" && reasonField && !reasonField.value) {
+                reasonField.value = "stock_take_difference";
+            }
+            if (reason !== "other" && customReasonField) {
+                customReasonField.value = customReasonField.value || "";
+            }
+        }
+
+        if (modeField) {
+            modeField.addEventListener("change", syncStockAdjustmentUi);
+        }
+        if (reasonField) {
+            reasonField.addEventListener("change", syncStockAdjustmentUi);
+        }
+        syncStockAdjustmentUi();
+    })();
+</script>
+{% endblock %}

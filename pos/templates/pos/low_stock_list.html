@@ -1,53 +1,51 @@
 {% extends "pos/base.html" %}
-{% block title %}Low Stock Products{% endblock %}
+{% block title %}Low Stock{% endblock %}
 
 {% block content %}
-<h3 class="mb-3">⚠️ Low Stock Products</h3>
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon warning"><i class="bi bi-exclamation-triangle"></i></span>
+        <div>
+            <h1 class="page-title">Low Stock</h1>
+            <p class="page-subtitle">Products at or below their configured reorder threshold.</p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <button class="btn btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
+    </div>
+</div>
 
-<button class="btn btn-danger mb-3" onclick="window.print()">
-    🖨 Print
-</button>
-
-<div class="table-section">
-    <table class="table table-hover table-sm">
-        <thead class="table-light">
-            <tr>
-                <th>#</th>
-                <th>Product</th>
-                <th>Category</th>
-                <th>Stock</th>
-                <th>Threshold</th>
-                <th>Location</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for p in products %}
-            <tr>
-                <td>{{ forloop.counter }}</td>
-                <td>{{ p.name }}</td>
-                <td>{{ p.category|default:"—" }}</td>
-
-                <!-- Current stock -->
-                <td class="fw-bold text-danger">
-                    {{ p.stock }}
-                </td>
-
-                <!-- Product-specific threshold -->
-                <td>
-                    {{ p.low_stock_threshold }}
-                </td>
-
-                <td>{{ p.location|default:"—" }}</td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="6" class="text-center text-muted">
-                    No low stock products 🎉
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="page-card p-0 overflow-hidden">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4">#</th>
+                    <th>Product</th>
+                    <th>Category</th>
+                    <th class="text-end">Stock</th>
+                    <th class="text-end">Threshold</th>
+                    <th class="pe-4">Location</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for p in products %}
+                <tr>
+                    <td class="ps-4">{{ forloop.counter }}</td>
+                    <td class="fw-semibold">{{ p.name }}</td>
+                    <td>{{ p.category|default:"-" }}</td>
+                    <td class="text-end text-danger fw-semibold">{{ p.stock }}</td>
+                    <td class="text-end">{{ p.low_stock_threshold }}</td>
+                    <td class="pe-4">{{ p.location|default:"-" }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-5">No low-stock products right now.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
 <style>

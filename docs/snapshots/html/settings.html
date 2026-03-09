@@ -1,0 +1,1789 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Settings</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --nav-bg: #14213d;
+            --nav-bg-alt: #1f355f;
+            --nav-text: #d9e3f0;
+            --nav-active: #fca311;
+            --page-bg: #f5f7fb;
+            --card-border: #dce3ee;
+            --content-max: 1440px;
+            --text-main: #14213d;
+            --text-soft: #5f6f86;
+            --surface-tint: #f8fbff;
+            --accent-primary: #2563eb;
+            --accent-success: #15803d;
+            --accent-info: #0f766e;
+            --accent-warning: #b45309;
+            --accent-danger: #dc2626;
+            --accent-slate: #334155;
+        }
+
+        body {
+            background: radial-gradient(circle at top, #ffffff 0%, var(--page-bg) 55%, #edf2f7 100%);
+            overflow-x: hidden;
+            color: var(--text-main);
+        }
+
+        a {
+            color: inherit;
+        }
+
+        .layout-shell {
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 250px;
+            min-height: 100vh;
+            position: fixed;
+            inset: 0 auto 0 0;
+            background: linear-gradient(180deg, var(--nav-bg), #0d162c 100%);
+            color: #fff;
+            z-index: 1030;
+            transition: width 0.25s ease, transform 0.25s ease;
+            overflow-y: auto;
+                    display: flex;
+            flex-direction: column;
+}
+
+        .sidebar.collapsed {
+            width: 78px;
+        }
+
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 22px 18px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .sidebar-brand-mark {
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--nav-active), #ffbf57);
+            color: #182a4d;
+            font-weight: 700;
+        }
+
+        .sidebar-title {
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            margin: 0;
+        }
+
+        .sidebar-subtitle {
+            color: rgba(217, 227, 240, 0.72);
+            font-size: 0.75rem;
+            margin: 0;
+        }
+
+        .toggle-btn {
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 1.1rem;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .sidebar-rail-toggle {
+            display: none;
+            position: fixed;
+            top: 18px;
+            left: 66px;
+            width: 30px;
+            height: 42px;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-left: none;
+            border-radius: 0 14px 14px 0;
+            background: linear-gradient(180deg, #1f355f, #14213d);
+            color: #fff;
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.22);
+            z-index: 1035;
+        }
+
+        .sidebar.collapsed + .sidebar-rail-toggle {
+            display: inline-flex;
+        }
+
+        .sidebar-rail-toggle:hover {
+            background: linear-gradient(180deg, #284375, #172849);
+        }
+
+        .sidebar-nav {
+            padding: 14px 12px 24px;
+            flex: 1 1 auto;
+        }
+
+        .nav-link-shell {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--nav-text);
+            text-decoration: none;
+            padding: 12px 14px;
+            border-radius: 14px;
+            margin-bottom: 6px;
+            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+        }
+
+        .nav-link-shell:hover,
+        .nav-link-shell.active {
+            background: linear-gradient(90deg, rgba(252, 163, 17, 0.16), rgba(252, 163, 17, 0.06));
+            color: #fff;
+            transform: translateX(2px);
+        }
+
+        .nav-link-shell i {
+            font-size: 1.1rem;
+            width: 22px;
+            text-align: center;
+            color: var(--nav-active);
+        }
+
+        .sidebar.collapsed .sidebar-copy,
+        .sidebar.collapsed .nav-copy {
+            display: none;
+        }
+
+        .content {
+            margin-left: 250px;
+            padding: 24px;
+            transition: margin-left 0.25s ease;
+        }
+
+        .content.expanded {
+            margin-left: 78px;
+        }
+
+        .content-inner {
+            max-width: var(--content-max);
+            margin: 0 auto;
+        }
+
+        .page-topbar {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .mobile-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(8, 15, 28, 0.48);
+            z-index: 1020;
+        }
+
+        .page-card {
+            border: 1px solid var(--card-border);
+            border-radius: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+            box-shadow: 0 10px 30px rgba(20, 33, 61, 0.06);
+        }
+
+        .page-header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 1.5rem;
+        }
+
+        .page-header-copy {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            min-width: 0;
+        }
+
+        .page-title-icon,
+        .section-title-icon,
+        .metric-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .page-title-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            font-size: 1.25rem;
+            color: #fff;
+            box-shadow: 0 14px 24px rgba(37, 99, 235, 0.18);
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        }
+
+        .page-title-icon.success {
+            background: linear-gradient(135deg, #16a34a, #15803d);
+            box-shadow: 0 14px 24px rgba(22, 163, 74, 0.18);
+        }
+
+        .page-title-icon.warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            box-shadow: 0 14px 24px rgba(245, 158, 11, 0.18);
+        }
+
+        .page-title-icon.danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            box-shadow: 0 14px 24px rgba(239, 68, 68, 0.18);
+        }
+
+        .page-title-icon.slate {
+            background: linear-gradient(135deg, #475569, #334155);
+            box-shadow: 0 14px 24px rgba(71, 85, 105, 0.18);
+        }
+
+        .page-title {
+            margin: 0;
+            font-size: clamp(1.65rem, 1.2rem + 1vw, 2.15rem);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .page-subtitle {
+            color: var(--text-soft);
+            margin: 6px 0 0;
+            max-width: 820px;
+        }
+
+        .page-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .metric-card {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+            border-radius: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, var(--surface-tint) 100%);
+            padding: 1rem;
+            height: 100%;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .metric-card::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 4px;
+            background: var(--metric-accent, var(--accent-primary));
+        }
+
+        .metric-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 16px 28px rgba(20, 33, 61, 0.12);
+        }
+
+        .metric-card.primary {
+            --metric-accent: var(--accent-primary);
+            --metric-soft: rgba(37, 99, 235, 0.12);
+        }
+
+        .metric-card.success {
+            --metric-accent: var(--accent-success);
+            --metric-soft: rgba(22, 163, 74, 0.12);
+        }
+
+        .metric-card.info {
+            --metric-accent: var(--accent-info);
+            --metric-soft: rgba(15, 118, 110, 0.12);
+        }
+
+        .metric-card.warning {
+            --metric-accent: var(--accent-warning);
+            --metric-soft: rgba(180, 83, 9, 0.12);
+        }
+
+        .metric-card.danger {
+            --metric-accent: var(--accent-danger);
+            --metric-soft: rgba(220, 38, 38, 0.12);
+        }
+
+        .metric-card.slate {
+            --metric-accent: var(--accent-slate);
+            --metric-soft: rgba(51, 65, 85, 0.12);
+        }
+
+        .metric-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            background: var(--metric-soft, rgba(37, 99, 235, 0.12));
+            color: var(--metric-accent, var(--accent-primary));
+            font-size: 1.1rem;
+        }
+
+        .metric-label {
+            color: var(--text-soft);
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .metric-value {
+            font-size: clamp(1.6rem, 1.3rem + 0.6vw, 2rem);
+            font-weight: 700;
+            margin-top: 0.65rem;
+            line-height: 1.1;
+        }
+
+        .metric-meta {
+            color: var(--text-soft);
+            font-size: 0.9rem;
+            margin-top: 0.8rem;
+        }
+
+        .section-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 1rem;
+        }
+
+        .section-heading-copy {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .section-title-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+            background: #eaf2ff;
+            color: var(--accent-primary);
+            font-size: 1rem;
+        }
+
+        .section-title-icon.section-icon-success {
+            background: #e9f9ef;
+            color: #15803d;
+        }
+
+        .section-title-icon.section-icon-warning {
+            background: #fff2df;
+            color: #b45309;
+        }
+
+        .section-title-icon.section-icon-danger {
+            background: #fdecec;
+            color: #dc2626;
+        }
+
+        .section-title-icon.section-icon-slate {
+            background: #edf2f7;
+            color: #334155;
+        }
+
+        .section-title {
+            margin: 0;
+            font-size: 1.15rem;
+            font-weight: 700;
+        }
+
+        .section-copy {
+            color: var(--text-soft);
+            margin: 4px 0 0;
+            font-size: 0.92rem;
+        }
+
+        .section-link {
+            color: var(--accent-primary);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.92rem;
+        }
+
+        .section-link:hover {
+            text-decoration: underline;
+        }
+
+        .chart-shell {
+            position: relative;
+            height: 320px;
+            max-height: 320px;
+            overflow: hidden;
+        }
+
+        .chart-shell.compact {
+            height: 240px;
+            max-height: 240px;
+        }
+
+        .chart-shell canvas {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .table-responsive .table {
+            margin-bottom: 0;
+        }
+
+        .table thead.table-light th,
+        .table thead th {
+            background: #f7fafc;
+            color: #334155;
+            font-size: 0.82rem;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            border-bottom-color: #dde7f2;
+        }
+
+        .table tbody tr {
+            transition: background-color 0.18s ease;
+        }
+
+        .table tbody tr:hover {
+            background: #fafcff;
+        }
+
+        .list-link-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 14px 16px;
+            text-decoration: none;
+            color: inherit;
+            background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .list-link-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 24px rgba(20, 33, 61, 0.08);
+            border-color: #bfd0e6;
+        }
+
+        .list-link-card .list-link-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: #eef4ff;
+            color: var(--accent-primary);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn {
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .btn-dark {
+            background: linear-gradient(135deg, #172849, #111d36);
+            border-color: #172849;
+            box-shadow: 0 10px 18px rgba(20, 33, 61, 0.12);
+        }
+
+        .btn-dark:hover,
+        .btn-dark:focus {
+            background: linear-gradient(135deg, #1f355f, #14213d);
+            border-color: #1f355f;
+        }
+
+        .btn-outline-secondary,
+        .btn-outline-primary,
+        .btn-outline-dark {
+            background: #fff;
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 12px;
+            border-color: #d7e2ee;
+            min-height: 46px;
+        }
+
+        textarea.form-control {
+            min-height: 120px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: #93c5fd;
+            box-shadow: 0 0 0 0.22rem rgba(37, 99, 235, 0.12);
+        }
+
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .status-chip.healthy {
+            color: #0f766e;
+            background: #ccfbf1;
+        }
+
+        .status-chip.below,
+        .status-chip.payable {
+            color: #b91c1c;
+            background: #fee2e2;
+        }
+
+        .status-chip.advance {
+            color: #92400e;
+            background: #fef3c7;
+        }
+
+        .status-chip.receivable {
+            color: #1d4ed8;
+            background: #dbeafe;
+        }
+
+        .status-chip.clear,
+        .status-chip.unknown {
+            color: #475569;
+            background: #e2e8f0;
+        }
+
+        .sidebar-footer {
+            margin: auto 12px 16px;
+            padding: 14px 0 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .sidebar-user {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .sidebar-user-mark {
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(252, 163, 17, 0.16);
+            color: #fff;
+            font-weight: 800;
+        }
+
+        .sidebar-user-name {
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .sidebar-user-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .sidebar-role-chip {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 3px 9px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            background: rgba(37, 99, 235, 0.18);
+            color: #bfdbfe;
+        }
+
+        .sidebar-session-text,
+        .sidebar-hint {
+            color: rgba(217, 227, 240, 0.7);
+            font-size: 0.75rem;
+        }
+
+        .sidebar-hint {
+            margin: 0 0 10px 52px;
+        }
+
+        .sidebar-logout {
+            width: 100%;
+            border: none;
+            background: transparent;
+            text-align: left;
+        }
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .content,
+            .content.expanded {
+                margin-left: 0;
+                padding: 16px;
+            }
+
+            .page-topbar {
+                display: flex;
+            }
+
+            .mobile-overlay.show {
+                display: block;
+            }
+            .sidebar-rail-toggle {
+                display: none !important;
+            }
+
+            .page-title-icon {
+                width: 44px;
+                height: 44px;
+                border-radius: 14px;
+            }
+
+            .chart-shell {
+                height: 260px;
+                max-height: 260px;
+            }
+
+            .chart-shell.compact {
+                height: 220px;
+                max-height: 220px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .content,
+            .content.expanded {
+                padding: 12px;
+            }
+
+            .page-header {
+                gap: 12px;
+            }
+
+            .page-header-copy {
+                width: 100%;
+                gap: 10px;
+            }
+
+            .page-actions {
+                width: 100%;
+            }
+
+            .page-actions .btn,
+            .page-actions .status-chip {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .page-card,
+            .metric-card {
+                border-radius: 16px;
+            }
+
+            .metric-value {
+                font-size: 1.8rem;
+            }
+
+            .table-responsive {
+                font-size: 0.92rem;
+            }
+        }
+    </style>
+    
+<style>
+    .settings-grid {
+        display: grid;
+        gap: 1.5rem;
+    }
+
+    .settings-hero {
+        border-radius: 22px;
+        border: 1px solid rgba(15, 23, 42, 0.08);
+        background: linear-gradient(135deg, #0f172a, #1e3a5f 60%, #1d4ed8 100%);
+        color: #fff;
+        padding: 1.6rem;
+        box-shadow: 0 24px 42px rgba(15, 23, 42, 0.18);
+    }
+
+    .settings-hero p {
+        color: rgba(255, 255, 255, 0.78);
+        margin-bottom: 0;
+    }
+
+    .settings-chip {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 0.82rem;
+        font-weight: 700;
+        background: rgba(255, 255, 255, 0.12);
+    }
+
+    .settings-form-grid {
+        display: grid;
+        gap: 1rem;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .settings-form-grid.full {
+        grid-template-columns: 1fr;
+    }
+
+    .settings-switches {
+        display: grid;
+        gap: 0.85rem;
+    }
+
+    .settings-switch {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 1rem;
+        border: 1px solid var(--card-border);
+        border-radius: 16px;
+        padding: 1rem;
+        background: #fff;
+    }
+
+    .settings-switch .copy {
+        min-width: 0;
+    }
+
+    .settings-switch .copy h3 {
+        font-size: 1rem;
+        margin: 0 0 0.2rem;
+    }
+
+    .settings-switch .copy p {
+        margin: 0;
+        color: var(--text-soft);
+        font-size: 0.92rem;
+    }
+
+    .settings-note {
+        border-radius: 18px;
+        border: 1px solid #dbeafe;
+        background: linear-gradient(180deg, #eff6ff, #f8fbff);
+        color: #1e3a8a;
+        padding: 1rem 1.1rem;
+    }
+
+    .category-rate {
+        font-weight: 700;
+        color: var(--text-main);
+    }
+
+    .table thead th {
+        white-space: nowrap;
+    }
+
+    .role-pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 6px 12px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        background: #eff6ff;
+        color: #1d4ed8;
+    }
+
+    .role-pill.cashier {
+        background: #ecfeff;
+        color: #0f766e;
+    }
+
+    .session-active {
+        color: #15803d;
+        font-weight: 700;
+    }
+
+    @media (max-width: 991px) {
+        .settings-form-grid {
+            grid-template-columns: 1fr;
+        }
+    }
+</style>
+
+</head>
+<body>
+<div class="layout-shell">
+    <div class="mobile-overlay" id="mobileOverlay" onclick="toggleSidebarMobile()"></div>
+
+    
+
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <div class="d-flex align-items-center gap-3 sidebar-copy">
+                <div class="sidebar-brand-mark">PO</div>
+                <div>
+                    <p class="sidebar-title">POS IMS</p>
+                    <p class="sidebar-subtitle">Sales, stock, accounts</p>
+                </div>
+            </div>
+            <button class="toggle-btn" onclick="toggleSidebar()">
+                <i class="bi bi-list"></i>
+            </button>
+        </div>
+
+        <nav class="sidebar-nav">
+            
+            <a href="/dashboard/" class="nav-link-shell ">
+                <i class="bi bi-speedometer2"></i>
+                <span class="nav-copy">Dashboard</span>
+            </a>
+            
+            <a href="/pos/" class="nav-link-shell ">
+                <i class="bi bi-cart4"></i>
+                <span class="nav-copy">POS</span>
+            </a>
+            
+            <a href="/products/" class="nav-link-shell ">
+                <i class="bi bi-box-seam"></i>
+                <span class="nav-copy">Products</span>
+            </a>
+            <a href="/inventory/adjustments/" class="nav-link-shell ">
+                <i class="bi bi-boxes"></i>
+                <span class="nav-copy">Stock Control</span>
+            </a>
+            <a href="/purchases/" class="nav-link-shell ">
+                <i class="bi bi-truck"></i>
+                <span class="nav-copy">Purchases</span>
+            </a>
+            <a href="/accounts/expenses/" class="nav-link-shell ">
+                <i class="bi bi-receipt-cutoff"></i>
+                <span class="nav-copy">Expenses</span>
+            </a>
+            <a href="/parties/" class="nav-link-shell ">
+                <i class="bi bi-people"></i>
+                <span class="nav-copy">Parties</span>
+            </a>
+            <a href="/accounts/" class="nav-link-shell ">
+                <i class="bi bi-journal-text"></i>
+                <span class="nav-copy">Accounts</span>
+            </a>
+            <a href="/reports/" class="nav-link-shell ">
+                <i class="bi bi-graph-up-arrow"></i>
+                <span class="nav-copy">Reports</span>
+            </a>
+            <a href="/settings/" class="nav-link-shell active">
+                <i class="bi bi-gear"></i>
+                <span class="nav-copy">Settings</span>
+            </a>
+            
+        </nav>
+        <div class="sidebar-footer">
+            <div class="sidebar-user">
+                <div class="sidebar-user-mark">J</div>
+                <div class="sidebar-copy">
+                    <div class="sidebar-user-name">Jawad Hamza</div>
+                    <div class="sidebar-user-meta">
+                        <span class="sidebar-role-chip">Admin</span>
+                        
+                    </div>
+                </div>
+            </div>
+            
+            <form method="post" action="/logout/" class="logout-form">
+                <input type="hidden" name="csrfmiddlewaretoken" value="N274mgFiw7kDsoGDW2j6Bbg5VZSzLS8l8pJJyTjK7M5sNar6i87F6BENg2hbx7BQ">
+                <button type="submit" class="nav-link-shell sidebar-logout">
+                    <i class="bi bi-box-arrow-right"></i>
+                    <span class="nav-copy">Logout</span>
+                </button>
+            </form>
+        </div>
+    </aside>
+    <button type="button" class="sidebar-rail-toggle" onclick="toggleSidebar()" aria-label="Expand sidebar">
+        <i class="bi bi-chevron-right"></i>
+    </button>
+
+    <main class="content" id="content">
+        <div class="content-inner">
+            <div class="page-topbar">
+                <button class="btn btn-outline-dark" onclick="toggleSidebarMobile()">
+                    <i class="bi bi-list"></i>
+                </button>
+                <div class="d-flex align-items-center gap-2">
+                    <strong>POS IMS</strong>
+                    <span class="badge text-bg-light">Admin</span>
+                </div>
+            </div>
+            
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon slate"><i class="bi bi-sliders"></i></span>
+        <div>
+            <h1 class="page-title">Settings</h1>
+            <p class="page-subtitle">Business branding, GST rules, checkout controls, and team access live here.</p>
+        </div>
+    </div>
+</div>
+
+<div class="settings-hero mb-4">
+    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
+        <div>
+            <h2 class="h3 mb-2">Business Rules Control Centre</h2>
+            <p>Keep the business identity, tax mode, thermal receipt width, and cashier access aligned from one screen.</p>
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            <span class="settings-chip"><i class="bi bi-receipt"></i>GST</span>
+            <span class="settings-chip"><i class="bi bi-printer"></i>50mm thermal</span>
+            <span class="settings-chip"><i class="bi bi-shield-check"></i>Manual Cart Tax</span>
+        </div>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3 col-sm-6">
+        <div class="metric-card h-100 slate">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Team Members</div>
+                    <div class="metric-value">2</div>
+                    <div class="metric-meta">All active and inactive system logins.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-people"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="metric-card h-100 info">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Taxable Categories</div>
+                    <div class="metric-value">1</div>
+                    <div class="metric-meta">Categories currently charging GST automatically.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-tags"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="metric-card h-100 success">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Cashiers</div>
+                    <div class="metric-value">1</div>
+                    <div class="metric-meta">POS-only accounts created for checkout staff.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-person-badge"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="metric-card h-100 warning">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Open Sessions</div>
+                    <div class="metric-value">2</div>
+                    <div class="metric-meta">Users currently logged in and not yet signed out.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-clock-history"></i></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-xl-6">
+        <div class="page-card p-4 h-100">
+            <div class="section-title d-flex align-items-center gap-2 mb-3">
+                <span class="section-title-icon"><i class="bi bi-shop"></i></span>
+                <div>
+                    <h2 class="h4 mb-1">Branding & Receipt Identity</h2>
+                    <p class="text-muted mb-0">Business name, logo, contacts, and footer text used across receipts.</p>
+                </div>
+            </div>
+            <form method="post" enctype="multipart/form-data" novalidate>
+                <input type="hidden" name="csrfmiddlewaretoken" value="N274mgFiw7kDsoGDW2j6Bbg5VZSzLS8l8pJJyTjK7M5sNar6i87F6BENg2hbx7BQ">
+                <input type="hidden" name="action" value="save_branding">
+                <div class="settings-form-grid">
+                    <div>
+                        <label class="form-label fw-semibold" for="id_branding-name">Business Name</label>
+                        <input type="text" name="branding-name" value="POS IMS" maxlength="200" class="form-control" required id="id_branding-name">
+                        
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold" for="id_branding-logo">Logo</label>
+                        <input type="file" name="branding-logo" accept="image/*" class="form-control" id="id_branding-logo">
+                        
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold" for="id_branding-phone">Phone</label>
+                        <input type="text" name="branding-phone" maxlength="50" class="form-control" id="id_branding-phone">
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold" for="id_branding-email">Email</label>
+                        <input type="email" name="branding-email" maxlength="254" class="form-control" id="id_branding-email">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="form-label fw-semibold" for="id_branding-address">Address</label>
+                    <textarea name="branding-address" cols="40" rows="10" class="form-control" id="id_branding-address">
+</textarea>
+                </div>
+                <div class="settings-form-grid mt-3">
+                    <div>
+                        <label class="form-label fw-semibold" for="id_branding-tax_registration_number">GST / Tax Number</label>
+                        <input type="text" name="branding-tax_registration_number" maxlength="100" class="form-control" aria-describedby="id_branding-tax_registration_number_helptext" id="id_branding-tax_registration_number">
+                        <div class="form-text">Optional registration shown on receipts and invoices.</div>
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold" for="id_branding-qr_note">QR Note</label>
+                        <input type="text" name="branding-qr_note" maxlength="255" class="form-control" aria-describedby="id_branding-qr_note_helptext" id="id_branding-qr_note">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <label class="form-label fw-semibold" for="id_branding-invoice_footer">Receipt Footer</label>
+                    <textarea name="branding-invoice_footer" cols="40" rows="10" class="form-control" aria-describedby="id_branding-invoice_footer_helptext" id="id_branding-invoice_footer">
+Thank you for your business.</textarea>
+                </div>
+                <div class="form-check form-switch mt-3">
+                    <input type="checkbox" name="branding-show_qr" class="form-check-input" id="id_branding-show_qr" checked>
+                    <label class="form-check-label fw-semibold" for="id_branding-show_qr">Show QR</label>
+                </div>
+                <button class="btn btn-dark mt-3">Save Branding</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-xl-6">
+        <div class="page-card p-4 h-100">
+            <div class="section-title d-flex align-items-center gap-2 mb-3">
+                <span class="section-title-icon"><i class="bi bi-receipt"></i></span>
+                <div>
+                    <h2 class="h4 mb-1">GST & POS Rules</h2>
+                    <p class="text-muted mb-0">Control how tax works and what cashiers can do at the cart.</p>
+                </div>
+            </div>
+            <form method="post" novalidate>
+                <input type="hidden" name="csrfmiddlewaretoken" value="N274mgFiw7kDsoGDW2j6Bbg5VZSzLS8l8pJJyTjK7M5sNar6i87F6BENg2hbx7BQ">
+                <input type="hidden" name="action" value="save_rules">
+                <div class="settings-form-grid">
+                    <div>
+                        <label class="form-label fw-semibold" for="id_business-tax_label">Tax Label</label>
+                        <input type="text" name="business-tax_label" value="GST" maxlength="30" class="form-control" required aria-describedby="id_business-tax_label_helptext" id="id_business-tax_label">
+                        <div class="form-text">Examples: GST, VAT, Sales Tax.</div>
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold" for="id_business-tax_mode">Tax Mode</label>
+                        <select name="business-tax_mode" class="form-select" aria-describedby="id_business-tax_mode_helptext" id="id_business-tax_mode">
+  <option value="manual_cart" selected>Manual Cart Tax</option>
+
+  <option value="category_gst">Category GST</option>
+
+</select>
+                        <div class="form-text">Use category GST to tax each product line from its category. Manual cart tax keeps the old cart-level tax box.</div>
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold" for="id_business-default_sale_payment_method">Default Payment Method</label>
+                        <select name="business-default_sale_payment_method" class="form-select" id="id_business-default_sale_payment_method">
+  <option value="cash" selected>Cash</option>
+
+  <option value="bank">Bank</option>
+
+</select>
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold" for="id_business-thermal_printer_width_mm">Thermal Printer Width (mm)</label>
+                        <input type="number" name="business-thermal_printer_width_mm" value="50" min="0" class="form-control" required aria-describedby="id_business-thermal_printer_width_mm_helptext" id="id_business-thermal_printer_width_mm">
+                        <div class="form-text">50mm is standard for small thermal receipt printers.</div>
+                    </div>
+                </div>
+
+                <div class="settings-switches mt-3">
+                    <div class="settings-switch">
+                        <div class="copy">
+                            <h3>Enable GST / Tax</h3>
+                            <p>Turns tax calculation on for sales and reports.</p>
+                        </div>
+                        <div class="form-check form-switch m-0"><input type="checkbox" name="business-gst_enabled" class="form-check-input" id="id_business-gst_enabled" checked></div>
+                    </div>
+                    <div class="settings-switch">
+                        <div class="copy">
+                            <h3>Allow Credit Sales</h3>
+                            <p>When disabled, POS will hide the credit-sale workflow and enforce cash/bank checkout.</p>
+                        </div>
+                        <div class="form-check form-switch m-0"><input type="checkbox" name="business-allow_credit_sales" class="form-check-input" id="id_business-allow_credit_sales" checked></div>
+                    </div>
+                    <div class="settings-switch">
+                        <div class="copy">
+                            <h3>Allow Price Override</h3>
+                            <p>Lets the operator change unit price at the cart for negotiated customer pricing.</p>
+                        </div>
+                        <div class="form-check form-switch m-0"><input type="checkbox" name="business-allow_price_override" class="form-check-input" id="id_business-allow_price_override" checked></div>
+                    </div>
+                    <div class="settings-switch">
+                        <div class="copy">
+                            <h3>Allow Line Discount</h3>
+                            <p>Lets the operator discount a specific product line while minimum margin still applies.</p>
+                        </div>
+                        <div class="form-check form-switch m-0"><input type="checkbox" name="business-allow_line_discount" class="form-check-input" id="id_business-allow_line_discount" checked></div>
+                    </div>
+                </div>
+
+                <div class="settings-note mt-3">
+                    <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>How tax mode works</div>
+                    <div class="small">If you switch to <strong>Category GST</strong>, the POS cart tax box is disabled and each product line uses its category GST status and rate instead.</div>
+                </div>
+
+                <button class="btn btn-dark mt-3">Save GST & POS Rules</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="page-card p-4 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+        <div class="section-title d-flex align-items-center gap-2 mb-0">
+            <span class="section-title-icon"><i class="bi bi-tags"></i></span>
+            <div>
+                <h2 class="h4 mb-1">Category GST Matrix</h2>
+                <p class="text-muted mb-0">Review taxable, zero-rated, and exempt product categories.</p>
+            </div>
+        </div>
+        <a href="/categories/add/" class="btn btn-dark"><i class="bi bi-plus-circle me-2"></i>Add Category</a>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Category</th>
+                    <th>GST Status</th>
+                    <th>Rate</th>
+                    <th>Status</th>
+                    <th class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td class="fw-semibold">Bakery</td>
+                    <td>
+                        
+                        <span class="status-chip healthy">Taxable</span>
+                        
+                    </td>
+                    <td class="category-rate">1.00%</td>
+                    <td>
+                        
+                        <span class="status-chip healthy">Active</span>
+                        
+                    </td>
+                    <td class="text-end"><a href="/categories/1/edit/" class="btn btn-sm btn-outline-dark">Edit</a></td>
+                </tr>
+                
+                <tr>
+                    <td class="fw-semibold">Laptop</td>
+                    <td>
+                        
+                        <span class="status-chip below">Exempt</span>
+                        
+                    </td>
+                    <td class="category-rate">0.00%</td>
+                    <td>
+                        
+                        <span class="status-chip healthy">Active</span>
+                        
+                    </td>
+                    <td class="text-end"><a href="/categories/2/edit/" class="btn btn-sm btn-outline-dark">Edit</a></td>
+                </tr>
+                
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-xl-5">
+        <div class="page-card p-4 h-100">
+            <div class="section-title d-flex align-items-center gap-2 mb-3">
+                <span class="section-title-icon"><i class="bi bi-bank2"></i></span>
+                <div>
+                    <h2 class="h4 mb-1">Bank Ledgers</h2>
+                    <p class="text-muted mb-0">Create the real bank accounts the business uses so receipts, payments, and transfers post to the right place.</p>
+                </div>
+            </div>
+            <form method="post" novalidate>
+                <input type="hidden" name="csrfmiddlewaretoken" value="N274mgFiw7kDsoGDW2j6Bbg5VZSzLS8l8pJJyTjK7M5sNar6i87F6BENg2hbx7BQ">
+                <input type="hidden" name="action" value="create_bank">
+                
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="id_bank-name">Bank Name</label>
+                    <input type="text" name="bank-name" maxlength="150" class="form-control" required id="id_bank-name">
+                    
+                    
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="id_bank-account_number">Account Number</label>
+                    <input type="text" name="bank-account_number" maxlength="80" class="form-control" required id="id_bank-account_number">
+                    
+                    
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="id_bank-branch">Branch / Notes</label>
+                    <input type="text" name="bank-branch" maxlength="150" class="form-control" aria-describedby="id_bank-branch_helptext" id="id_bank-branch">
+                    <div class="form-text">Optional branch, branch code, or short note to help staff choose the right bank account.</div>
+                    
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="id_bank-is_active">Active Bank Ledger</label>
+                    <input type="checkbox" name="bank-is_active" class="form-check-input" id="id_bank-is_active" checked>
+                    
+                    
+                </div>
+                
+                <button class="btn btn-dark w-100"><i class="bi bi-plus-circle me-2"></i>Create Bank Ledger</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-xl-7">
+        <div class="page-card p-4 h-100">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div class="section-title d-flex align-items-center gap-2 mb-0">
+                    <span class="section-title-icon"><i class="bi bi-building"></i></span>
+                    <div>
+                        <h2 class="h4 mb-1">Available Bank Ledgers</h2>
+                        <p class="text-muted mb-0">These ledgers are used in POS bank sales, supplier payments, expense payments, and money transfers.</p>
+                    </div>
+                </div>
+                <span class="status-chip clear">0 active of 0</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Bank</th>
+                            <th>Account Number</th>
+                            <th>Linked Ledger</th>
+                            <th>Status</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr><td colspan="5" class="text-center text-muted py-4">No bank ledgers added yet.</td></tr>
+                        
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-xl-5">
+        <div class="page-card p-4 h-100">
+            <div class="section-title d-flex align-items-center gap-2 mb-3">
+                <span class="section-title-icon"><i class="bi bi-safe2"></i></span>
+                <div>
+                    <h2 class="h4 mb-1">Backups</h2>
+                    <p class="text-muted mb-0">Take a database snapshot before major data changes, and restore one when recovery is needed.</p>
+                </div>
+            </div>
+            <form method="post" novalidate>
+                <input type="hidden" name="csrfmiddlewaretoken" value="N274mgFiw7kDsoGDW2j6Bbg5VZSzLS8l8pJJyTjK7M5sNar6i87F6BENg2hbx7BQ">
+                <input type="hidden" name="action" value="create_backup">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="backup_label">Backup Label</label>
+                    <input id="backup_label" name="backup_label" class="form-control" placeholder="Before stock count, pre-launch, month-end close">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="backup_notes">Notes</label>
+                    <textarea id="backup_notes" name="backup_notes" class="form-control" rows="3" placeholder="Optional note about why this snapshot was taken"></textarea>
+                </div>
+                <div class="settings-note mb-3">
+                    <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Current backup scope</div>
+                    <div class="small">This creates a database snapshot of the current business data. Take a fresh backup before restore operations.</div>
+                </div>
+                <button class="btn btn-dark w-100"><i class="bi bi-download me-2"></i>Create Backup Snapshot</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-xl-7">
+        <div class="page-card p-4 h-100">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div class="section-title d-flex align-items-center gap-2 mb-0">
+                    <span class="section-title-icon"><i class="bi bi-clock-history"></i></span>
+                    <div>
+                        <h2 class="h4 mb-1">Backup History</h2>
+                        <p class="text-muted mb-0">Recent snapshots with file size, creator, and restore status.</p>
+                    </div>
+                </div>
+                <span class="status-chip clear">0 total snapshots</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Label</th>
+                            <th>Created</th>
+                            <th>Size</th>
+                            <th>Last Restore</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr><td colspan="5" class="text-center text-muted py-4">No backups created yet.</td></tr>
+                        
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-card p-4 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+        <div class="section-title d-flex align-items-center gap-2 mb-0">
+            <span class="section-title-icon"><i class="bi bi-journal-text"></i></span>
+            <div>
+                <h2 class="h4 mb-1">Audit Trail</h2>
+                <p class="text-muted mb-0">Review who changed settings, created logins, posted stock corrections, or ran critical admin actions.</p>
+            </div>
+        </div>
+        <span class="status-chip clear">7 recorded events</span>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>Time</th>
+                    <th>Action</th>
+                    <th>User</th>
+                    <th>Target</th>
+                    <th>Description</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td>09 Mar 2026 00:16</td>
+                    <td><span class="status-chip clear">Salecompleted</span></td>
+                    <td>hamza1</td>
+                    <td>Sale #8</td>
+                    <td>Sale #8 completed through POS.</td>
+                </tr>
+                
+                <tr>
+                    <td>09 Mar 2026 00:15</td>
+                    <td><span class="status-chip clear">Salecompleted</span></td>
+                    <td>hamza1</td>
+                    <td>Sale #7</td>
+                    <td>Sale #7 completed through POS.</td>
+                </tr>
+                
+                <tr>
+                    <td>08 Mar 2026 23:52</td>
+                    <td><span class="status-chip clear">Systemsettingsupdated</span></td>
+                    <td>jawwad</td>
+                    <td>SystemSettings #1</td>
+                    <td>GST and POS rules were updated from Settings.</td>
+                </tr>
+                
+                <tr>
+                    <td>08 Mar 2026 23:52</td>
+                    <td><span class="status-chip clear">Systemsettingsupdated</span></td>
+                    <td>jawwad</td>
+                    <td>SystemSettings #1</td>
+                    <td>GST and POS rules were updated from Settings.</td>
+                </tr>
+                
+                <tr>
+                    <td>08 Mar 2026 23:50</td>
+                    <td><span class="status-chip clear">Teamusercreated</span></td>
+                    <td>jawwad</td>
+                    <td>User #2</td>
+                    <td>Login &#x27;hamza1&#x27; created as Cashier.</td>
+                </tr>
+                
+                <tr>
+                    <td>08 Mar 2026 23:31</td>
+                    <td><span class="status-chip clear">Salecompleted</span></td>
+                    <td>jawwad</td>
+                    <td>Sale #6</td>
+                    <td>Sale #6 completed through POS.</td>
+                </tr>
+                
+                <tr>
+                    <td>08 Mar 2026 19:37</td>
+                    <td><span class="status-chip clear">Salecompleted</span></td>
+                    <td>jawwad</td>
+                    <td>Sale #5</td>
+                    <td>Sale #5 completed through POS.</td>
+                </tr>
+                
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-5">
+        <div class="page-card p-4 h-100">
+            <div class="section-title d-flex align-items-center gap-2 mb-3">
+                <span class="section-title-icon"><i class="bi bi-person-plus"></i></span>
+                <div>
+                    <h2 class="h4 mb-1">Add Team Member</h2>
+                    <p class="text-muted mb-0">Create a new admin or cashier login without leaving the system.</p>
+                </div>
+            </div>
+            <form method="post" novalidate>
+                <input type="hidden" name="csrfmiddlewaretoken" value="N274mgFiw7kDsoGDW2j6Bbg5VZSzLS8l8pJJyTjK7M5sNar6i87F6BENg2hbx7BQ">
+                <input type="hidden" name="action" value="create_user">
+                
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="id_team-username">Login ID</label>
+                    <input type="text" name="team-username" maxlength="150" autocapitalize="none" autocomplete="username" autofocus class="form-control" required aria-describedby="id_team-username_helptext" id="id_team-username">
+                    <div class="form-text">Unique ID used by the team member to sign in.</div>
+                    
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="id_team-first_name">First name</label>
+                    <input type="text" name="team-first_name" maxlength="150" class="form-control" id="id_team-first_name">
+                    
+                    
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="id_team-last_name">Last name</label>
+                    <input type="text" name="team-last_name" maxlength="150" class="form-control" id="id_team-last_name">
+                    
+                    
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="id_team-email">Email</label>
+                    <input type="email" name="team-email" maxlength="320" class="form-control" id="id_team-email">
+                    
+                    
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="id_team-role">Role</label>
+                    <select name="team-role" class="form-select" aria-describedby="id_team-role_helptext" id="id_team-role">
+  <option value="admin">Admin</option>
+
+  <option value="cashier" selected>Cashier</option>
+
+</select>
+                    <div class="form-text">Admins get full access. Cashiers are limited to POS and their receipts.</div>
+                    
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="id_team-is_active">Is active</label>
+                    <input type="checkbox" name="team-is_active" class="form-check-input" id="id_team-is_active" checked>
+                    
+                    
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="id_team-password1">Password</label>
+                    <input type="password" name="team-password1" autocomplete="new-password" class="form-control" required aria-describedby="id_team-password1_helptext" id="id_team-password1">
+                    <div class="form-text">Use a strong password with at least 8 characters.</div>
+                    
+                </div>
+                
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="id_team-password2">Password confirmation</label>
+                    <input type="password" name="team-password2" autocomplete="new-password" class="form-control" required aria-describedby="id_team-password2_helptext" id="id_team-password2">
+                    <div class="form-text">Enter the same password as before, for verification.</div>
+                    
+                </div>
+                
+                <button class="btn btn-dark w-100">Create Login</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-xl-7">
+        <div class="page-card p-4 h-100">
+            <div class="section-title d-flex align-items-center gap-2 mb-3">
+                <span class="section-title-icon"><i class="bi bi-shield-lock"></i></span>
+                <div>
+                    <h2 class="h4 mb-1">Access Rules</h2>
+                    <p class="text-muted mb-0">Admins can access the full system. Cashiers are restricted to POS and their own receipts.</p>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Login ID</th>
+                            <th>Name</th>
+                            <th>Role</th>
+                            <th>Sales</th>
+                            <th>Last Login</th>
+                            <th>Status</th>
+                            <th class="text-end">Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        
+                        <tr>
+                            <td class="fw-semibold">hamza1</td>
+                            <td>Hamza Jawad</td>
+                            <td>
+                                <span class="role-pill cashier">
+                                    <i class="bi bi-cart4"></i>
+                                    Cashier
+                                </span>
+                            </td>
+                            <td>
+                                <div class="fw-semibold">2</div>
+                                <div class="small text-muted">Rs 95020.00</div>
+                            </td>
+                            <td>09 Mar 2026 00:09</td>
+                            <td>
+                                
+                                <span class="status-chip healthy">Active</span>
+                                
+                            </td>
+                            <td class="text-end">
+                                
+                                <form method="post" class="d-inline">
+                                    <input type="hidden" name="csrfmiddlewaretoken" value="N274mgFiw7kDsoGDW2j6Bbg5VZSzLS8l8pJJyTjK7M5sNar6i87F6BENg2hbx7BQ">
+                                    <input type="hidden" name="action" value="toggle_user">
+                                    <input type="hidden" name="user_id" value="2">
+                                    <button class="btn btn-sm btn-outline-danger">
+                                        Disable
+                                    </button>
+                                </form>
+                                
+                            </td>
+                        </tr>
+                        
+                        <tr>
+                            <td class="fw-semibold">jawwad</td>
+                            <td>Jawad Hamza</td>
+                            <td>
+                                <span class="role-pill ">
+                                    <i class="bi bi-shield-check"></i>
+                                    Admin
+                                </span>
+                            </td>
+                            <td>
+                                <div class="fw-semibold">3</div>
+                                <div class="small text-muted">Rs 89.40</div>
+                            </td>
+                            <td>09 Mar 2026 14:58</td>
+                            <td>
+                                
+                                <span class="status-chip healthy">Active</span>
+                                
+                            </td>
+                            <td class="text-end">
+                                
+                                <span class="text-muted small">Current account</span>
+                                
+                            </td>
+                        </tr>
+                        
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-card p-4 mt-4">
+    <div class="section-title d-flex align-items-center gap-2 mb-3">
+        <span class="section-title-icon"><i class="bi bi-clock-history"></i></span>
+        <div>
+            <h2 class="h4 mb-1">Recent Sign-in Activity</h2>
+            <p class="text-muted mb-0">Latest login and logout records captured from the workspace.</p>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th>Signed In</th>
+                    <th>Signed Out</th>
+                    <th>IP</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td class="fw-semibold">jawwad</td>
+                    <td>Admin</td>
+                    <td>09 Mar 2026 00:16</td>
+                    <td>Still signed in</td>
+                    <td>127.0.0.1</td>
+                    <td>
+                        
+                        <span class="session-active">Open</span>
+                        
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td class="fw-semibold">hamza1</td>
+                    <td>Cashier</td>
+                    <td>09 Mar 2026 00:09</td>
+                    <td>09 Mar 2026 00:16</td>
+                    <td>127.0.0.1</td>
+                    <td>
+                        
+                        <span class="text-muted small">Closed</span>
+                        
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td class="fw-semibold">hamza1</td>
+                    <td>Cashier</td>
+                    <td>09 Mar 2026 00:08</td>
+                    <td>09 Mar 2026 00:09</td>
+                    <td>127.0.0.1</td>
+                    <td>
+                        
+                        <span class="text-muted small">Closed</span>
+                        
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td class="fw-semibold">jawwad</td>
+                    <td>Admin</td>
+                    <td>08 Mar 2026 19:35</td>
+                    <td>09 Mar 2026 00:08</td>
+                    <td>127.0.0.1</td>
+                    <td>
+                        
+                        <span class="text-muted small">Closed</span>
+                        
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td class="fw-semibold">jawwad</td>
+                    <td>Admin</td>
+                    <td>08 Mar 2026 19:35</td>
+                    <td>Still signed in</td>
+                    <td>127.0.0.1</td>
+                    <td>
+                        
+                        <span class="session-active">Open</span>
+                        
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td class="fw-semibold">jawwad</td>
+                    <td>Admin</td>
+                    <td>08 Mar 2026 14:47</td>
+                    <td>08 Mar 2026 19:35</td>
+                    <td>127.0.0.1</td>
+                    <td>
+                        
+                        <span class="text-muted small">Closed</span>
+                        
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td class="fw-semibold">jawwad</td>
+                    <td>Admin</td>
+                    <td>07 Mar 2026 23:09</td>
+                    <td>07 Mar 2026 23:13</td>
+                    <td>127.0.0.1</td>
+                    <td>
+                        
+                        <span class="text-muted small">Closed</span>
+                        
+                    </td>
+                </tr>
+                
+            </tbody>
+        </table>
+    </div>
+</div>
+
+        </div>
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const content = document.getElementById('content');
+        sidebar.classList.toggle('collapsed');
+        content.classList.toggle('expanded');
+        localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+    }
+
+    function toggleSidebarMobile() {
+        document.getElementById('sidebar').classList.toggle('show');
+        document.getElementById('mobileOverlay').classList.toggle('show');
+    }
+
+    window.addEventListener('DOMContentLoaded', function() {
+        if (window.innerWidth > 992 && localStorage.getItem('sidebarCollapsed') === 'true') {
+            document.getElementById('sidebar').classList.add('collapsed');
+            document.getElementById('content').classList.add('expanded');
+        }
+    });
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+

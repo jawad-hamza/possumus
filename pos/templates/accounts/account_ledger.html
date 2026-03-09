@@ -1,37 +1,73 @@
 {% extends "pos/base.html" %}
+{% load accounting_tags %}
+
 {% block title %}Ledger - {{ account.title }}{% endblock %}
 
 {% block content %}
-<h3 class="mb-3">📂 Ledger: {{ account.title }}</h3>
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon slate"><i class="bi bi-journal-richtext"></i></span>
+        <div>
+            <h1 class="page-title">Account Ledger</h1>
+            <p class="page-subtitle">Movement history for {{ account.title }}.</p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <span class="status-chip clear">{{ account.get_type_display }}</span>
+    </div>
+</div>
 
-<div class="card shadow-sm">
-  <div class="table-responsive">
-    <table class="table table-sm mb-0">
-      <thead class="table-dark">
-        <tr>
-          <th>Date</th>
-          <th>Voucher</th>
-          <th class="text-end">Debit</th>
-          <th class="text-end">Credit</th>
-          <th class="text-end">Balance</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in ledger %}
-        <tr>
-          <td>{{ row.date }}</td>
-          <td>#{{ row.voucher.id }} ({{ row.voucher.voucher_type }})</td>
-          <td class="text-end">{{ row.debit }}</td>
-          <td class="text-end">{{ row.credit }}</td>
-          <td class="text-end fw-bold">{{ row.balance }} {{ row.drcr }}</td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="5" class="text-center text-muted py-4">No ledger entries.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="metric-card primary">
+            <div class="metric-label">Total Debit</div>
+            <div class="metric-value">{{ total_debit|money }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="metric-card warning">
+            <div class="metric-label">Total Credit</div>
+            <div class="metric-value">{{ total_credit|money }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="metric-card slate">
+            <div class="metric-label">Closing Balance</div>
+            <div class="metric-value">{{ closing_balance|money }} {{ closing_side }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="page-card p-0 overflow-hidden">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4">Date</th>
+                    <th>Voucher</th>
+                    <th>Narration</th>
+                    <th class="text-end">Debit</th>
+                    <th class="text-end">Credit</th>
+                    <th class="text-end pe-4">Running Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in ledger %}
+                <tr>
+                    <td class="ps-4">{{ row.date }}</td>
+                    <td>#{{ row.voucher.id }} | {{ row.voucher.get_voucher_type_display }}</td>
+                    <td>{{ row.narration|default:"-" }}</td>
+                    <td class="text-end">{{ row.debit|money }}</td>
+                    <td class="text-end">{{ row.credit|money }}</td>
+                    <td class="text-end pe-4 fw-semibold">{{ row.balance|money }} {{ row.drcr }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="text-center text-muted py-5">No ledger entries posted for this account.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endblock %}

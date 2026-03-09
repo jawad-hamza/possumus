@@ -1,0 +1,25 @@
+﻿<tr class="purchase-line-row">
+    <td>
+        {{ form.id }}
+        <div class="d-none">{{ form.DELETE }}</div>
+        {{ form.product }}
+        {% if form.product.errors %}<div class="text-danger small mt-1">{{ form.product.errors|join:', ' }}</div>{% endif %}
+    </td>
+    <td>
+        {{ form.quantity }}
+        {% if form.quantity.errors %}<div class="text-danger small mt-1">{{ form.quantity.errors|join:', ' }}</div>{% endif %}
+    </td>
+    <td>
+        {{ form.cost_price }}
+        {% if form.cost_price.errors %}<div class="text-danger small mt-1">{{ form.cost_price.errors|join:', ' }}</div>{% endif %}
+    </td>
+    <td>
+        {{ form.sale_price }}
+        {% if form.sale_price.errors %}<div class="text-danger small mt-1">{{ form.sale_price.errors|join:', ' }}</div>{% endif %}
+    </td>
+    <td class="text-end">
+        <button type="button" class="btn btn-outline-danger btn-sm" data-remove-line>
+            <i class="bi bi-x-circle"></i> Remove
+        </button>
+    </td>
+</tr>

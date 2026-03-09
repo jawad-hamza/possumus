@@ -1,26 +1,17 @@
 from decimal import Decimal
+
 from django.contrib.contenttypes.models import ContentType
 
 from accounts.models import PartyLedgerEntry
 
 
-def get_party_statement(
-    *,
-    party,
-    from_date=None,
-    to_date=None,
-):
-    """
-    Returns chronological ledger with:
-    - date filtering (Option A)
-    - opening balance
-    - UI-ready balance labels (Option B)
+CUSTOMER = "customer"
+SUPPLIER = "supplier"
+UNIFIED = "unified"
 
-    Balance rule:
-    - debit  increases balance
-    - credit decreases balance
-    """
 
+def get_party_statement(*, party, from_date=None, to_date=None):
+    role = _party_role(party)
     ct = ContentType.objects.get_for_model(party)
 
     base_qs = PartyLedgerEntry.objects.filter(
@@ -28,21 +19,12 @@ def get_party_statement(
         object_id=party.id,
     ).select_related("voucher")
 
-    # -----------------------------
-    # Opening balance (before from_date)
-    # -----------------------------
     opening_balance = Decimal("0")
-
     if from_date:
-        prev_entries = base_qs.filter(voucher__date__lt=from_date)
-        for e in prev_entries:
-            opening_balance += (e.debit - e.credit)
+        for entry in base_qs.filter(voucher__date__lt=from_date):
+            opening_balance += entry.debit - entry.credit
 
-    # -----------------------------
-    # Main entries (date range)
-    # -----------------------------
     entries = base_qs
-
     if from_date:
         entries = entries.filter(voucher__date__gte=from_date)
     if to_date:
@@ -52,102 +34,105 @@ def get_party_statement(
 
     rows = []
     running = opening_balance
-
-    for e in entries:
-        running += (e.debit - e.credit)
-
-        rows.append({
-            # core
-            "date": e.voucher.date,
-            "voucher_id": e.voucher.id,
-            "voucher_type": e.voucher.voucher_type,
-            "ref": f"{e.voucher.ref_model}#{e.voucher.ref_id}",
-            "debit": e.debit,
-            "credit": e.credit,
-
-            # accounting
-            "running_balance": running,
-
-            # UI helpers (Option B)
-            "balance_type": (
-                "receivable" if running > 0
-                else "advance" if running < 0
-                else "clear"
-            ),
-            "display_balance": abs(running),
-        })
+    for entry in entries:
+        running += entry.debit - entry.credit
+        rows.append(
+            {
+                "date": entry.voucher.date,
+                "voucher_id": entry.voucher.id,
+                "voucher_type": entry.voucher.voucher_type,
+                "ref": f"{entry.voucher.ref_model}#{entry.voucher.ref_id}",
+                "debit": entry.debit,
+                "credit": entry.credit,
+                "running_balance": running,
+                "balance_type": _balance_type(running, role),
+                "display_balance": abs(running),
+            }
+        )
 
     return {
         "party": str(party),
         "opening_balance": opening_balance,
         "closing_balance": running,
-        "balance_type": (
-            "receivable" if running > 0
-            else "advance" if running < 0
-            else "clear"
-        ),
+        "balance_type": _balance_type(running, role),
         "rows": rows,
     }
-    
-from decimal import Decimal
 
 
-def get_unified_party_statement(
-    *,
-    customer=None,
-    supplier=None,
-    from_date=None,
-    to_date=None,
-):
-    """
-    Unified customer + supplier statement.
-    UI-ready and date-aware.
-    """
 
+def get_unified_party_statement(*, customer=None, supplier=None, from_date=None, to_date=None):
     rows = []
+    opening_balance = Decimal("0")
+    party_labels = []
 
     if customer:
-        data = get_party_statement(
+        customer_data = get_party_statement(
             party=customer,
             from_date=from_date,
             to_date=to_date,
         )
-        for r in data["rows"]:
-            rows.append({**r, "role": "customer"})
+        opening_balance += customer_data["opening_balance"]
+        party_labels.append(str(customer))
+        for row in customer_data["rows"]:
+            rows.append({**row, "role": CUSTOMER})
 
     if supplier:
-        data = get_party_statement(
+        supplier_data = get_party_statement(
             party=supplier,
             from_date=from_date,
             to_date=to_date,
         )
-        for r in data["rows"]:
-            rows.append({**r, "role": "supplier"})
+        opening_balance += supplier_data["opening_balance"]
+        party_labels.append(str(supplier))
+        for row in supplier_data["rows"]:
+            rows.append({**row, "role": SUPPLIER})
 
-    # sort unified timeline
-    rows.sort(key=lambda x: (x["date"], x["voucher_id"]))
+    rows.sort(key=lambda row: (row["date"], row["voucher_id"], row.get("role", "")))
 
-    # recompute unified running balance
-    running = Decimal("0")
-    final = []
-
-    for r in rows:
-        running += (r["debit"] - r["credit"])
-        r["running_balance"] = running
-        r["balance_type"] = (
-            "receivable" if running > 0
-            else "advance" if running < 0
-            else "clear"
-        )
-        r["display_balance"] = abs(running)
-        final.append(r)
+    running = opening_balance
+    final_rows = []
+    for row in rows:
+        running += row["debit"] - row["credit"]
+        row["running_balance"] = running
+        row["balance_type"] = _balance_type(running, UNIFIED)
+        row["display_balance"] = abs(running)
+        final_rows.append(row)
 
     return {
+        "party": " / ".join(party_labels),
+        "opening_balance": opening_balance,
         "closing_balance": running,
-        "balance_type": (
-            "receivable" if running > 0
-            else "advance" if running < 0
-            else "clear"
-        ),
-        "rows": final,
+        "balance_type": _balance_type(running, UNIFIED),
+        "rows": final_rows,
     }
+
+
+
+def _party_role(party) -> str:
+    model_name = party.__class__.__name__.lower()
+    if model_name == "supplier":
+        return SUPPLIER
+    return CUSTOMER
+
+
+
+def _balance_type(balance: Decimal, role: str) -> str:
+    if role == CUSTOMER:
+        if balance > 0:
+            return "receivable"
+        if balance < 0:
+            return "advance"
+        return "clear"
+
+    if role == SUPPLIER:
+        if balance < 0:
+            return "payable"
+        if balance > 0:
+            return "advance"
+        return "clear"
+
+    if balance > 0:
+        return "receivable"
+    if balance < 0:
+        return "payable"
+    return "clear"

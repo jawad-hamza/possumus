@@ -1,121 +1,166 @@
 {% extends "pos/base.html" %}
-{% load static %}
-{% block title %}{{ supplier.name }} – Supplier{% endblock %}
-
-{% block extra_css %}
-<style>
-.profile-header {
-    background: linear-gradient(135deg,#11998e,#38ef7d);
-    color:#fff;border-radius:16px;padding:35px;margin-bottom:25px;
-}
-.avatar {
-    width:90px;height:90px;border-radius:50%;
-    background:#fff;color:#11998e;
-    display:flex;align-items:center;justify-content:center;
-    font-size:42px;font-weight:bold;
-}
-.stat-card{border-radius:14px;box-shadow:0 4px 12px rgba(0,0,0,.08)}
-</style>
-{% endblock %}
+{% block title %}{{ supplier.name }}{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
-<a href="{% url 'supplier_list' %}" class="btn btn-outline-secondary mb-3">← Back</a>
-
-<div class="profile-header d-flex align-items-center">
-    <div class="avatar">{{ supplier.name|slice:":1"|upper }}</div>
-    <div class="ms-4">
-        <h2>{{ supplier.name }}</h2>
-        <div class="opacity-75">Supplier ID #{{ supplier.id }}</div>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1">{{ supplier.name }}</h2>
+        <p class="text-muted mb-0">Supplier ledger, payment status, and purchase history.</p>
     </div>
+    <a href="{% url 'supplier_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Suppliers</a>
 </div>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="card stat-card text-center">
-            <div class="card-body">
-                <small class="text-muted">Closing Balance</small>
-                <h4 id="closing_balance">—</h4>
-                <span id="balance_badge" class="badge"></span>
+<div class="row g-4 mb-4">
+    <div class="col-lg-3"><div class="page-card p-3 h-100"><div class="text-muted small">Transactions</div><div class="fs-4 fw-semibold">{{ total_transactions }}</div></div></div>
+    <div class="col-lg-3"><div class="page-card p-3 h-100"><div class="text-muted small">Total Purchases</div><div class="fs-4 fw-semibold">Rs {{ total_purchases|floatformat:2 }}</div></div></div>
+    <div class="col-lg-3"><div class="page-card p-3 h-100"><div class="text-muted small">Current Balance</div><div class="fs-4 fw-semibold" id="closing_balance">Rs 0.00</div></div></div>
+    <div class="col-lg-3"><div class="page-card p-3 h-100"><div class="text-muted small">Status</div><div class="mt-2"><span id="balance_badge" class="status-chip {{ badge.balance_type }}">{{ badge.balance_type|title }}</span></div></div></div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-4">
+        <div class="page-card p-4 h-100">
+            <h5 class="mb-3">Supplier Info</h5>
+            <div class="mb-2"><strong>Phone:</strong> {{ supplier.phone|default:"-" }}</div>
+            <div class="mb-2"><strong>Email:</strong> {{ supplier.email|default:"-" }}</div>
+            <div class="mb-2"><strong>Address:</strong> {{ supplier.address|default:"-" }}</div>
+            <div class="mb-2"><strong>Created:</strong> {{ supplier.created_at|date:"d M Y" }}</div>
+            <hr>
+            <button class="btn btn-dark w-100" onclick="openSettlement()">Pay Supplier</button>
+        </div>
+    </div>
+    <div class="col-lg-8">
+        <div class="page-card p-4">
+            <div class="d-flex flex-wrap justify-content-between align-items-end gap-3 mb-3">
+                <div>
+                    <h5 class="mb-1">Supplier Statement</h5>
+                    <p class="text-muted mb-0">Filter the ledger for a date range.</p>
+                </div>
+                <div class="d-flex gap-2">
+                    <input type="date" id="from_date" class="form-control">
+                    <input type="date" id="to_date" class="form-control">
+                    <button class="btn btn-outline-secondary" onclick="loadStatement()">Load</button>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr><th>Date</th><th>Voucher</th><th>Ref</th><th class="text-end">Debit</th><th class="text-end">Credit</th><th class="text-end">Balance</th></tr>
+                    </thead>
+                    <tbody id="ledger"></tbody>
+                </table>
             </div>
         </div>
     </div>
+</div>
 
-    <div class="col-md-4">
-        <div class="card stat-card text-center">
-            <div class="card-body">
-                <small class="text-muted">Settlement</small>
-                <button class="btn btn-success w-100" onclick="openSettlement()">Pay Supplier</button>
-            </div>
+<div class="modal fade" id="settlementModal" tabindex="-1">
+  <div class="modal-dialog">
+    <div class="modal-content">
+      <div class="modal-header"><h5 class="modal-title">Pay Supplier</h5><button type="button" class="btn-close" data-bs-dismiss="modal"></button></div>
+      <div class="modal-body">
+        <input class="form-control mb-3" id="amount" type="number" min="0" step="0.01" placeholder="Amount">
+        <select class="form-select mb-3" id="method" onchange="toggleBankLedger()">
+            <option value="cash">Cash</option>
+            <option value="bank">Bank</option>
+        </select>
+        <div id="bank-ledger-wrap" class="d-none">
+            <select class="form-select" id="bank_account_id">
+                <option value="">Choose bank ledger</option>
+                {% for bank in bank_accounts %}
+                <option value="{{ bank.id }}">{{ bank.display_name }}</option>
+                {% endfor %}
+            </select>
+            <div class="form-text">Select which bank ledger this supplier payment left from.</div>
         </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-dark" onclick="submitSettlement()">Submit</button>
+      </div>
     </div>
+  </div>
 </div>
+{% endblock %}
 
-<div class="card shadow-sm">
-    <div class="card-header bg-white d-flex justify-content-between">
-        <span>🧾 Supplier Ledger</span>
-        <button class="btn btn-sm btn-outline-secondary" onclick="loadStatement()">Refresh</button>
-    </div>
-    <div class="card-body table-responsive">
-        <table class="table table-sm table-bordered">
-            <thead>
-                <tr>
-                    <th>Date</th><th>Voucher</th><th>Ref</th>
-                    <th class="text-end">Debit</th>
-                    <th class="text-end">Credit</th>
-                    <th class="text-end">Balance</th>
-                </tr>
-            </thead>
-            <tbody id="ledger"></tbody>
-        </table>
-    </div>
-</div>
-
-<!-- MODAL -->
-<div class="modal fade" id="settlementModal">
-<div class="modal-dialog"><div class="modal-content">
-<div class="modal-header"><h5>Pay Supplier</h5></div>
-<div class="modal-body">
-<input class="form-control mb-2" id="amount">
-<select class="form-control" id="method">
-<option value="cash">Cash</option><option value="bank">Bank</option>
-</select>
-</div>
-<div class="modal-footer">
-<button class="btn btn-success" onclick="submitSettlement()">Pay</button>
-</div>
-</div></div></div>
-
+{% block extra_js %}
 <script>
-function loadStatement(){
-fetch(`/api/party-statement/?supplier_id={{ supplier.id }}`)
-.then(r=>r.json()).then(d=>{
-document.getElementById("closing_balance").innerText=d.closing_balance;
-const b=document.getElementById("balance_badge");
-b.className="badge "+d.balance_type; b.innerText=d.balance_type.toUpperCase();
-const body=document.getElementById("ledger"); body.innerHTML="";
-d.rows.forEach(r=>{
-body.innerHTML+=`
-<tr><td>${r.date}</td>
-<td>${r.voucher_type} #${r.voucher_id}</td>
-<td>${r.ref}</td>
-<td class="text-end">${r.debit}</td>
-<td class="text-end">${r.credit}</td>
-<td class="text-end">${r.display_balance}</td></tr>`;
-});
-});
+function getCsrfToken() {
+    const match = document.cookie.match(/csrftoken=([^;]+)/);
+    return match ? decodeURIComponent(match[1]) : '';
 }
-function openSettlement(){ new bootstrap.Modal(document.getElementById("settlementModal")).show(); }
-function submitSettlement(){
-fetch("/api/settlements/",{
-method:"POST",headers:{'Content-Type':'application/json'},
-body:JSON.stringify({
-supplier_id:{{ supplier.id }},
-amount:document.getElementById("amount").value,
-payment_method:document.getElementById("method").value
-})
-}).then(()=>location.reload());
+
+function buildStatementUrl() {
+    const from = document.getElementById('from_date').value;
+    const to = document.getElementById('to_date').value;
+    let url = `/api/party-statement/?supplier_id={{ supplier.id }}`;
+    if (from) url += `&from=${from}`;
+    if (to) url += `&to=${to}`;
+    return url;
 }
+
+function loadStatement() {
+    fetch(buildStatementUrl())
+        .then(response => response.json())
+        .then(data => {
+            document.getElementById('closing_balance').innerText = `Rs ${data.closing_balance}`;
+            const badge = document.getElementById('balance_badge');
+            badge.className = `status-chip ${data.balance_type}`;
+            badge.innerText = data.balance_type.replace('_', ' ').toUpperCase();
+            const body = document.getElementById('ledger');
+            body.innerHTML = '';
+            data.rows.forEach(row => {
+                body.innerHTML += `<tr>
+                    <td>${row.date}</td>
+                    <td>${row.voucher_type} #${row.voucher_id}</td>
+                    <td>${row.ref}</td>
+                    <td class="text-end">${row.debit}</td>
+                    <td class="text-end">${row.credit}</td>
+                    <td class="text-end">${row.display_balance}</td>
+                </tr>`;
+            });
+        });
+}
+
+function toggleBankLedger() {
+    const method = document.getElementById('method').value;
+    const wrap = document.getElementById('bank-ledger-wrap');
+    wrap.classList.toggle('d-none', method !== 'bank');
+}
+
+function openSettlement() {
+    toggleBankLedger();
+    new bootstrap.Modal(document.getElementById('settlementModal')).show();
+}
+
+function submitSettlement() {
+    const method = document.getElementById('method').value;
+    const payload = {
+        supplier_id: {{ supplier.id }},
+        amount: document.getElementById('amount').value,
+        payment_method: method,
+    };
+    if (method === 'bank') {
+        payload.bank_account_id = document.getElementById('bank_account_id').value;
+    }
+
+    fetch('/api/settlements/', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': getCsrfToken(),
+        },
+        body: JSON.stringify(payload)
+    })
+    .then(async (response) => {
+        if (!response.ok) {
+            const data = await response.json().catch(() => ({}));
+            throw new Error(data.error || 'Settlement could not be saved.');
+        }
+        window.location.reload();
+    })
+    .catch((error) => alert(error.message));
+}
+
 loadStatement();
 </script>
 {% endblock %}

@@ -1,132 +1,92 @@
 {% extends "pos/base.html" %}
+
+{% block title %}Party Statement{% endblock %}
+
 {% block content %}
-
-<style>
-    .statement-box {
-        background: #fff;
-        padding: 20px;
-        border-radius: 6px;
-        box-shadow: 0 2px 6px rgba(0,0,0,.08);
-    }
-
-    .filters {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 15px;
-        flex-wrap: wrap;
-    }
-
-    input, button {
-        padding: 6px 10px;
-        font-size: 14px;
-    }
-
-    table {
-        width: 100%;
-        border-collapse: collapse;
-        margin-top: 15px;
-    }
-
-    th, td {
-        border: 1px solid #ddd;
-        padding: 8px;
-        font-size: 14px;
-    }
-
-    th {
-        background: #f0f0f0;
-    }
-
-    .badge {
-        padding: 4px 10px;
-        border-radius: 20px;
-        font-size: 12px;
-        color: #fff;
-    }
-
-    .advance { background: #e74c3c; }
-    .receivable { background: #2ecc71; }
-    .clear { background: #7f8c8d; }
-</style>
-
-<div class="statement-box">
-    <h3>Party Statement</h3>
-
-    <div class="filters">
-        <input type="number" id="customer_id" placeholder="Customer ID">
-        <input type="number" id="supplier_id" placeholder="Supplier ID">
-        <input type="date" id="from_date">
-        <input type="date" id="to_date">
-        <button onclick="loadStatement()">Load</button>
+<div class="d-flex justify-content-between align-items-center mb-4">
+    <div>
+        <h2 class="mb-1">Party Statement</h2>
+        <p class="text-muted mb-0">Inspect customer, supplier, or combined statements with opening and closing balances.</p>
     </div>
-
-    <div id="summary"></div>
-
-    <table id="table" style="display:none;">
-        <thead>
-            <tr>
-                <th>Date</th>
-                <th>Voucher</th>
-                <th>Ref</th>
-                <th>Debit</th>
-                <th>Credit</th>
-                <th>Balance</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
 </div>
 
+<div class="page-card p-4">
+    <div class="row g-3 mb-4">
+        <div class="col-md-3"><input type="number" id="customer_id" class="form-control" placeholder="Customer ID"></div>
+        <div class="col-md-3"><input type="number" id="supplier_id" class="form-control" placeholder="Supplier ID"></div>
+        <div class="col-md-2"><input type="date" id="from_date" class="form-control"></div>
+        <div class="col-md-2"><input type="date" id="to_date" class="form-control"></div>
+        <div class="col-md-2 d-grid"><button class="btn btn-dark" onclick="loadStatement()">Load</button></div>
+    </div>
+
+    <div id="summary" class="mb-4"></div>
+
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0" id="table" style="display:none;">
+            <thead>
+                <tr>
+                    <th>Date</th>
+                    <th>Voucher</th>
+                    <th>Ref</th>
+                    <th class="text-end">Debit</th>
+                    <th class="text-end">Credit</th>
+                    <th class="text-end">Balance</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
 <script>
 function loadStatement() {
-    const customer = document.getElementById("customer_id").value;
-    const supplier = document.getElementById("supplier_id").value;
-    const from = document.getElementById("from_date").value;
-    const to = document.getElementById("to_date").value;
+    const customer = document.getElementById('customer_id').value;
+    const supplier = document.getElementById('supplier_id').value;
+    const from = document.getElementById('from_date').value;
+    const to = document.getElementById('to_date').value;
 
-    let url = "/api/party-statement/?";
+    let url = '/api/party-statement/?';
     if (customer) url += `customer_id=${customer}&`;
     if (supplier) url += `supplier_id=${supplier}&`;
     if (from) url += `from=${from}&`;
     if (to) url += `to=${to}&`;
 
     fetch(url)
-        .then(r => r.json())
-        .then(render);
+        .then(response => response.json())
+        .then(renderStatement);
 }
 
-function render(data) {
-    const summary = document.getElementById("summary");
-    const table = document.getElementById("table");
-    const body = table.querySelector("tbody");
+function renderStatement(data) {
+    const summary = document.getElementById('summary');
+    const table = document.getElementById('table');
+    const body = table.querySelector('tbody');
 
-    body.innerHTML = "";
-    table.style.display = "table";
+    body.innerHTML = '';
+    table.style.display = 'table';
 
     summary.innerHTML = `
-        <p>
-            <strong>Party:</strong> ${data.party} <br>
-            <strong>Opening:</strong> ${data.opening_balance} <br>
-            <strong>Closing:</strong> ${data.closing_balance}
-            <span class="badge ${data.balance_type}">
-                ${data.balance_type.toUpperCase()}
-            </span>
-        </p>
+        <div class="d-flex flex-wrap gap-3 align-items-center">
+            <div><strong>Party:</strong> ${data.party}</div>
+            <div><strong>Opening:</strong> ${data.opening_balance}</div>
+            <div><strong>Closing:</strong> ${data.closing_balance}</div>
+            <span class="status-chip ${data.balance_type}">${data.balance_type.toUpperCase()}</span>
+        </div>
     `;
 
-    data.rows.forEach(r => {
-        const tr = document.createElement("tr");
+    data.rows.forEach(row => {
+        const tr = document.createElement('tr');
         tr.innerHTML = `
-            <td>${r.date}</td>
-            <td>${r.voucher_type} #${r.voucher_id}</td>
-            <td>${r.ref}</td>
-            <td>${r.debit}</td>
-            <td>${r.credit}</td>
-            <td>${r.display_balance}</td>
+            <td>${row.date}</td>
+            <td>${row.voucher_type} #${row.voucher_id}</td>
+            <td>${row.ref}</td>
+            <td class="text-end">${row.debit}</td>
+            <td class="text-end">${row.credit}</td>
+            <td class="text-end">${row.display_balance}</td>
         `;
         body.appendChild(tr);
     });
 }
 </script>
-
 {% endblock %}

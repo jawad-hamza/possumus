@@ -1,279 +1,249 @@
-{% load pos_extras %}
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Invoice #{{ sale.id }}</title>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Receipt #{{ sale.id }}</title>
     <style>
+        @page {
+            size: {{ thermal_width_mm|default:50 }}mm auto;
+            margin: 0;
+        }
+
         body {
-            font-family: Arial, Helvetica, sans-serif;
-            background: #fff;
-            color: #000;
             margin: 0;
-            padding: 0;
+            background: #e5e7eb;
+            color: #111827;
+            font-family: "Courier New", Courier, monospace;
         }
 
-        .invoice {
-            max-width: 800px;
-            margin: auto;
-            padding: 30px;
+        .screen-actions {
+            max-width: 380px;
+            margin: 18px auto 0;
+            padding: 0 12px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            justify-content: center;
         }
 
-        /* ================= HEADER ================= */
-        .header {
+        .screen-actions a,
+        .screen-actions button {
+            border: 1px solid #111827;
+            background: #ffffff;
+            color: #111827;
+            text-decoration: none;
+            padding: 10px 14px;
+            border-radius: 12px;
+            font-size: 12px;
+            font-weight: 700;
+            cursor: pointer;
+        }
+
+        .screen-actions .primary {
+            background: #111827;
+            color: #ffffff;
+        }
+
+        .receipt-stage {
+            padding: 16px 0 32px;
+        }
+
+        .receipt {
+            width: {{ thermal_width_mm|default:50 }}mm;
+            min-width: {{ thermal_width_mm|default:50 }}mm;
+            max-width: {{ thermal_width_mm|default:50 }}mm;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 2.5mm 2.2mm 3mm;
+            box-shadow: 0 20px 40px rgba(15, 23, 42, 0.16);
+            box-sizing: border-box;
+        }
+
+        .receipt-center {
+            text-align: center;
+        }
+
+        .receipt img {
+            max-width: 18mm;
+            max-height: 18mm;
+            object-fit: contain;
+            margin-bottom: 4px;
+        }
+
+        .company-name {
+            font-size: 12px;
+            font-weight: 700;
+            line-height: 1.25;
+        }
+
+        .company-copy,
+        .footer {
+            font-size: 9px;
+            line-height: 1.35;
+            word-break: break-word;
+        }
+
+        .divider {
+            border-top: 1px dashed #94a3b8;
+            margin: 6px 0;
+        }
+
+        .meta-row,
+        .item-pricing,
+        .summary-row {
             display: flex;
             justify-content: space-between;
-            align-items: center;
-            border-bottom: 2px solid #000;
-            padding-bottom: 15px;
-            margin-bottom: 20px;
+            align-items: flex-start;
+            gap: 8px;
+            font-size: 9px;
         }
 
-        .company {
+        .meta-row strong,
+        .item-pricing strong,
+        .summary-row strong {
+            font-weight: 700;
+        }
+
+        .meta-block {
+            display: grid;
+            gap: 4px;
+        }
+
+        .line-item {
+            padding: 5px 0;
+        }
+
+        .item-name {
+            font-size: 10px;
+            font-weight: 700;
+            line-height: 1.3;
+            word-break: break-word;
+            margin-bottom: 2px;
+        }
+
+        .badge-strip {
             display: flex;
-            gap: 15px;
-            align-items: center;
-        }
-
-        .company img {
-            height: 60px;
-        }
-
-        .company h2 {
-            margin: 0;
-            font-size: 1.4rem;
-        }
-
-        .company small {
-            display: block;
-            font-size: 0.8rem;
-        }
-
-        .invoice-title {
-            text-align: right;
-        }
-
-        .invoice-title h1 {
-            margin: 0;
-            font-size: 1.8rem;
-        }
-
-        /* ================= META ================= */
-        .meta {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 20px;
-            font-size: 0.9rem;
-        }
-
-        .meta p {
-            margin: 4px 0;
+            flex-wrap: wrap;
+            gap: 4px;
+            margin-top: 4px;
         }
 
         .badge {
-            border: 1px solid #000;
-            padding: 2px 8px;
-            font-size: 0.75rem;
+            display: inline-flex;
+            align-items: center;
+            border: 1px solid #cbd5e1;
+            border-radius: 999px;
+            padding: 2px 6px;
+            font-size: 8px;
+            background: #f8fafc;
         }
 
-        /* ================= TABLE ================= */
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-bottom: 20px;
+        .summary-row {
+            padding: 2px 0;
         }
 
-        th, td {
-            border-bottom: 1px solid #000;
-            padding: 8px;
-            font-size: 0.9rem;
+        .summary-row.total {
+            font-size: 11px;
+            font-weight: 700;
+            padding-top: 6px;
         }
 
-        th {
-            text-align: left;
-            font-weight: bold;
-        }
-
-        td:last-child, th:last-child {
-            text-align: right;
-        }
-
-        /* ================= SUMMARY ================= */
-        .summary {
-            max-width: 300px;
-            margin-left: auto;
-            font-size: 0.9rem;
-        }
-
-        .summary div {
-            display: flex;
-            justify-content: space-between;
-            margin-bottom: 6px;
-        }
-
-        .summary .total {
-            border-top: 2px solid #000;
-            font-weight: bold;
-            padding-top: 8px;
-            font-size: 1rem;
-        }
-
-        /* ================= ACTIONS ================= */
-        .actions {
-            margin-top: 30px;
-            display: flex;
-            gap: 10px;
-        }
-
-        .actions a,
-        .actions button {
-            padding: 8px 16px;
-            font-size: 0.85rem;
-            border: 1px solid #000;
-            background: #fff;
-            cursor: pointer;
-            text-decoration: none;
-            color: #000;
-        }
-
-        .actions a:hover,
-        .actions button:hover {
-            background: #000;
-            color: #fff;
-        }
-
-        /* ================= FOOTER ================= */
         .footer {
             text-align: center;
-            margin-top: 40px;
-            font-size: 0.8rem;
+            margin-top: 8px;
+            color: #475569;
         }
 
-        /* ================= PRINT ================= */
         @media print {
-            .actions {
-                display: none;
-            }
             body {
+                background: #ffffff;
+            }
+
+            .screen-actions {
+                display: none !important;
+            }
+
+            .receipt-stage {
+                padding: 0;
+            }
+
+            .receipt {
+                box-shadow: none;
                 margin: 0;
             }
         }
     </style>
 </head>
 <body>
-
-<div class="invoice">
-
-    <!-- HEADER -->
-    <div class="header">
-        <div class="company">
-            {% if company.logo %}
-                <img src="{{ company.logo.url }}" alt="Logo">
-            {% endif %}
-            <div>
-                <h2>{{ company.name|default:"Company Name" }}</h2>
-                <small>{{ company.address }}</small>
-                <small>{{ company.phone }}</small>
-            </div>
-        </div>
-
-        <div class="invoice-title">
-            <h1>INVOICE</h1>
-            <small>#{{ sale.id }}</small>
-        </div>
-    </div>
-
-    <!-- META -->
-    <div class="meta">
-        <div>
-            <p><strong>Date:</strong> {{ sale.created_at|date:"d-m-Y" }}</p>
-            <p><strong>Time:</strong> {{ sale.created_at|date:"H:i" }}</p>
-            {% if sale.is_credit %}
-                <p><span class="badge">CREDIT SALE</span></p>
-            {% endif %}
-        </div>
-
-        <div>
-            <p><strong>Customer:</strong>
-                {{ sale.customer.name|default:"Walk-in Customer" }}
-            </p>
-            {% if sale.customer.phone %}
-                <p><strong>Phone:</strong> {{ sale.customer.phone }}</p>
-            {% endif %}
-        </div>
-    </div>
-
-    <!-- ITEMS -->
-    <table>
-        <thead>
-            <tr>
-                <th>#</th>
-                <th>Item</th>
-                <th>Qty</th>
-                <th>Rate</th>
-                <th>Amount</th>
-            </tr>
-        </thead>
-        <tbody>
-        {% for item in items %}
-            <tr>
-                <td>{{ forloop.counter }}</td>
-                <td>{{ item.product.name }}</td>
-                <td>{{ item.quantity }}</td>
-                <td>Rs {{ item.price|floatformat:2 }}</td>
-                <td>
-                    Rs {{ item.price|multiply:item.quantity|floatformat:2 }}
-                </td>
-            </tr>
-        {% endfor %}
-        </tbody>
-    </table>
-
-    <!-- SUMMARY -->
-    <div class="summary">
-        <div>
-            <span>Subtotal</span>
-            <span>Rs {{ subtotal|floatformat:2 }}</span>
-        </div>
-
-        {% if discount_rate > 0 %}
-        <div>
-            <span>Discount ({{ discount_rate }}%)</span>
-            <span>- Rs {{ discount_amount|floatformat:2 }}</span>
-        </div>
-        {% endif %}
-
-        {% if tax_rate > 0 %}
-        <div>
-            <span>Tax ({{ tax_rate }}%)</span>
-            <span>Rs {{ tax_amount|floatformat:2 }}</span>
-        </div>
-        {% endif %}
-
-        <div class="total">
-            <span>Total</span>
-            <span>Rs {{ grand_total|floatformat:2 }}</span>
-        </div>
-    </div>
-
-    <!-- ACTIONS -->
-    <div class="actions">
-        <button onclick="window.print()">Print</button>
-        <a href="{% url 'invoice_pdf' sale.id %}">Download PDF</a>
-        <a href="{% url 'pos_screen' %}">Back to POS</a>
-    </div>
-
-    <!-- FOOTER -->
-    <div class="footer">
-        {% if company.invoice_footer %}
-            {{ company.invoice_footer }}
-        {% else %}
-            Thank you for your business.
-        {% endif %}
-    </div>
-
+<div class="screen-actions">
+    <button class="primary" onclick="window.print()">Print {{ thermal_width_mm|default:50 }}mm</button>
+    <a href="{% url 'invoice_pdf' sale.id %}">Download {{ thermal_width_mm|default:50 }}mm PDF</a>
+    {% if request.user.is_staff or request.user.is_superuser %}<a href="{% url 'sale_return' sale.id %}">Return Items</a>{% endif %}
+    <a href="{% url 'pos_screen' %}">Back to POS</a>
 </div>
 
+<div class="receipt-stage">
+    <div class="receipt">
+        <div class="receipt-center">
+            {% if company.logo %}<img src="{{ company.logo.url }}" alt="Logo">{% endif %}
+            <div class="company-name">{{ company.name|default:"POS IMS" }}</div>
+            {% if company.address %}<div class="company-copy">{{ company.address }}</div>{% endif %}
+            {% if company.phone or company.email %}
+            <div class="company-copy">{{ company.phone }}{% if company.email %} | {{ company.email }}{% endif %}</div>
+            {% endif %}
+            {% if company.tax_registration_number %}<div class="company-copy">{{ company.tax_registration_number }}</div>{% endif %}
+        </div>
+
+        <div class="divider"></div>
+
+        <div class="meta-block">
+            <div class="meta-row"><span>Receipt</span><strong>#{{ sale.id }}</strong></div>
+            <div class="meta-row"><span>Date</span><strong>{{ sale.created_at|date:"d M Y" }}</strong></div>
+            <div class="meta-row"><span>Time</span><strong>{{ sale.created_at|date:"H:i" }}</strong></div>
+            <div class="meta-row"><span>Payment</span><strong>{{ sale.get_payment_method_display }}</strong></div>
+            <div class="meta-row"><span>Customer</span><strong>{{ sale.customer.name|default:"Walk-in" }}</strong></div>
+            {% if sale.sold_by %}<div class="meta-row"><span>Cashier</span><strong>{{ sale.sold_by.get_full_name|default:sale.sold_by.username }}</strong></div>{% endif %}
+            {% if sale.is_credit %}<div class="meta-row"><span>Type</span><strong>Credit Sale</strong></div>{% endif %}
+        </div>
+
+        <div class="divider"></div>
+
+        {% for item in items %}
+        <div class="line-item">
+            <div class="item-name">{{ item.product.name }}</div>
+            <div class="item-pricing">
+                <span>{{ item.quantity }} x Rs {{ item.discounted_unit_price|floatformat:2 }}</span>
+                <strong>Rs {{ item.line_total|floatformat:2 }}</strong>
+            </div>
+            {% if item.price != item.original_price or item.discount_percent > 0 %}
+            <div class="badge-strip">
+                {% if item.price != item.original_price %}<span class="badge">Custom price</span>{% endif %}
+                {% if item.discount_percent > 0 %}<span class="badge">Discount {{ item.discount_percent|floatformat:2 }}%</span>{% endif %}
+            </div>
+            {% endif %}
+        </div>
+        {% endfor %}
+
+        <div class="divider"></div>
+
+        <div class="summary-row"><span>Line Subtotal</span><strong>Rs {{ subtotal|floatformat:2 }}</strong></div>
+        {% if line_discount_total > 0 %}<div class="summary-row"><span>Line Discounts</span><strong>Rs {{ line_discount_total|floatformat:2 }}</strong></div>{% endif %}
+        {% if discount_amount > 0 %}<div class="summary-row"><span>Order Discount</span><strong>Rs {{ discount_amount|floatformat:2 }}</strong></div>{% endif %}
+        {% if tax_amount > 0 %}<div class="summary-row"><span>{{ tax_label_value }}</span><strong>Rs {{ tax_amount|floatformat:2 }}</strong></div>{% endif %}
+        <div class="summary-row total"><span>Total</span><strong>Rs {{ grand_total|floatformat:2 }}</strong></div>
+        <div class="summary-row"><span>Paid</span><strong>Rs {{ paid_amount|floatformat:2 }}</strong></div>
+        <div class="summary-row"><span>Balance</span><strong>Rs {{ balance_due|floatformat:2 }}</strong></div>
+        {% if new_balance is not None %}
+        <div class="summary-row"><span>Previous Balance</span><strong>Rs {{ previous_balance|floatformat:2 }}</strong></div>
+        <div class="summary-row"><span>Current Balance</span><strong>Rs {{ new_balance|floatformat:2 }}</strong></div>
+        {% endif %}
+
+        <div class="divider"></div>
+        <div class="footer">{{ company.invoice_footer|default:"Thank you for your business." }}</div>
+    </div>
+</div>
 </body>
 </html>
+
+

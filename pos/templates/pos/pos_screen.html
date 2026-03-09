@@ -3,310 +3,620 @@
 
 {% block title %}POS{% endblock %}
 
-{% block content %}
+{% block extra_css %}
 <style>
- /* ===== TOUCH FRIENDLY CART BUTTONS ===== */
+.product-browser-card,.cart-panel{height:calc(100vh - 136px);min-height:640px;display:flex;flex-direction:column;overflow:hidden}
+.product-toolbar{display:grid;grid-template-columns:minmax(0,1fr) minmax(280px,328px);gap:14px;align-items:start}
+.barcode-shell{border:1px solid #dbeafe;border-radius:16px;background:linear-gradient(180deg,#f8fbff 0%,#eef4ff 100%);padding:12px}
+.barcode-shell .form-control{min-height:48px;font-size:.97rem;border-radius:13px}
+.product-search-shell{border:1px solid #dbeafe;border-radius:16px;background:#fff;padding:12px;margin-bottom:.9rem}
+.product-search-shell .form-control{min-height:46px;border-radius:13px}
+.product-search-meta{margin-top:5px;font-size:.79rem;color:#64748b}
+.category-strip{display:flex;flex-wrap:wrap;gap:8px}
+.category-strip .btn{padding:.48rem .9rem;border-radius:14px;font-weight:700}
+.product-grid-shell{flex:1;min-height:0;overflow:auto;padding-right:2px;margin-right:-2px}
+.product-tile{border:1px solid var(--card-border);border-radius:18px;background:linear-gradient(180deg,#fff,#f8fafc);transition:transform .2s ease,box-shadow .2s ease;box-shadow:0 8px 18px rgba(15,23,42,.04)}
+.product-tile:hover{transform:translateY(-1px);box-shadow:0 14px 24px rgba(15,23,42,.08)}.product-tile .btn{min-height:42px;font-weight:700;font-size:.95rem;border-radius:14px}
+.product-card-title{font-size:1rem;line-height:1.2}
+.product-card-meta{font-size:.88rem}
+.cart-panel{border:1px solid #dbeafe;border-radius:26px;background:linear-gradient(180deg,#fbfdff 0%,#f3f7ff 100%);box-shadow:0 22px 40px rgba(15,23,42,.08)}
+.cart-header{display:flex;justify-content:space-between;align-items:flex-start;gap:14px}
+.cart-summary-pills{display:flex;flex-wrap:wrap;gap:8px;justify-content:flex-end}.cart-list-title{font-size:.69rem;text-transform:uppercase;letter-spacing:.06em;color:#64748b;padding:0 4px}
+.cart-summary-pill{min-width:102px;border-radius:15px;padding:.65rem .8rem;background:#fff;border:1px solid #dbeafe;box-shadow:0 8px 18px rgba(37,99,235,.06)}
+.cart-summary-pill .label{display:block;font-size:.69rem;text-transform:uppercase;letter-spacing:.04em;color:#64748b}
+.cart-summary-pill .value{display:block;margin-top:4px;font-size:1rem;font-weight:800;color:#0f172a}
+.cart-scroll{flex:1;min-height:180px;overflow:auto;padding:10px;border:1px solid #dbeafe;border-radius:18px;background:rgba(255,255,255,.8);display:flex;flex-direction:column;gap:10px}
+.cart-line{border:1px solid #d8e4f5;border-radius:18px;background:#fff;box-shadow:0 8px 18px rgba(15,23,42,.05);padding:.9rem}
+.cart-line.has-issue{border-color:#fecaca;box-shadow:0 12px 24px rgba(185,28,28,.08)}
+.cart-line-head{display:grid;grid-template-columns:minmax(0,1fr) auto auto;gap:12px;align-items:start}
+.cart-item{min-width:0}.cart-item-title{display:flex;align-items:flex-start;gap:10px;min-width:0}
+.cart-line-index{width:30px;height:30px;border-radius:10px;display:inline-flex;align-items:center;justify-content:center;background:#dbeafe;color:#1d4ed8;font-size:.78rem;font-weight:800;flex:0 0 auto}
+.cart-item-name{font-size:.98rem;font-weight:700;color:#0f172a;line-height:1.15;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cart-item-meta{margin-top:3px;font-size:.8rem;color:#475569;line-height:1.25}
+.cart-item-badges{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px}
+.price-badge{display:inline-flex;align-items:center;gap:6px;border-radius:999px;padding:4px 9px;font-size:.7rem;font-weight:700;background:#f1f5f9;color:#0f172a}
+.price-badge.discount{background:#dcfce7;color:#166534}.price-badge.custom{background:#dbeafe;color:#1d4ed8}.price-badge.warning{background:#fee2e2;color:#b91c1c}.price-badge.tax{background:#ede9fe;color:#6d28d9}
+.line-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px}.line-metric{border-radius:12px;background:#f8fafc;padding:8px 10px}.line-metric .label{display:block;color:#64748b;font-size:.7rem;text-transform:uppercase;letter-spacing:.02em}.line-metric .value{display:block;font-weight:700;color:#0f172a;font-size:.95rem}
+.cart-line-tools{display:flex;gap:6px;align-items:flex-start;padding-top:2px}.cart-icon-form{margin:0}.cart-icon-form .btn{width:32px;min-width:32px;height:32px;padding:0;border-radius:999px;display:inline-flex;align-items:center;justify-content:center}
+.cart-line-total{min-width:98px;text-align:right}.cart-line-total .label{display:block;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:#64748b}.cart-line-total .value{display:block;margin-top:2px;font-size:1rem;font-weight:800;color:#0f172a}.cart-line-total .meta{display:block;margin-top:4px;font-size:.74rem;color:#64748b}
+.cart-editor-row{margin-top:.75rem}.cart-line-editor{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:8px;align-items:center}.cart-inline-field{min-width:0}.cart-inline-field .input-group-text{border-radius:11px 0 0 11px;min-height:36px;font-size:.68rem;font-weight:700;color:#475569;background:#fff;padding-left:9px;padding-right:9px}.cart-inline-field .form-control{min-height:36px;border-radius:0 11px 11px 0;font-size:.88rem;font-weight:700;text-align:center;padding-left:8px;padding-right:8px;background:#fff}.cart-inline-field .form-control[readonly]{background:#eef2f7;color:#64748b;cursor:not-allowed}
+.cart-line-note{margin-top:.7rem;font-size:.75rem;color:#64748b}
+.cart-empty{border:1px dashed #cbd5e1;border-radius:22px;padding:2rem 1.5rem;background:rgba(255,255,255,.74);text-align:center}.cart-empty .icon{width:64px;height:64px;margin:0 auto 14px;border-radius:20px;display:inline-flex;align-items:center;justify-content:center;background:#dbeafe;color:#1d4ed8;font-size:1.4rem}
+#checkout-form{display:flex;flex-direction:column;gap:10px}#checkout-form .row{--bs-gutter-x:.7rem;--bs-gutter-y:.7rem}#checkout-form .form-control,#checkout-form .form-select{min-height:42px;border-radius:13px}#checkout-form .btn-outline-primary,#checkout-form .btn-dark{min-height:42px;border-radius:13px;font-weight:700}
+.totals-card{border-radius:20px;background:linear-gradient(180deg,#0f172a,#1e293b);color:#fff}.totals-card .muted{color:rgba(255,255,255,.72)}.checkout-button{min-height:56px;font-size:1.01rem;font-weight:800;letter-spacing:.01em;border-radius:16px}
+.rule-note{border:1px solid #dbeafe;background:linear-gradient(180deg,#eff6ff,#f8fbff);color:#1d4ed8;border-radius:15px;padding:.78rem .9rem;font-size:.86rem}
+@media (max-width:1399px){.product-toolbar{grid-template-columns:1fr}}
+@media (max-width:1599px){.product-browser-card,.cart-panel{height:auto;min-height:auto;overflow:visible}.product-grid-shell,.cart-scroll{min-height:auto;max-height:none;overflow:visible;padding-right:0;margin-right:0}.cart-panel{display:flex;flex-direction:column;gap:14px}}
+@media (max-width:1199px){.cart-line-head{grid-template-columns:minmax(0,1fr) auto auto}.cart-line-editor{grid-template-columns:minmax(0,1fr) minmax(0,1fr)}}
+@media (max-width:768px){.cart-header,.product-toolbar{display:grid;grid-template-columns:1fr}.cart-summary-pills{width:100%;justify-content:stretch}.cart-summary-pill{flex:1 1 0}.cart-scroll{padding:9px}.cart-line-head{grid-template-columns:1fr auto;grid-template-areas:"item total" "tools tools"}.cart-item{grid-area:item}.cart-line-tools{grid-area:tools;justify-content:flex-start}.cart-line-total{grid-area:total;text-align:left}.cart-line-editor{grid-template-columns:1fr}#barcode-input{min-width:0 !important;width:100%}}
+</style>
+{% endblock %}
 
-.cart-actions {
-    display: flex;
-    gap: 10px;          /* space between buttons */
-    justify-content: center;
-}
+{% block content %}
+<div class="row g-4 align-items-stretch">
+    <div class="col-xl-5 col-xxl-6">
+        <div class="page-card p-3 mb-4 product-browser-card">
+            <div class="product-toolbar mb-4">
+                <div>
+                    <h2 class="mb-1">POS Checkout</h2>
+                    <p class="text-muted mb-1">Scan barcode or add from the product grid. Price and discount stay protected by your business rules.</p>
+                    <div class="small text-muted"><i class="bi bi-person-badge me-1"></i>Signed in as {{ request.user.get_full_name|default:request.user.username }} ({{ user_role_label }})</div>
+                </div>
+                <div class="barcode-shell">
+                    <label for="barcode-input" class="form-label fw-semibold mb-2">Barcode / SKU Scan</label>
+                    <input type="text" id="barcode-input" class="form-control form-control-lg" placeholder="Scan barcode or type SKU and press Enter" autocomplete="off">
+                    <div class="form-text mt-2">Built for touch and scanner use. Press Enter after manual typing.</div>
+                </div>
+            </div>
 
-.cart-btn {
-    width: 48px;
-    height: 48px;
-    font-size: 22px;
-    font-weight: bold;
-    border-radius: 8px;
-    padding: 0;
-    line-height: 1;
-}
-
-/* Optional: even better touch feel */
-.cart-btn:active {
-    transform: scale(0.92);
-}
-
-
-  </style>
-<div class="container-fluid mt-3">
-  <div class="row">
-    <!-- Search Bar -->
-     <!-- Barcode / SKU Scan Input -->
-<div class="mb-3">
-  <input
-    type="text"
-    id="barcode-input"
-    class="form-control form-control-lg"
-    placeholder="Scan barcode or type SKU..."
-    autocomplete="off"
-  >
-</div>
-
-
-    <!-- ================= PRODUCTS ================= -->
-    <div class="col-lg-8 col-md-7">
-      <h4>Products</h4>
-
-      <!-- Categories -->
-      <div class="mb-3">
-        <strong>Categories:</strong>
-
-        <a href="{% url 'pos_screen' %}"
-           class="btn btn-sm {% if not selected_category %}btn-dark{% else %}btn-outline-dark{% endif %}">
-          All
-        </a>
-
-        {% for cat in categories %}
-          <a href="{% url 'pos_screen' %}?category={{ cat.id }}"
-             class="btn btn-sm {% if selected_category == cat.id|stringformat:'s' %}btn-primary{% else %}btn-outline-primary{% endif %}">
-            {{ cat.name }}
-          </a>
-        {% endfor %}
-      </div>
-
-      <!-- Product Cards -->
-      <div class="row">
-        {% for product in products %}
-          <div class="col-md-3 mb-3">
-            <div class="card h-100">
-              <div class="card-body text-center">
-
-                <h6 class="mb-1">{{ product.name }}</h6>
-
-                {% if product.stock > 0 %}
-                  <span class="badge bg-success">Stock: {{ product.stock }}</span>
+            <div class="rule-note mb-3">
+                <i class="bi bi-info-circle me-1"></i>
+                {% if uses_category_gst %}
+                {{ tax_label_value }} is applied automatically from the product category. The cart tax box is locked from Settings.
+                {% elif manual_tax_enabled %}
+                Manual {{ tax_label_value }} is enabled for this cart. Use the cart tax field if this sale needs tax.
                 {% else %}
-                  <span class="badge bg-danger">Out of Stock</span>
+                Tax is currently disabled from Settings.
+                {% endif %}
+            </div>
+
+            <div class="product-search-shell">
+                <label for="product-search-input" class="form-label fw-semibold mb-2">Quick Product Search</label>
+                <input type="search" id="product-search-input" class="form-control" placeholder="Type name, SKU, brand, category, barcode, or location" autocomplete="off">
+                <div class="product-search-meta" id="product-search-meta">Showing all available products.</div>
+            </div>
+
+            <div class="mb-3">
+                <div class="category-strip">
+                    <a href="{% url 'pos_screen' %}" class="btn {% if not selected_category %}btn-dark{% else %}btn-outline-dark{% endif %}">All Products</a>
+                    {% for cat in categories %}
+                    <a href="{% url 'pos_screen' %}?category={{ cat.id }}" class="btn {% if selected_category == cat.id|stringformat:'s' %}btn-dark{% else %}btn-outline-dark{% endif %}">{{ cat.name }}</a>
+                    {% endfor %}
+                </div>
+            </div>
+
+            <div class="product-grid-shell">
+                <div class="row g-3">
+                    {% for product in products %}
+                    <div class="col-sm-6 col-lg-4 js-product-card" data-product-search='{{ product.name|lower }} {{ product.sku|default:""|lower }} {{ product.barcode|default:""|lower }} {% if product.brand %}{{ product.brand.name|lower }}{% endif %} {% if product.category %}{{ product.category.name|lower }}{% endif %} {{ product.location|default:""|lower }}'>
+                        <div class="product-tile h-100 p-3">
+                            <div class="d-flex justify-content-between align-items-start gap-2 mb-2">
+                                <div>
+                                    <div class="fw-semibold product-card-title">{{ product.name }}</div>
+                                    <div class="small text-muted product-card-meta">{{ product.sku }}{% if product.category %} | {{ product.category.name }}{% endif %}{% if product.brand %} | {{ product.brand.name }}{% endif %}</div>
+                                </div>
+                                {% if product.margin_status == 'below' %}
+                                <span class="status-chip below">Low margin</span>
+                                {% else %}
+                                <span class="status-chip healthy">Ready</span>
+                                {% endif %}
+                            </div>
+
+                            <div class="d-flex flex-wrap gap-2 mb-3">
+                                {% if uses_category_gst and product.category and product.category.effective_gst_rate > 0 %}
+                                <span class="price-badge tax">{{ tax_label_value }} {{ product.category.effective_gst_rate|floatformat:2 }}%</span>
+                                {% endif %}
+                                {% if product.category and product.category.tax_status == 'exempt' %}
+                                <span class="price-badge">Exempt</span>
+                                {% endif %}
+                                {% if product.location %}
+                                <span class="price-badge"><i class="bi bi-geo-alt"></i>{{ product.location }}</span>
+                                {% endif %}
+                            </div>
+
+                            <div class="line-metrics mb-3">
+                                <div class="line-metric">
+                                    <span class="label">Sale</span>
+                                    <span class="value">Rs {{ product.price|floatformat:2 }}</span>
+                                </div>
+                                <div class="line-metric">
+                                    <span class="label">Stock</span>
+                                    <span class="value">{{ product.stock }}</span>
+                                </div>
+                            </div>
+
+                            <form method="post" class="js-preserve-form">
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="add">
+                                <input type="hidden" name="product_id" value="{{ product.id }}">
+                                <input type="hidden" name="selected_customer_id">
+                                <input type="hidden" name="preserve_credit">
+                                <input type="hidden" name="preserve_payment_method">
+                                <input type="hidden" name="preserve_bank_account_id">
+                                <input type="hidden" name="preserve_discount_rate">
+                                <input type="hidden" name="preserve_tax_rate">
+                                <input type="hidden" name="selected_category" value="{{ selected_category }}">
+                                <button class="btn btn-dark w-100" {% if product.stock <= 0 %}disabled{% endif %}>
+                                    {% if product.stock <= 0 %}Out of Stock{% else %}<i class="bi bi-plus-circle me-1"></i>Add to Cart{% endif %}
+                                </button>
+                            </form>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="col-12"><div class="alert alert-light border mb-0">No products found in this category.</div></div>
+                    {% endfor %}
+                    <div class="col-12 d-none" id="product-search-empty">
+                        <div class="alert alert-light border mb-0">No products match what you typed.</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-7 col-xxl-6">
+        <div class="page-card p-3 sticky-xl-top cart-panel" style="top: 20px;">
+            <div class="cart-header mb-3">
+                <div>
+                    <h4 class="mb-1">Cart</h4>
+                    <div class="text-muted small">{{ cart_rows|length }} line{{ cart_rows|length|pluralize }} ready for billing</div>
+                </div>
+                <div class="cart-summary-pills">
+                    <div class="cart-summary-pill">
+                        <span class="label">Subtotal</span>
+                        <span class="value">Rs {{ cart_total|floatformat:2 }}</span>
+                    </div>
+                    <div class="cart-summary-pill">
+                        <span class="label">Projected Total</span>
+                        <span class="value">Rs {{ sale_preview.total_amount|floatformat:2 }}</span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="cart-list-title">Cart Items</div>
+            <div class="cart-scroll">
+                {% if cart_rows %}
+                    {% for row in cart_rows %}
+                    <div class="cart-line {% if row.pricing_error or row.stock_error %}has-issue{% endif %}" data-line-total="{{ row.line_total|floatformat:2 }}" data-tax-rate="{{ row.category_tax_rate|floatformat:2 }}">
+                        <div class="cart-line-head">
+                            <div class="cart-item">
+                                <div class="cart-item-title">
+                                    <span class="cart-line-index">{{ forloop.counter }}</span>
+                                    <div class="min-w-0">
+                                        <div class="cart-item-name">{{ row.name }}</div>
+                                        <div class="cart-item-meta">SKU {{ row.product.sku|default:"-" }}{% if row.product.location %} | {{ row.product.location }}{% endif %}{% if row.stock %} | Stock {{ row.stock }}{% endif %}</div>
+                                    </div>
+                                </div>
+                                {% if row.has_custom_price or row.has_line_discount or row.pricing_error or row.stock_error or row.category_tax_rate > 0 %}
+                                <div class="cart-item-badges">
+                                    {% if row.has_custom_price %}<span class="price-badge custom"><i class="bi bi-pencil-square"></i>Custom price</span>{% endif %}
+                                    {% if row.has_line_discount %}<span class="price-badge discount"><i class="bi bi-percent"></i>{{ row.discount_percent|floatformat:2 }}% off</span>{% endif %}
+                                    {% if uses_category_gst and row.category_tax_rate > 0 %}<span class="price-badge tax"><i class="bi bi-receipt"></i>{{ tax_label_value }} {{ row.category_tax_rate|floatformat:2 }}%</span>{% endif %}
+                                    {% if row.pricing_error %}<span class="price-badge warning"><i class="bi bi-exclamation-triangle"></i>{{ row.pricing_error }}</span>{% endif %}
+                                    {% if row.stock_error %}<span class="price-badge warning"><i class="bi bi-exclamation-triangle"></i>{{ row.stock_error }}</span>{% endif %}
+                                </div>
+                                {% endif %}
+                            </div>
+
+                            <div class="cart-line-tools">
+                                <form method="post" class="js-preserve-form cart-icon-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="add">
+                                    <input type="hidden" name="product_id" value="{{ row.product_id }}">
+                                    <input type="hidden" name="selected_customer_id">
+                                    <input type="hidden" name="preserve_credit">
+                                    <input type="hidden" name="preserve_payment_method">
+                                    <input type="hidden" name="preserve_bank_account_id">
+                                    <input type="hidden" name="preserve_discount_rate">
+                                    <input type="hidden" name="preserve_tax_rate">
+                                    <input type="hidden" name="selected_category" value="{{ selected_category }}">
+                                    <button class="btn btn-outline-success" title="Add one more" aria-label="Add one more" {% if row.quantity >= row.stock %}disabled{% endif %}><i class="bi bi-plus-lg"></i></button>
+                                </form>
+                                <form method="post" class="js-preserve-form cart-icon-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="decrease">
+                                    <input type="hidden" name="product_id" value="{{ row.product_id }}">
+                                    <input type="hidden" name="selected_customer_id">
+                                    <input type="hidden" name="preserve_credit">
+                                    <input type="hidden" name="preserve_payment_method">
+                                    <input type="hidden" name="preserve_bank_account_id">
+                                    <input type="hidden" name="preserve_discount_rate">
+                                    <input type="hidden" name="preserve_tax_rate">
+                                    <input type="hidden" name="selected_category" value="{{ selected_category }}">
+                                    <button class="btn btn-outline-warning" title="Reduce quantity" aria-label="Reduce quantity"><i class="bi bi-dash-lg"></i></button>
+                                </form>
+                                <form method="post" class="js-preserve-form cart-icon-form">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="remove_all">
+                                    <input type="hidden" name="product_id" value="{{ row.product_id }}">
+                                    <input type="hidden" name="selected_customer_id">
+                                    <input type="hidden" name="preserve_credit">
+                                    <input type="hidden" name="preserve_payment_method">
+                                    <input type="hidden" name="preserve_bank_account_id">
+                                    <input type="hidden" name="preserve_discount_rate">
+                                    <input type="hidden" name="preserve_tax_rate">
+                                    <input type="hidden" name="selected_category" value="{{ selected_category }}">
+                                    <button class="btn btn-outline-danger" title="Remove line" aria-label="Remove line"><i class="bi bi-trash"></i></button>
+                                </form>
+                            </div>
+
+                            <div class="cart-line-total">
+                                <span class="label">Line Total</span>
+                                <span class="value">Rs {{ row.line_total|floatformat:2 }}</span>
+                                <span class="meta">Qty {{ row.quantity }}</span>
+                            </div>
+                        </div>
+
+                        <div class="cart-editor-row">
+                            <form method="post" class="js-preserve-form cart-line-editor" data-inline-pricing>
+                                {% csrf_token %}
+                                <input type="hidden" name="action" value="update_line">
+                                <input type="hidden" name="product_id" value="{{ row.product_id }}">
+                                <input type="hidden" name="selected_customer_id">
+                                <input type="hidden" name="preserve_credit">
+                                <input type="hidden" name="preserve_payment_method">
+                                <input type="hidden" name="preserve_bank_account_id">
+                                <input type="hidden" name="preserve_discount_rate">
+                                <input type="hidden" name="preserve_tax_rate">
+                                <input type="hidden" name="selected_category" value="{{ selected_category }}">
+                                <div class="input-group input-group-sm cart-inline-field">
+                                    <span class="input-group-text">Unit Price</span>
+                                    <input type="number" class="form-control" name="custom_price" min="0.01" step="0.01" value="{{ row.unit_price|floatformat:2 }}" data-price-input data-minimum="{{ row.minimum_price|floatformat:2 }}" aria-label="Unit price" {% if not allow_price_override %}readonly{% endif %}>
+                                </div>
+                                <div class="input-group input-group-sm cart-inline-field">
+                                    <span class="input-group-text">Line Discount %</span>
+                                    <input type="number" class="form-control" name="line_discount" min="0" max="100" step="0.01" value="{{ row.discount_percent|floatformat:2 }}" data-discount-input data-minimum="{{ row.minimum_price|floatformat:2 }}" aria-label="Line discount" {% if not allow_line_discount %}readonly{% endif %}>
+                                </div>
+                            </form>
+                        </div>
+                        <div class="cart-line-note"> 
+                            Net unit Rs {{ row.effective_unit_price|floatformat:2 }}
+                            {% if row.product.sku %} | SKU {{ row.product.sku }}{% endif %}
+                            {% if row.product.location %} | {{ row.product.location }}{% endif %}
+                        </div>
+                    </div>
+                    {% endfor %}
+                {% else %}
+                    <div class="cart-empty">
+                        <div class="icon"><i class="bi bi-cart-x"></i></div>
+                        <h5 class="mb-2">No items in cart</h5>
+                        <p class="text-muted mb-0">Scan a barcode or tap products on the left to start building the sale.</p>
+                    </div>
+                {% endif %}
+            </div>
+
+            <form method="post" id="checkout-form">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="checkout">
+                <input type="hidden" name="selected_customer_id" value="{{ selected_customer_id }}" id="selected_customer_id_hidden">
+                <input type="hidden" name="selected_category" value="{{ selected_category }}">
+
+                <div class="row g-3">
+                    <div class="col-6">
+                        <label for="discount_rate" class="form-label fw-semibold">Order Discount %</label>
+                        <input type="number" name="discount_rate" id="discount_rate" class="form-control form-control-lg" value="{{ discount_rate_value|floatformat:2 }}" min="0" max="100" step="0.01">
+                    </div>
+                    <div class="col-6">
+                        {% if manual_tax_enabled %}
+                        <label for="tax_rate" class="form-label fw-semibold">{{ tax_label_value }} %</label>
+                        <input type="number" name="tax_rate" id="tax_rate" class="form-control form-control-lg" value="{{ tax_rate_value|floatformat:2 }}" min="0" max="100" step="0.01">
+                        {% else %}
+                        <label class="form-label fw-semibold">{{ tax_label_value }}</label>
+                        <div class="form-control form-control-lg bg-light d-flex align-items-center">{% if uses_category_gst %}Auto from category{% else %}Disabled{% endif %}</div>
+                        <input type="hidden" name="tax_rate" id="tax_rate" value="0">
+                        {% endif %}
+                    </div>
+                    <div class="col-12">
+                        <label for="payment_method" class="form-label fw-semibold">Payment Method</label>
+                        <select name="payment_method" id="payment_method" class="form-select form-select-lg">
+                            <option value="cash" {% if payment_method_value == 'cash' %}selected{% endif %}>Cash</option>
+                            <option value="bank" {% if payment_method_value == 'bank' %}selected{% endif %}>Bank</option>
+                        </select>
+                    </div>
+                    <div class="col-12" id="bank-account-wrapper">
+                        <label for="bank_account_id" class="form-label fw-semibold">Bank Ledger</label>
+                        <select name="bank_account_id" id="bank_account_id" class="form-select form-select-lg">
+                            <option value="">Generic Bank</option>
+                            {% for bank in bank_accounts %}
+                            <option value="{{ bank.id }}" {% if selected_bank_account_id == bank.id|stringformat:'s' %}selected{% endif %}>{{ bank.display_name }}</option>
+                            {% endfor %}
+                        </select>
+                        <div class="form-text">
+                            {% if bank_accounts %}
+                            Optional. Pick a specific bank ledger or leave it on Generic Bank.
+                            {% else %}
+                            No specific bank ledgers yet. This payment will use the generic Bank account.
+                            {% endif %}
+                        </div>
+                    </div>
+                    <div class="col-12">
+                        <div class="d-flex justify-content-between align-items-center gap-2 mb-2">
+                            <label for="customer_id" class="form-label fw-semibold mb-0">Customer</label>
+                            <a href="{{ pos_customer_add_url }}" class="btn btn-outline-primary"><i class="bi bi-person-plus me-1"></i>Add Customer</a>
+                        </div>
+                        <select name="customer_id" id="customer_id" class="form-select form-select-lg">
+                            <option value="">Walk-in Customer</option>
+                            {% for c in customers %}
+                            <option value="{{ c.id }}" {% if selected_customer_id == c.id|stringformat:'s' %}selected{% endif %}>{{ c.name }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <div class="col-12">
+                        {% if allow_credit_sales %}
+                        <div class="form-check form-switch fs-6">
+                            <input class="form-check-input" type="checkbox" name="is_credit" id="is_credit" {% if prefill_credit_sale %}checked{% endif %}>
+                            <label class="form-check-label" for="is_credit">Credit sale</label>
+                        </div>
+                        <div class="form-text">Credit sale posts the invoice balance to Accounts Receivable and requires a customer.</div>
+                        {% else %}
+                        <div class="rule-note">
+                            <i class="bi bi-lock me-1"></i>Credit sale is disabled in Settings for this business.
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="totals-card p-3 mt-4">
+                    <div class="d-flex justify-content-between align-items-center">
+                        <span class="muted">Cart Subtotal</span>
+                        <strong>Rs <span id="subtotal-amount">{{ sale_preview.subtotal|floatformat:2 }}</span></strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span class="muted">Order Discount</span>
+                        <strong>Rs <span id="discount-amount">{{ sale_preview.discount_amount|floatformat:2 }}</span></strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span class="muted">{{ tax_label_value }}</span>
+                        <strong>Rs <span id="tax-amount">{{ sale_preview.tax_amount|floatformat:2 }}</span></strong>
+                    </div>
+                    <div class="d-flex justify-content-between align-items-center mt-2">
+                        <span class="muted">Projected Invoice Total</span>
+                        <strong>Rs <span id="final-total">{{ sale_preview.total_amount|floatformat:2 }}</span></strong>
+                    </div>
+                </div>
+
+                {% if checkout_disabled %}
+                <div class="alert alert-danger mt-3 mb-0">Fix stock or pricing issues in the highlighted cart lines before checkout.</div>
                 {% endif %}
 
-                <p class="mt-2 mb-2">Rs {{ product.price }}</p>
-
-                <form method="post">
-                  {% csrf_token %}
-                  <input type="hidden" name="action" value="add">
-                  <input type="hidden" name="product_id" value="{{ product.id }}">
-
-                  <button class="btn btn-success btn-sm w-100"
-                          {% if product.stock <= 0 %}disabled{% endif %}>
-                    Add
-                  </button>
-                </form>
-
-              </div>
-            </div>
-          </div>
-        {% empty %}
-          <p>No products found.</p>
-        {% endfor %}
-      </div>
+                <button class="btn btn-dark w-100 mt-3 checkout-button" {% if checkout_disabled or not cart_rows %}disabled{% endif %}><i class="bi bi-bag-check me-1"></i>Complete Checkout</button>
+            </form>
+        </div>
     </div>
+</div>
+{% endblock %}
 
-    <!-- ================= CART ================= -->
-    <div class="col-lg-4 col-md-5">
-      <h4>Cart</h4>
-
-      {% if cart %}
-        <table class="table table-sm table-bordered">
-          <thead>
-            <tr>
-              <th>Item</th>
-              <th>Qty</th>
-              <th>Price</th>
-              <th width="150">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-          {% for pid, item in cart.items %}
-            <tr>
-              <td>{{ item.name }}</td>
-
-              <td>
-                {{ item.quantity }}
-                <div class="small text-muted">
-                  Stock: {{ stock_map|get_item:pid }}
-                </div>
-              </td>
-
-              <td>{{ item.price }}</td>
-
-              <td>
-                <!-- Increase -->
-                <form method="post" style="display:inline;">
-                  {% csrf_token %}
-                  <input type="hidden" name="action" value="add">
-                  <input type="hidden" name="product_id" value="{{ pid }}">
-                  <button class="btn btn-success cart-btn"
-                          {% if item.quantity >= stock_map|get_item:pid %}disabled{% endif %}>
-                    +
-                  </button>
-                </form>
-
-                <!-- Decrease -->
-                <form method="post" style="display:inline;">
-                  {% csrf_token %}
-                  <input type="hidden" name="action" value="decrease">
-                  <input type="hidden" name="product_id" value="{{ pid }}">
-                  <button class="btn btn-warning cart-btn">-</button>
-                </form>
-
-                <!-- Remove -->
-                <form method="post" style="display:inline;">
-                  {% csrf_token %}
-                  <input type="hidden" name="action" value="remove_all">
-                  <input type="hidden" name="product_id" value="{{ pid }}">
-                  <button class="btn btn-danger cart-btn">x</button>
-                </form>
-              </td>
-            </tr>
-          {% endfor %}
-          </tbody>
-        </table>
-      {% else %}
-        <p>No items in cart</p>
-      {% endif %}
-
-      <!-- ================= CHECKOUT ================= -->
-      <form method="post" class="mt-3">
-        {% csrf_token %}
-        <input type="hidden" name="action" value="checkout">
-
-        <div class="mb-2">
-          <label>Discount (%)</label>
-          <input type="number" name="discount_rate" id="discount_rate" class="form-control" value="0">
-        </div>
-
-        <div class="mb-2">
-          <label>Tax (%)</label>
-          <input type="number" name="tax_rate" id="tax_rate" class="form-control" value="0">
-        </div>
-
-        <hr>
-
-        <!-- Credit Sale -->
-        <div class="form-check mb-2">
-          <input class="form-check-input" type="checkbox" name="is_credit" id="is_credit">
-          <label class="form-check-label" for="is_credit">
-            Sale on Loan (Udhaar)
-          </label>
-        </div>
-
-        <div class="mb-3">
-          <label>Customer</label>
-          <select name="customer_id" id="customer_id" class="form-control">
-            <option value="">Walk-in Customer</option>
-            {% for c in customers %}
-              <option value="{{ c.id }}">{{ c.name }}</option>
-            {% endfor %}
-          </select>
-          <small class="text-muted">
-            Loan sale requires a registered customer
-          </small>
-        </div>
-
-        <script>
-          const creditBox = document.getElementById("is_credit");
-          const customerSelect = document.getElementById("customer_id");
-
-          creditBox.addEventListener("change", function () {
-            if (this.checked) {
-              customerSelect.required = true;
-            } else {
-              customerSelect.required = false;
-              customerSelect.value = "";
-            }
-          });
-        </script>
-
-        <hr>
-
-       <h5>
-    Total: Rs 
-    <span id="final-total"
-          data-subtotal="{{ cart_total }}">
-        {{ cart_total }}
-    </span>
-</h5>
-
-
-        <button class="btn btn-primary w-100 mt-2"
-                {% if checkout_disabled or not cart %}disabled{% endif %}>
-          Checkout
-        </button>
-
-        {% if checkout_disabled %}
-          <div class="alert alert-danger mt-2 p-2">
-            Some items exceed available stock. Please adjust the cart.
-          </div>
-        {% endif %}
-      </form>
-
+{% block extra_js %}
 <script>
 (function () {
-    const discountInput = document.getElementById("discount_rate");
-    const taxInput = document.getElementById("tax_rate");
-    const totalSpan = document.getElementById("final-total");
+    const barcodeInput = document.getElementById('barcode-input');
+    const productSearchInput = document.getElementById('product-search-input');
+    const productSearchMeta = document.getElementById('product-search-meta');
+    const productCards = Array.from(document.querySelectorAll('.js-product-card'));
+    const productSearchEmpty = document.getElementById('product-search-empty');
+    const discountInput = document.getElementById('discount_rate');
+    const taxInput = document.getElementById('tax_rate');
+    const subtotalSpan = document.getElementById('subtotal-amount');
+    const discountSpan = document.getElementById('discount-amount');
+    const taxSpan = document.getElementById('tax-amount');
+    const totalSpan = document.getElementById('final-total');
+    const creditBox = document.getElementById('is_credit');
+    const paymentMethod = document.getElementById('payment_method');
+    const customerSelect = document.getElementById('customer_id');
+    const customerHidden = document.getElementById('selected_customer_id_hidden');
+    const bankSelect = document.getElementById('bank_account_id');
+    const bankWrapper = document.getElementById('bank-account-wrapper');
+    const preserveForms = document.querySelectorAll('.js-preserve-form');
+    const cartLines = Array.from(document.querySelectorAll('.cart-line'));
+    const manualTaxEnabled = {{ manual_tax_enabled|yesno:"true,false" }};
+    const usesCategoryGst = {{ uses_category_gst|yesno:"true,false" }};
+    const inlineEditors = Array.from(document.querySelectorAll('[data-inline-pricing]'));
 
-    if (!discountInput || !taxInput || !totalSpan) return;
+    function filterProducts() {
+        if (!productSearchInput || !productCards.length) return;
+        const term = productSearchInput.value.toLowerCase().replace(/\s+/g, ' ').trim();
+        const parts = term ? term.split(' ').filter(Boolean) : [];
+        let visibleCount = 0;
+        const totalCount = productCards.length;
 
-    const subtotal = parseFloat(totalSpan.dataset.subtotal) || 0;
+        productCards.forEach(function (card) {
+            const haystack = (card.dataset.productSearch || '').replace(/\s+/g, ' ').trim();
+            const visible = !parts.length || parts.every(function (part) {
+                return haystack.indexOf(part) !== -1;
+            });
+            card.classList.toggle('d-none', !visible);
+            if (visible) visibleCount += 1;
+        });
 
-    function recalcTotal() {
-        let discountRate = parseFloat(discountInput.value) || 0;
-        let taxRate = parseFloat(taxInput.value) || 0;
+        if (productSearchEmpty) {
+            productSearchEmpty.classList.toggle('d-none', visibleCount !== 0);
+        }
 
-        // safety clamps
-        discountRate = Math.min(Math.max(discountRate, 0), 100);
-        taxRate = Math.min(Math.max(taxRate, 0), 100);
-
-        const discountAmount = subtotal * (discountRate / 100);
-        const afterDiscount = subtotal - discountAmount;
-        const taxAmount = afterDiscount * (taxRate / 100);
-
-        const finalTotal = afterDiscount + taxAmount;
-
-        totalSpan.innerText = finalTotal.toFixed(2);
+        if (productSearchMeta) {
+            productSearchMeta.textContent = term
+                ? `Showing ${visibleCount} of ${totalCount} product${totalCount === 1 ? '' : 's'} while you type.`
+                : `Showing all ${totalCount} available product${totalCount === 1 ? '' : 's'}.`;
+        }
     }
 
-    discountInput.addEventListener("input", recalcTotal);
-    taxInput.addEventListener("input", recalcTotal);
+    function validateInlinePricing(form) {
+        const priceField = form.querySelector('[data-price-input]');
+        const discountField = form.querySelector('[data-discount-input]');
+        if (!priceField || !discountField) return true;
+        const minimumValue = parseFloat(priceField.dataset.minimum || discountField.dataset.minimum || '0') || 0;
+        const priceValue = parseFloat(priceField.value || '0') || 0;
+        const discountValue = Math.min(Math.max(parseFloat(discountField.value || '0') || 0, 0), 100);
+        const effectiveValue = priceValue - (priceValue * (discountValue / 100));
+        const invalid = minimumValue > 0 && effectiveValue + 0.0001 < minimumValue;
+        const message = invalid ? 'Below allowed pricing rule.' : '';
+        priceField.setCustomValidity(message);
+        discountField.setCustomValidity(message);
+        return !invalid;
+    }
+
+    if (barcodeInput) {
+        barcodeInput.focus();
+        barcodeInput.addEventListener('keydown', function (event) {
+            if (event.key !== 'Enter') return;
+            event.preventDefault();
+            const code = barcodeInput.value.trim();
+            if (!code) return;
+            fetch(`/pos/ajax/scan/${encodeURIComponent(code)}/`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'ok') {
+                        window.location.reload();
+                        return;
+                    }
+                    if (data.status === 'out_of_stock') {
+                        alert(`${data.product} is out of stock for additional quantity.`);
+                        return;
+                    }
+                    alert('Product not found.');
+                });
+            barcodeInput.value = '';
+        });
+    }
+
+    function recalcTotal() {
+        if (!subtotalSpan || !discountSpan || !taxSpan || !totalSpan) return;
+        const rows = cartLines.map((line) => ({
+            lineTotal: parseFloat(line.dataset.lineTotal) || 0,
+            taxRate: parseFloat(line.dataset.taxRate) || 0,
+        }));
+        const subtotal = rows.reduce((sum, row) => sum + row.lineTotal, 0);
+        let discountRate = parseFloat(discountInput ? discountInput.value : 0) || 0;
+        let manualTaxRate = parseFloat(taxInput ? taxInput.value : 0) || 0;
+        discountRate = Math.min(Math.max(discountRate, 0), 100);
+        manualTaxRate = Math.min(Math.max(manualTaxRate, 0), 100);
+        const discountAmount = subtotal * (discountRate / 100);
+        const afterDiscount = subtotal - discountAmount;
+        let taxAmount = 0;
+
+        if (usesCategoryGst && subtotal > 0) {
+            let remainingDiscount = discountAmount;
+            rows.forEach((row, index) => {
+                let allocatedDiscount = remainingDiscount;
+                if (index < rows.length - 1) {
+                    allocatedDiscount = Number((discountAmount * (row.lineTotal / subtotal)).toFixed(2));
+                    remainingDiscount -= allocatedDiscount;
+                }
+                const taxableBase = Math.max(row.lineTotal - allocatedDiscount, 0);
+                taxAmount += taxableBase * (row.taxRate / 100);
+            });
+        } else if (manualTaxEnabled) {
+            taxAmount = afterDiscount * (manualTaxRate / 100);
+        }
+
+        subtotalSpan.textContent = subtotal.toFixed(2);
+        discountSpan.textContent = discountAmount.toFixed(2);
+        taxSpan.textContent = taxAmount.toFixed(2);
+        totalSpan.textContent = (afterDiscount + taxAmount).toFixed(2);
+    }
+
+    function syncPreservedState(form) {
+        const customerField = form.querySelector('input[name="selected_customer_id"]');
+        const creditField = form.querySelector('input[name="preserve_credit"]');
+        const paymentField = form.querySelector('input[name="preserve_payment_method"]');
+        const bankField = form.querySelector('input[name="preserve_bank_account_id"]');
+        const discountField = form.querySelector('input[name="preserve_discount_rate"]');
+        const taxField = form.querySelector('input[name="preserve_tax_rate"]');
+        if (customerField && customerSelect) customerField.value = customerSelect.value;
+        if (creditField && creditBox) creditField.value = creditBox.checked ? '1' : '0';
+        if (paymentField && paymentMethod) paymentField.value = paymentMethod.value;
+        if (bankField && bankSelect) bankField.value = bankSelect.value;
+        if (discountField && discountInput) discountField.value = discountInput.value;
+        if (taxField && taxInput) taxField.value = taxInput.value;
+    }
+
+    function syncCheckoutCustomer() {
+        if (customerHidden && customerSelect) customerHidden.value = customerSelect.value;
+    }
+
+    function toggleBankField() {
+        if (!bankWrapper || !paymentMethod) return;
+        const usingBank = paymentMethod.value === 'bank';
+        const creditSale = creditBox && creditBox.checked;
+        bankWrapper.style.display = usingBank && !creditSale ? '' : 'none';
+        if ((!usingBank || creditSale) && bankSelect) bankSelect.value = '';
+    }
+
+    preserveForms.forEach(function (form) {
+        form.addEventListener('submit', function () {
+            syncPreservedState(form);
+        });
+    });
+
+    inlineEditors.forEach(function (form) {
+        const priceField = form.querySelector('[data-price-input]');
+        const discountField = form.querySelector('[data-discount-input]');
+        let submitTimer = null;
+
+        const scheduleSubmit = function () {
+            if (!validateInlinePricing(form)) return;
+            window.clearTimeout(submitTimer);
+            submitTimer = window.setTimeout(function () {
+                form.requestSubmit ? form.requestSubmit() : form.submit();
+            }, 450);
+        };
+
+        const flushSubmit = function () {
+            if (!validateInlinePricing(form)) return;
+            window.clearTimeout(submitTimer);
+            form.requestSubmit ? form.requestSubmit() : form.submit();
+        };
+
+        if (priceField && !priceField.readOnly) {
+            priceField.addEventListener('input', scheduleSubmit);
+            priceField.addEventListener('blur', flushSubmit);
+        }
+        if (discountField && !discountField.readOnly) {
+            discountField.addEventListener('input', scheduleSubmit);
+            discountField.addEventListener('blur', flushSubmit);
+        }
+        form.addEventListener('submit', function (event) {
+            if (!validateInlinePricing(form)) {
+                event.preventDefault();
+            }
+        });
+        validateInlinePricing(form);
+    });
+
+    if (paymentMethod) paymentMethod.addEventListener('change', toggleBankField);
+    if (creditBox) creditBox.addEventListener('change', toggleBankField);
+    if (customerSelect) customerSelect.addEventListener('change', syncCheckoutCustomer);
+    if (discountInput) discountInput.addEventListener('input', recalcTotal);
+    if (taxInput) taxInput.addEventListener('input', recalcTotal);
+    if (productSearchInput) {
+        productSearchInput.addEventListener('input', filterProducts);
+        productSearchInput.addEventListener('search', filterProducts);
+    }
+
+    syncCheckoutCustomer();
+    toggleBankField();
+    recalcTotal();
+    filterProducts();
 })();
 </script>
-
-
-    </div>
-  </div>
-</div>
-<!-- -search bar script-->
-<script>
-document.addEventListener("DOMContentLoaded", function () {
-    const barcodeInput = document.getElementById("barcode-input");
-
-    // Focus on load (good for barcode scanner)
-    barcodeInput.focus();
-
-    barcodeInput.addEventListener("keydown", function (e) {
-        if (e.key === "Enter") {
-            e.preventDefault();
-
-            const sku = barcodeInput.value.trim();
-            if (!sku) return;
-
-            fetch(`/pos/ajax/scan/${sku}/`)
-                .then(res => res.json())
-                .then(data => {
-                    if (data.status === "ok") {
-                        window.location.reload();
-                    } else {
-                        alert("Product not found");
-                    }
-                });
-
-            barcodeInput.value = "";
-        }
-    });
-});
-</script>
-
 {% endblock %}
+
+
+
+
+
+
+
+
+
+
+
+

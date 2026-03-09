@@ -1,100 +1,72 @@
-{% extends "pos/base.html" %}
-{% load static %}
-{% block title %}🏢 Suppliers{% endblock %}
-
-{% block extra_css %}
-<style>
-.supplier-card {
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,.08);
-    transition: .25s ease;
-}
-.supplier-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(0,0,0,.12);
-}
-
-.avatar {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: linear-gradient(135deg,#11998e,#38ef7d);
-    color:#fff;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-weight:600;
-}
-
-.meta { font-size: 13px; color: #6c757d; }
-
-.badge.payable { background:#e74c3c; }
-.badge.advance { background:#f39c12; }
-.badge.clear { background:#7f8c8d; }
-</style>
-{% endblock %}
+﻿{% extends "pos/base.html" %}
+{% block title %}Suppliers{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
-
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="fw-bold mb-0">🏢 Suppliers</h2>
-        <small class="text-muted">Total: {{ total_suppliers }}</small>
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon success"><i class="bi bi-building"></i></span>
+        <div>
+            <h1 class="page-title">Suppliers</h1>
+            <p class="page-subtitle">{{ total_suppliers }} supplier records with payable and advance status.</p>
+        </div>
     </div>
-    <div>
-        <a href="{% url 'add_supplier_from_pos' %}" class="btn btn-success">+ Add Supplier</a>
+    <div class="page-actions">
+        <a href="{% url 'add_supplier_from_pos' %}" class="btn btn-dark"><i class="bi bi-plus-circle"></i> Add Supplier</a>
     </div>
 </div>
 
-<form method="get" class="mb-4">
-    <input class="form-control" name="search" placeholder="Search..." value="{{ search_term }}">
+<form method="get" class="page-card p-3 p-lg-4 mb-4" id="supplier-search-form">
+    <div class="section-heading mb-3">
+        <div class="section-heading-copy">
+            <span class="section-title-icon section-icon-success"><i class="bi bi-search"></i></span>
+            <div>
+                <h2 class="section-title">Find Supplier</h2>
+                <p class="section-copy">Search by name, phone, email, or address.</p>
+            </div>
+        </div>
+    </div>
+    <input class="form-control" id="supplier-search-input" name="search" placeholder="Search name, phone, email, address" value="{{ search_term }}" autocomplete="off">
 </form>
 
 <div class="row g-3">
 {% for supplier in suppliers %}
-<div class="col-lg-6">
-    <div class="card supplier-card">
-        <div class="card-body d-flex justify-content-between">
-
-            <div class="d-flex">
-                <div class="avatar me-3">
-                    {{ supplier.name|slice:":1"|upper }}
-                </div>
+    <div class="col-lg-6">
+        <div class="page-card p-3 h-100 d-flex justify-content-between align-items-start gap-3">
+            <div class="d-flex align-items-start gap-3">
+                <span class="section-title-icon section-icon-success"><i class="bi bi-building"></i></span>
                 <div>
-                    <strong>{{ supplier.name }}</strong>
-                    <div class="meta">
-                        {% if supplier.phone %}📞 {{ supplier.phone }}{% endif %}
-                        {% if supplier.email %} · ✉️ {{ supplier.email }}{% endif %}
-                    </div>
+                    <div class="fw-semibold fs-5">{{ supplier.name }}</div>
+                    <div class="text-muted small">{{ supplier.phone|default:"-" }}{% if supplier.email %} | {{ supplier.email }}{% endif %}</div>
                 </div>
             </div>
-
             <div class="text-end">
-                {% if supplier.balance_type %}
-                    <span class="badge {{ supplier.balance_type }}">
-                        {{ supplier.balance_type|upper }}
-                        {% if supplier.balance_amount %}
-                            : {{ supplier.balance_amount }}
-                        {% endif %}
-                    </span>
-                {% else %}
-                    <span class="badge clear">CLEAR</span>
-                {% endif %}
-                <div class="mt-2">
-                    <a href="{% url 'supplier_detail' supplier.id %}" class="btn btn-sm btn-outline-success">
-                        View →
-                    </a>
-                </div>
+                <div><span class="status-chip {{ supplier.balance_type }}">{{ supplier.balance_type|title }}{% if supplier.balance_amount %}: {{ supplier.balance_amount }}{% endif %}</span></div>
+                <a href="{% url 'supplier_detail' supplier.id %}" class="btn btn-sm btn-outline-primary mt-2">View</a>
             </div>
-
         </div>
     </div>
-</div>
 {% empty %}
-<p class="text-muted">No suppliers found.</p>
+    <div class="col-12"><div class="alert alert-light border mb-0">No suppliers found.</div></div>
 {% endfor %}
 </div>
-
-</div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const form = document.getElementById("supplier-search-form");
+    const input = document.getElementById("supplier-search-input");
+    if (!form || !input) return;
+    let timer = null;
+    input.addEventListener("input", function () {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(function () {
+            form.requestSubmit ? form.requestSubmit() : form.submit();
+        }, 250);
+    });
+})();
+</script>
+{% endblock %}
+
+
+

@@ -1,0 +1,348 @@
+{% extends "pos/base.html" %}
+{% load accounting_tags %}
+
+{% block title %}Money Desk{% endblock %}
+
+{% block extra_css %}
+<style>
+    .money-help {
+        border: 1px solid #dbe7f5;
+        border-radius: 16px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        padding: 16px;
+    }
+
+    .history-card {
+        height: 100%;
+    }
+
+    .history-card .table td,
+    .history-card .table th {
+        font-size: 0.92rem;
+        vertical-align: middle;
+    }
+
+    .open-expense-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 12px;
+        padding: 14px 0;
+        border-bottom: 1px solid #e2e8f0;
+    }
+
+    .open-expense-row:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    @media (max-width: 576px) {
+        .open-expense-row {
+            flex-direction: column;
+            align-items: stretch;
+        }
+
+        .open-expense-row .btn {
+            width: 100%;
+        }
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon warning"><i class="bi bi-arrow-left-right"></i></span>
+        <div>
+            <h1 class="page-title">Money Desk</h1>
+            <p class="page-subtitle">Introduce opening funds, transfer money between cash and bank, and pay old expense bills with a clear audit trail.</p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <a href="{% url 'accounts_home' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Accounts</a>
+        <a href="{% url 'expense_list' %}" class="btn btn-outline-secondary"><i class="bi bi-receipt-cutoff"></i> Expense Log</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card primary">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Money Available Now</div>
+                    <div class="metric-value">{{ available_money|money }}</div>
+                    <div class="metric-meta">Cash plus bank after all posted entries.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-wallet2"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card success">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Cash Balance</div>
+                    <div class="metric-value">{{ cash_balance|money }}</div>
+                    <div class="metric-meta">Current cash in hand per books.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-cash"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card info">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Bank Balance</div>
+                    <div class="metric-value">{{ bank_balance|money }}</div>
+                    <div class="metric-meta">Current bank balance per books.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-bank"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card danger">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Expense Bills Due</div>
+                    <div class="metric-value">{{ expense_payable_balance|money }}</div>
+                    <div class="metric-meta">Outstanding rent, utilities, and other unpaid bills.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-lightning-charge"></i></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="money-help mb-4">
+    <div class="fw-semibold mb-2">How this page affects money</div>
+    <div class="small text-muted">Opening Funds / Owner Capital increases Cash or Bank and credits Owner Capital. Expense Payment reduces Cash or Bank and clears Expense Payable. Transfer moves money between Cash and Bank without changing total money available.</div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-xl-6">
+        <div class="page-card p-4 p-lg-5 h-100">
+            <div class="section-heading mb-4">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-success"><i class="bi bi-box-arrow-in-down"></i></span>
+                    <div>
+                        <h2 class="section-title">Opening Funds / Owner Capital</h2>
+                        <p class="section-copy">Record where business money came from and which account it entered into.</p>
+                    </div>
+                </div>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="capital">
+                <div class="row g-3">
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=capital_form.source_name %}</div>
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=capital_form.date %}</div>
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=capital_form.amount %}</div>
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=capital_form.deposit_to %}</div>
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=capital_form.bank_account %}</div>
+                    <div class="col-12">{% include "pos/partials/_field.html" with field=capital_form.notes %}</div>
+                </div>
+                {% if capital_form.non_field_errors %}<div class="text-danger small mt-3">{{ capital_form.non_field_errors|join:', ' }}</div>{% endif %}
+                <div class="d-flex justify-content-end mt-4">
+                    <button class="btn btn-dark"><i class="bi bi-save"></i> Record Funds</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="page-card p-4 p-lg-5 h-100">
+            <div class="section-heading mb-4">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-warning"><i class="bi bi-arrow-left-right"></i></span>
+                    <div>
+                        <h2 class="section-title">Transfer Cash and Bank</h2>
+                        <p class="section-copy">Clearly mark which account money moved out from and which account it moved into.</p>
+                    </div>
+                </div>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="transfer">
+                <div class="row g-3">
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=transfer_form.date %}</div>
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=transfer_form.amount %}</div>
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=transfer_form.from_account %}</div>
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=transfer_form.to_account %}</div>
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=transfer_form.from_bank_account %}</div>
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=transfer_form.to_bank_account %}</div>
+                </div>
+                {% if transfer_form.non_field_errors %}<div class="text-danger small mt-3">{{ transfer_form.non_field_errors|join:', ' }}</div>{% endif %}
+                <div class="d-flex justify-content-end mt-4">
+                    <button class="btn btn-dark"><i class="bi bi-arrow-left-right"></i> Save Transfer</button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4 mb-4">
+    <div class="col-xl-7">
+        <div class="page-card p-4 p-lg-5 h-100">
+            <div class="section-heading mb-4">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-danger"><i class="bi bi-credit-card"></i></span>
+                    <div>
+                        <h2 class="section-title">Pay Outstanding Expense</h2>
+                        <p class="section-copy">Choose an unpaid bill and record where the payment left from.</p>
+                    </div>
+                </div>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="pay_expense">
+                <div class="row g-3">
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.expense %}</div>
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.date %}</div>
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.amount %}</div>
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.payment_method %}</div>
+                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.bank_account %}</div>
+                </div>
+                {% if expense_payment_form.non_field_errors %}<div class="text-danger small mt-3">{{ expense_payment_form.non_field_errors|join:', ' }}</div>{% endif %}
+                <div class="d-flex justify-content-end mt-4">
+                    <button class="btn btn-dark"><i class="bi bi-cash-stack"></i> Save Payment</button>
+                </div>
+            </form>
+        </div>
+    </div>
+    <div class="col-xl-5">
+        <div class="page-card p-4 p-lg-5 h-100">
+            <div class="section-heading mb-4">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon"><i class="bi bi-list-check"></i></span>
+                    <div>
+                        <h2 class="section-title">Outstanding Bills</h2>
+                        <p class="section-copy">Quick pick list for bills still unpaid or partially paid.</p>
+                    </div>
+                </div>
+            </div>
+            <div>
+                {% for expense in open_expenses %}
+                <div class="open-expense-row">
+                    <div>
+                        <div class="fw-semibold">{{ expense.display_title }}</div>
+                        <div class="small text-muted">Due {{ expense.balance_due|money }}{% if expense.vendor %} | {{ expense.vendor }}{% endif %}</div>
+                    </div>
+                    <a href="{% url 'money_desk' %}?expense={{ expense.id }}" class="btn btn-sm btn-outline-primary {% if selected_expense_id == expense.id|stringformat:'s' %}active{% endif %}">Use in payment form</a>
+                </div>
+                {% empty %}
+                <div class="text-muted">No outstanding bills right now.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-4">
+        <div class="page-card p-4 history-card">
+            <div class="section-heading mb-3">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-danger"><i class="bi bi-cash-stack"></i></span>
+                    <div>
+                        <h2 class="section-title">Recent Expense Payments</h2>
+                        <p class="section-copy">Shows which bill was paid and the account money left from.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr><th>Bill</th><th>From</th><th class="text-end">Amount</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for payment in recent_expense_payments %}
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">{{ payment.expense.display_title }}</div>
+                                <div class="small text-muted">#{{ payment.voucher_id|default:'-' }}</div>
+                            </td>
+                            <td>{{ payment.from_account_title }}{% if payment.payment_method == 'bank' %}<div class="small text-muted">{{ payment.bank_reference }}</div>{% endif %}</td>
+                            <td class="text-end">{{ payment.amount|money }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-muted py-4">No expense payments yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="page-card p-4 history-card">
+            <div class="section-heading mb-3">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-success"><i class="bi bi-box-arrow-in-down"></i></span>
+                    <div>
+                        <h2 class="section-title">Recent Funding</h2>
+                        <p class="section-copy">Shows where money came from and which account it entered into.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr><th>Source</th><th>Into</th><th class="text-end">Amount</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in recent_capital_entries %}
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">{{ entry.source_name }}</div>
+                                <div class="small text-muted">#{{ entry.voucher_id|default:'-' }}</div>
+                            </td>
+                            <td>{{ entry.to_account_title }}{% if entry.deposit_to == 'bank' %}<div class="small text-muted">{{ entry.bank_reference }}</div>{% endif %}</td>
+                            <td class="text-end">{{ entry.amount|money }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-muted py-4">No funds introduced yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="page-card p-4 history-card">
+            <div class="section-heading mb-3">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-warning"><i class="bi bi-arrow-left-right"></i></span>
+                    <div>
+                        <h2 class="section-title">Recent Transfers</h2>
+                        <p class="section-copy">Shows which account transferred out and which account transferred in.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr><th>Out</th><th>In</th><th class="text-end">Amount</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for transfer in recent_transfers %}
+                        <tr>
+                            <td>{{ transfer.from_account_title }}{% if transfer.from_account == 'bank' %}<div class="small text-muted">{{ transfer.from_bank_reference }}</div>{% endif %}</td>
+                            <td>{{ transfer.to_account_title }}{% if transfer.to_account == 'bank' %}<div class="small text-muted">{{ transfer.to_bank_reference }}</div>{% endif %}</td>
+                            <td class="text-end">
+                                <div class="fw-semibold">{{ transfer.amount|money }}</div>
+                                <div class="small text-muted">#{{ transfer.voucher_id|default:'-' }}</div>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-muted py-4">No transfers posted yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+
+

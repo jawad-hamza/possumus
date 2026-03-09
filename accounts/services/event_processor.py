@@ -1,51 +1,61 @@
 from django.db import transaction
-from accounts.models import AccountingEvent, Account, Voucher, VoucherLine
+
+from accounts.models import Account, AccountingEvent, Voucher, VoucherLine
 from accounts.services.party_ledger import post_party_ledger
+from accounts.services.pos_posting import post_purchase_from_pos, post_sale_from_pos
 from pos.models import Purchase, Sale
 
 
 def get_account(title):
     try:
         return Account.objects.get(title=title, is_active=True)
-    except Account.DoesNotExist:
-        raise RuntimeError(f"Required account missing: {title}")
+    except Account.DoesNotExist as exc:
+        raise RuntimeError(f"Required account missing: {title}") from exc
 
 
 @transaction.atomic
 def process_event(event: AccountingEvent):
-    """
-    IMPORTANT ARCHITECTURE RULE
-    ---------------------------
-    POS-originated Sales and Purchases MUST NOT be processed here.
-
-    POS transactions are posted via:
-        accounts.services.pos_posting
-
-    This processor is ONLY for:
-    - legacy data
-    - background imports
-    - manual / admin-triggered AccountingEvents
-    """
-
-    # 🔒 HARD GUARD: POS must NEVER come here
-    if event.ref_model in ("Sale", "Purchase"):
+    if event.processed:
         return
 
-    if event.processed:
+    if event.ref_model == "Sale":
+        sale = Sale.objects.get(id=event.ref_id)
+        post_sale_from_pos(
+            sale_id=sale.id,
+            customer=sale.customer,
+            total_amount=sale.total_amount,
+            paid_amount=sale.paid_amount,
+            payment_method=sale.payment_method,
+            sale_date=sale.created_at.date(),
+        )
+        event.processed = True
+        event.save(update_fields=["processed"])
+        return
+
+    if event.ref_model == "Purchase":
+        purchase = Purchase.objects.get(id=event.ref_id)
+        post_purchase_from_pos(
+            purchase_id=purchase.id,
+            supplier=purchase.supplier,
+            total_amount=purchase.total_amount,
+            paid_amount=purchase.paid_amount,
+            payment_method=purchase.payment_method,
+            purchase_date=purchase.created_at.date(),
+        )
+        event.processed = True
+        event.save(update_fields=["processed"])
         return
 
     if event.event_type == AccountingEvent.SALE:
         _process_sale(event)
-
     elif event.event_type == AccountingEvent.PURCHASE:
         _process_purchase(event)
-
     else:
         return
 
-    # mark event as processed
     event.processed = True
     event.save(update_fields=["processed"])
+
 
 def _process_sale(event: AccountingEvent):
     if Voucher.objects.filter(
@@ -53,8 +63,6 @@ def _process_sale(event: AccountingEvent):
         ref_id=event.ref_id,
         voucher_type=Voucher.SALE,
     ).exists():
-        event.processed = True
-        event.save(update_fields=["processed"])
         return
 
     cash = get_account("Cash")
@@ -78,19 +86,11 @@ def _process_sale(event: AccountingEvent):
 
     voucher.clean()
 
-    # ---- Party Ledger (ONLY credit sale) ----
     if event.is_credit:
         sale = Sale.objects.get(id=event.ref_id)
+        post_party_ledger(voucher=voucher, party=sale.customer, debit=event.amount, credit=0)
 
-        post_party_ledger(
-            voucher=voucher,
-            party=sale.customer,
-            debit=event.amount,
-            credit=0
-        )
 
-    event.processed = True
-    event.save(update_fields=["processed"])
 
 def _process_purchase(event: AccountingEvent):
     if Voucher.objects.filter(
@@ -98,11 +98,9 @@ def _process_purchase(event: AccountingEvent):
         ref_id=event.ref_id,
         voucher_type=Voucher.PURCHASE,
     ).exists():
-        event.processed = True
-        event.save(update_fields=["processed"])
         return
 
-    purchase_acc = get_account("Purchase")
+    inventory = get_account("Inventory")
     cash = get_account("Cash")
     ap = get_account("Accounts Payable")
 
@@ -115,24 +113,14 @@ def _process_purchase(event: AccountingEvent):
     )
 
     if event.is_credit:
-        VoucherLine.objects.create(voucher=voucher, account=purchase_acc, debit=event.amount)
+        VoucherLine.objects.create(voucher=voucher, account=inventory, debit=event.amount)
         VoucherLine.objects.create(voucher=voucher, account=ap, credit=event.amount)
     else:
-        VoucherLine.objects.create(voucher=voucher, account=purchase_acc, debit=event.amount)
+        VoucherLine.objects.create(voucher=voucher, account=inventory, debit=event.amount)
         VoucherLine.objects.create(voucher=voucher, account=cash, credit=event.amount)
 
     voucher.clean()
 
-    # ---- Party Ledger (ONLY credit purchase) ----
     if event.is_credit:
         purchase = Purchase.objects.get(id=event.ref_id)
-
-        post_party_ledger(
-            voucher=voucher,
-            party=purchase.supplier,
-            debit=0,
-            credit=event.amount
-        )
-
-    event.processed = True
-    event.save(update_fields=["processed"])
+        post_party_ledger(voucher=voucher, party=purchase.supplier, debit=0, credit=event.amount)

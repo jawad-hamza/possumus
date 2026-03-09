@@ -1,37 +1,66 @@
-{% extends "pos/base.html" %}
-{% block title %}Party Ledger{% endblock %}
+﻿{% extends "pos/base.html" %}
+{% load accounting_tags %}
+
+{% block title %}Party Statement{% endblock %}
 
 {% block content %}
-<h3 class="mb-3">👥 Party Ledger: {{ party }}</h3>
+<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+    <div>
+        <h2 class="mb-1">Party Statement</h2>
+        <p class="text-muted mb-0">Detailed movement history for {{ party|default:"this party" }}.</p>
+    </div>
+    <span class="status-chip clear">Sub-ledger</span>
+</div>
 
-<div class="card shadow-sm">
-  <div class="table-responsive">
-    <table class="table table-sm mb-0">
-      <thead class="table-dark">
-        <tr>
-          <th>Date</th>
-          <th>Voucher</th>
-          <th class="text-end">Debit</th>
-          <th class="text-end">Credit</th>
-          <th class="text-end">Balance</th>
-        </tr>
-      </thead>
-      <tbody>
-        {% for row in rows %}
-        <tr>
-          <td>{{ row.date }}</td>
-          <td>#{{ row.voucher.id }} ({{ row.voucher.voucher_type }})</td>
-          <td class="text-end">{{ row.debit }}</td>
-          <td class="text-end">{{ row.credit }}</td>
-          <td class="text-end fw-bold">{{ row.balance }} {{ row.drcr }}</td>
-        </tr>
-        {% empty %}
-        <tr>
-          <td colspan="5" class="text-center text-muted py-4">No party ledger entries.</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-  </div>
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="page-card p-3 h-100">
+            <div class="text-muted small">Total Debit</div>
+            <div class="fs-4 fw-bold">{{ total_debit|money }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="page-card p-3 h-100">
+            <div class="text-muted small">Total Credit</div>
+            <div class="fs-4 fw-bold">{{ total_credit|money }}</div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="page-card p-3 h-100">
+            <div class="text-muted small">Closing Balance</div>
+            <div class="fs-4 fw-bold">{{ closing_balance|money }} {{ closing_side }}</div>
+        </div>
+    </div>
+</div>
+
+<div class="page-card p-0 overflow-hidden">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4">Date</th>
+                    <th>Voucher</th>
+                    <th class="text-end">Debit</th>
+                    <th class="text-end">Credit</th>
+                    <th class="text-end pe-4">Running Balance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td class="ps-4">{{ row.date }}</td>
+                    <td>#{{ row.voucher.id }} | {{ row.voucher.get_voucher_type_display }}</td>
+                    <td class="text-end">{{ row.debit|money }}</td>
+                    <td class="text-end">{{ row.credit|money }}</td>
+                    <td class="text-end pe-4 fw-semibold">{{ row.balance|money }} {{ row.drcr }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="text-center text-muted py-5">No party ledger entries posted yet.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 {% endblock %}

@@ -1,151 +1,111 @@
 {% extends "pos/base.html" %}
-{% load static %}
-{% block title %}👥 Parties Management{% endblock %}
-
-{% block extra_css %}
-<style>
-    .party-card {
-        border: none;
-        border-radius: 15px;
-        box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-        transition: all 0.3s ease;
-        overflow: hidden;
-    }
-    .party-card:hover {
-        transform: translateY(-5px);
-        box-shadow: 0 8px 25px rgba(0,0,0,0.15);
-    }
-    .party-card .card-body {
-        padding: 30px;
-    }
-    .party-icon {
-        font-size: 4rem;
-        margin-bottom: 20px;
-    }
-    .customer-icon {
-        color: #0d6efd;
-    }
-    .supplier-icon {
-        color: #198754;
-    }
-    .stat-number {
-        font-size: 2.5rem;
-        font-weight: bold;
-        margin: 10px 0;
-    }
-    .recent-list {
-        max-height: 300px;
-        overflow-y: auto;
-    }
-    .recent-item {
-        padding: 12px;
-        border-left: 3px solid #0d6efd;
-        margin-bottom: 10px;
-        background: #f8f9fa;
-        border-radius: 5px;
-        transition: all 0.2s;
-    }
-    .recent-item:hover {
-        background: #e9ecef;
-        transform: translateX(5px);
-    }
-</style>
-{% endblock %}
+{% block title %}Parties{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
-    <!-- Header -->
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2 class="fw-bold">👥 Parties Management</h2>
-        <a href="{% url 'pos_screen' %}" class="btn btn-outline-secondary">
-            ← Back to POS
-        </a>
-    </div>
-
-    <!-- Main Cards -->
-    <div class="row g-4 mb-5">
-        <div class="col-md-6">
-            <div class="card party-card">
-                <div class="card-body text-center">
-                    <div class="party-icon customer-icon">👨‍💼</div>
-                    <h3 class="fw-bold">Customers</h3>
-                    <div class="stat-number text-primary">{{ total_customers }}</div>
-                    <p class="text-muted mb-4">Total Customers</p>
-                    <a href="{% url 'customer_list' %}" class="btn btn-primary btn-lg w-100">
-                        View All Customers →
-                    </a>
-                </div>
-            </div>
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon"><i class="bi bi-people"></i></span>
+        <div>
+            <h1 class="page-title">Parties</h1>
+            <p class="page-subtitle">Manage customer and supplier masters used by sales, purchases, and statements.</p>
         </div>
+    </div>
+    <div class="page-actions">
+        <a href="{% url 'pos_screen' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to POS</a>
+    </div>
+</div>
 
-        <div class="col-md-6">
-            <div class="card party-card">
-                <div class="card-body text-center">
-                    <div class="party-icon supplier-icon">🏢</div>
-                    <h3 class="fw-bold">Suppliers</h3>
-                    <div class="stat-number text-success">{{ total_suppliers }}</div>
-                    <p class="text-muted mb-4">Total Suppliers</p>
-                    <a href="{% url 'supplier_list' %}" class="btn btn-success btn-lg w-100">
-                        View All Suppliers →
-                    </a>
+<div class="row g-4 mb-4">
+    <div class="col-md-6">
+        <div class="metric-card primary">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Customers</div>
+                    <div class="metric-value">{{ total_customers }}</div>
+                    <div class="metric-meta">Registered buyers for cash and credit sales.</div>
+                    <div class="page-actions mt-3">
+                        <a href="{% url 'customer_list' %}" class="btn btn-dark">View Customers</a>
+                        <a href="{% url 'customer_add' %}" class="btn btn-outline-primary">Add Customer</a>
+                    </div>
                 </div>
+                <span class="metric-icon"><i class="bi bi-people"></i></span>
             </div>
         </div>
     </div>
-
-    <!-- Recent Activity -->
-    <div class="row g-4">
-        <div class="col-md-6">
-            <div class="card shadow-sm">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0">📋 Recent Customers</h5>
+    <div class="col-md-6">
+        <div class="metric-card success">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Suppliers</div>
+                    <div class="metric-value">{{ total_suppliers }}</div>
+                    <div class="metric-meta">Vendors linked to purchases and payable tracking.</div>
+                    <div class="page-actions mt-3">
+                        <a href="{% url 'supplier_list' %}" class="btn btn-dark">View Suppliers</a>
+                        <a href="{% url 'supplier_add' %}" class="btn btn-outline-primary">Add Supplier</a>
+                    </div>
                 </div>
-                <div class="card-body">
-                    <div class="recent-list">
-                        {% for customer in recent_customers %}
-                        <div class="recent-item">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>{{ customer.name }}</strong>
-                                    <div class="small text-muted">{{ customer.phone }}</div>
-                                </div>
-                                <a href="{% url 'customer_detail' customer.id %}" class="btn btn-sm btn-outline-primary">
-                                    View
-                                </a>
-                            </div>
-                        </div>
-                        {% empty %}
-                        <p class="text-muted text-center py-3">No customers yet</p>
-                        {% endfor %}
+                <span class="metric-icon"><i class="bi bi-building"></i></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-lg-6">
+        <div class="page-card p-4 h-100">
+            <div class="section-heading">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon"><i class="bi bi-person-lines-fill"></i></span>
+                    <div>
+                        <h2 class="section-title">Recent Customers</h2>
+                        <p class="section-copy">Quick access to recently added buyers.</p>
                     </div>
                 </div>
             </div>
-        </div>
-
-        <div class="col-md-6">
-            <div class="card shadow-sm">
-                <div class="card-header bg-white">
-                    <h5 class="mb-0">📋 Recent Suppliers</h5>
-                </div>
-                <div class="card-body">
-                    <div class="recent-list">
-                        {% for supplier in recent_suppliers %}
-                        <div class="recent-item" style="border-left-color: #198754;">
-                            <div class="d-flex justify-content-between align-items-center">
-                                <div>
-                                    <strong>{{ supplier.name }}</strong>
-                                    <div class="small text-muted">{{ supplier.phone }}</div>
-                                </div>
-                                <a href="{% url 'supplier_detail' supplier.id %}" class="btn btn-sm btn-outline-success">
-                                    View
-                                </a>
-                            </div>
+            <div class="d-grid gap-2">
+                {% for customer in recent_customers %}
+                <a href="{% url 'customer_detail' customer.id %}" class="list-link-card d-flex justify-content-between align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="list-link-icon"><i class="bi bi-person"></i></span>
+                        <div>
+                            <div class="fw-semibold">{{ customer.name }}</div>
+                            <div class="small text-muted">{{ customer.phone|default:"No phone" }}</div>
                         </div>
-                        {% empty %}
-                        <p class="text-muted text-center py-3">No suppliers yet</p>
-                        {% endfor %}
+                    </div>
+                    <i class="bi bi-arrow-right text-muted"></i>
+                </a>
+                {% empty %}
+                <div class="text-muted">No customers added yet.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+    <div class="col-lg-6">
+        <div class="page-card p-4 h-100">
+            <div class="section-heading">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-success"><i class="bi bi-building-check"></i></span>
+                    <div>
+                        <h2 class="section-title">Recent Suppliers</h2>
+                        <p class="section-copy">Quick access to recently added vendors.</p>
                     </div>
                 </div>
+            </div>
+            <div class="d-grid gap-2">
+                {% for supplier in recent_suppliers %}
+                <a href="{% url 'supplier_detail' supplier.id %}" class="list-link-card d-flex justify-content-between align-items-center gap-3">
+                    <div class="d-flex align-items-center gap-3">
+                        <span class="list-link-icon"><i class="bi bi-building"></i></span>
+                        <div>
+                            <div class="fw-semibold">{{ supplier.name }}</div>
+                            <div class="small text-muted">{{ supplier.phone|default:"No phone" }}</div>
+                        </div>
+                    </div>
+                    <i class="bi bi-arrow-right text-muted"></i>
+                </a>
+                {% empty %}
+                <div class="text-muted">No suppliers added yet.</div>
+                {% endfor %}
             </div>
         </div>
     </div>

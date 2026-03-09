@@ -1,0 +1,114 @@
+{% extends "pos/base.html" %}
+{% load accounting_tags %}
+
+{% block title %}Sale Return{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon danger"><i class="bi bi-arrow-counterclockwise"></i></span>
+        <div>
+            <h1 class="page-title">Sale Return for Invoice #{{ sale.id }}</h1>
+            <p class="page-subtitle">Return only the quantities received back from the customer. Stock and accounts will update automatically.</p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <a href="{% url 'invoice' sale.id %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Receipt</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="metric-card primary"><div class="metric-label">Customer</div><div class="metric-value fs-4">{{ sale.customer|default:"Walk-in" }}</div></div></div>
+    <div class="col-md-3"><div class="metric-card info"><div class="metric-label">Sale Total</div><div class="metric-value fs-4">{{ sale.total_amount|money }}</div></div></div>
+    <div class="col-md-3"><div class="metric-card success"><div class="metric-label">Paid</div><div class="metric-value fs-4">{{ sale.paid_amount|money }}</div></div></div>
+    <div class="col-md-3"><div class="metric-card warning"><div class="metric-label">Balance</div><div class="metric-value fs-4">{{ sale.balance_due|money }}</div></div></div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-7">
+        <div class="page-card p-0 overflow-hidden">
+            <div class="section-heading p-4 border-bottom mb-0">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon"><i class="bi bi-box-seam"></i></span>
+                    <div>
+                        <h2 class="section-title">Return Quantities</h2>
+                        <p class="section-copy">Only enter the quantity being returned now. The maximum available is based on earlier returns already recorded.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead class="table-light">
+                        <tr>
+                            <th class="ps-4">Product</th>
+                            <th class="text-end">Sold</th>
+                            <th class="text-end">Already Returned</th>
+                            <th class="text-end">Available</th>
+                            <th class="text-end pe-4">Return Now</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in item_rows %}
+                        <tr>
+                            <td class="ps-4">
+                                <div class="fw-semibold">{{ row.item.product.name }}</div>
+                                <div class="small text-muted">Unit {{ row.item.discounted_unit_price|money }}</div>
+                            </td>
+                            <td class="text-end">{{ row.item.quantity }}</td>
+                            <td class="text-end">{{ row.returned_qty }}</td>
+                            <td class="text-end">{{ row.returnable_qty }}</td>
+                            <td class="text-end pe-4">
+                                <input class="form-control form-control-sm text-end" type="number" min="0" max="{{ row.returnable_qty }}" name="qty_{{ row.item.id }}" value="0" form="sale-return-form">
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <div class="col-xl-5">
+        <div class="page-card p-4">
+            <div class="section-heading mb-3">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-danger"><i class="bi bi-receipt"></i></span>
+                    <div>
+                        <h2 class="section-title">Return Posting</h2>
+                        <p class="section-copy">Choose whether the return reduces customer receivable or refunds from cash/bank.</p>
+                    </div>
+                </div>
+            </div>
+            <form method="post" id="sale-return-form">
+                {% csrf_token %}
+                <div class="mb-3">{% include "pos/partials/_field.html" with field=form.refund_method %}</div>
+                <div class="mb-3">{% include "pos/partials/_field.html" with field=form.bank_account %}</div>
+                <div class="mb-3">{% include "pos/partials/_field.html" with field=form.reason %}</div>
+                <div class="mb-3">{% include "pos/partials/_field.html" with field=form.notes %}</div>
+                {% if form.non_field_errors %}<div class="text-danger small mb-3">{{ form.non_field_errors|join:', ' }}</div>{% endif %}
+                <div class="alert alert-light border small mb-0">Inventory goes back up. Sales are reversed through accounting, and if you pick receivable the customer balance is reduced instead of refunding cash.</div>
+                <div class="d-flex justify-content-end mt-4"><button class="btn btn-dark"><i class="bi bi-arrow-counterclockwise"></i> Save Return</button></div>
+            </form>
+        </div>
+
+        <div class="page-card p-4 mt-4">
+            <h2 class="section-title mb-3">Existing Returns</h2>
+            <div class="vstack gap-3">
+                {% for entry in existing_returns %}
+                <div class="border rounded-4 p-3 bg-white">
+                    <div class="d-flex justify-content-between gap-3">
+                        <div>
+                            <div class="fw-semibold">Return #{{ entry.id }}</div>
+                            <div class="small text-muted">{{ entry.created_at|date:"d M Y H:i" }} | {{ entry.reason }}</div>
+                        </div>
+                        <div class="text-end fw-semibold">{{ entry.total_amount|money }}</div>
+                    </div>
+                </div>
+                {% empty %}
+                <div class="text-muted">No returns recorded for this sale yet.</div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

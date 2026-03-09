@@ -1,0 +1,1204 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Money Breakdown</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --nav-bg: #14213d;
+            --nav-bg-alt: #1f355f;
+            --nav-text: #d9e3f0;
+            --nav-active: #fca311;
+            --page-bg: #f5f7fb;
+            --card-border: #dce3ee;
+            --content-max: 1440px;
+            --text-main: #14213d;
+            --text-soft: #5f6f86;
+            --surface-tint: #f8fbff;
+            --accent-primary: #2563eb;
+            --accent-success: #15803d;
+            --accent-info: #0f766e;
+            --accent-warning: #b45309;
+            --accent-danger: #dc2626;
+            --accent-slate: #334155;
+        }
+
+        body {
+            background: radial-gradient(circle at top, #ffffff 0%, var(--page-bg) 55%, #edf2f7 100%);
+            overflow-x: hidden;
+            color: var(--text-main);
+        }
+
+        a {
+            color: inherit;
+        }
+
+        .layout-shell {
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 250px;
+            min-height: 100vh;
+            position: fixed;
+            inset: 0 auto 0 0;
+            background: linear-gradient(180deg, var(--nav-bg), #0d162c 100%);
+            color: #fff;
+            z-index: 1030;
+            transition: width 0.25s ease, transform 0.25s ease;
+            overflow-y: auto;
+                    display: flex;
+            flex-direction: column;
+}
+
+        .sidebar.collapsed {
+            width: 78px;
+        }
+
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 22px 18px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .sidebar-brand-mark {
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--nav-active), #ffbf57);
+            color: #182a4d;
+            font-weight: 700;
+        }
+
+        .sidebar-title {
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            margin: 0;
+        }
+
+        .sidebar-subtitle {
+            color: rgba(217, 227, 240, 0.72);
+            font-size: 0.75rem;
+            margin: 0;
+        }
+
+        .toggle-btn {
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 1.1rem;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .sidebar-rail-toggle {
+            display: none;
+            position: fixed;
+            top: 18px;
+            left: 66px;
+            width: 30px;
+            height: 42px;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-left: none;
+            border-radius: 0 14px 14px 0;
+            background: linear-gradient(180deg, #1f355f, #14213d);
+            color: #fff;
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.22);
+            z-index: 1035;
+        }
+
+        .sidebar.collapsed + .sidebar-rail-toggle {
+            display: inline-flex;
+        }
+
+        .sidebar-rail-toggle:hover {
+            background: linear-gradient(180deg, #284375, #172849);
+        }
+
+        .sidebar-nav {
+            padding: 14px 12px 24px;
+            flex: 1 1 auto;
+        }
+
+        .nav-link-shell {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--nav-text);
+            text-decoration: none;
+            padding: 12px 14px;
+            border-radius: 14px;
+            margin-bottom: 6px;
+            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+        }
+
+        .nav-link-shell:hover,
+        .nav-link-shell.active {
+            background: linear-gradient(90deg, rgba(252, 163, 17, 0.16), rgba(252, 163, 17, 0.06));
+            color: #fff;
+            transform: translateX(2px);
+        }
+
+        .nav-link-shell i {
+            font-size: 1.1rem;
+            width: 22px;
+            text-align: center;
+            color: var(--nav-active);
+        }
+
+        .sidebar.collapsed .sidebar-copy,
+        .sidebar.collapsed .nav-copy {
+            display: none;
+        }
+
+        .content {
+            margin-left: 250px;
+            padding: 24px;
+            transition: margin-left 0.25s ease;
+        }
+
+        .content.expanded {
+            margin-left: 78px;
+        }
+
+        .content-inner {
+            max-width: var(--content-max);
+            margin: 0 auto;
+        }
+
+        .page-topbar {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .mobile-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(8, 15, 28, 0.48);
+            z-index: 1020;
+        }
+
+        .page-card {
+            border: 1px solid var(--card-border);
+            border-radius: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+            box-shadow: 0 10px 30px rgba(20, 33, 61, 0.06);
+        }
+
+        .page-header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 1.5rem;
+        }
+
+        .page-header-copy {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            min-width: 0;
+        }
+
+        .page-title-icon,
+        .section-title-icon,
+        .metric-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .page-title-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            font-size: 1.25rem;
+            color: #fff;
+            box-shadow: 0 14px 24px rgba(37, 99, 235, 0.18);
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        }
+
+        .page-title-icon.success {
+            background: linear-gradient(135deg, #16a34a, #15803d);
+            box-shadow: 0 14px 24px rgba(22, 163, 74, 0.18);
+        }
+
+        .page-title-icon.warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            box-shadow: 0 14px 24px rgba(245, 158, 11, 0.18);
+        }
+
+        .page-title-icon.danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            box-shadow: 0 14px 24px rgba(239, 68, 68, 0.18);
+        }
+
+        .page-title-icon.slate {
+            background: linear-gradient(135deg, #475569, #334155);
+            box-shadow: 0 14px 24px rgba(71, 85, 105, 0.18);
+        }
+
+        .page-title {
+            margin: 0;
+            font-size: clamp(1.65rem, 1.2rem + 1vw, 2.15rem);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .page-subtitle {
+            color: var(--text-soft);
+            margin: 6px 0 0;
+            max-width: 820px;
+        }
+
+        .page-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .metric-card {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+            border-radius: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, var(--surface-tint) 100%);
+            padding: 1rem;
+            height: 100%;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .metric-card::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 4px;
+            background: var(--metric-accent, var(--accent-primary));
+        }
+
+        .metric-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 16px 28px rgba(20, 33, 61, 0.12);
+        }
+
+        .metric-card.primary {
+            --metric-accent: var(--accent-primary);
+            --metric-soft: rgba(37, 99, 235, 0.12);
+        }
+
+        .metric-card.success {
+            --metric-accent: var(--accent-success);
+            --metric-soft: rgba(22, 163, 74, 0.12);
+        }
+
+        .metric-card.info {
+            --metric-accent: var(--accent-info);
+            --metric-soft: rgba(15, 118, 110, 0.12);
+        }
+
+        .metric-card.warning {
+            --metric-accent: var(--accent-warning);
+            --metric-soft: rgba(180, 83, 9, 0.12);
+        }
+
+        .metric-card.danger {
+            --metric-accent: var(--accent-danger);
+            --metric-soft: rgba(220, 38, 38, 0.12);
+        }
+
+        .metric-card.slate {
+            --metric-accent: var(--accent-slate);
+            --metric-soft: rgba(51, 65, 85, 0.12);
+        }
+
+        .metric-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            background: var(--metric-soft, rgba(37, 99, 235, 0.12));
+            color: var(--metric-accent, var(--accent-primary));
+            font-size: 1.1rem;
+        }
+
+        .metric-label {
+            color: var(--text-soft);
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .metric-value {
+            font-size: clamp(1.6rem, 1.3rem + 0.6vw, 2rem);
+            font-weight: 700;
+            margin-top: 0.65rem;
+            line-height: 1.1;
+        }
+
+        .metric-meta {
+            color: var(--text-soft);
+            font-size: 0.9rem;
+            margin-top: 0.8rem;
+        }
+
+        .section-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 1rem;
+        }
+
+        .section-heading-copy {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .section-title-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+            background: #eaf2ff;
+            color: var(--accent-primary);
+            font-size: 1rem;
+        }
+
+        .section-title-icon.section-icon-success {
+            background: #e9f9ef;
+            color: #15803d;
+        }
+
+        .section-title-icon.section-icon-warning {
+            background: #fff2df;
+            color: #b45309;
+        }
+
+        .section-title-icon.section-icon-danger {
+            background: #fdecec;
+            color: #dc2626;
+        }
+
+        .section-title-icon.section-icon-slate {
+            background: #edf2f7;
+            color: #334155;
+        }
+
+        .section-title {
+            margin: 0;
+            font-size: 1.15rem;
+            font-weight: 700;
+        }
+
+        .section-copy {
+            color: var(--text-soft);
+            margin: 4px 0 0;
+            font-size: 0.92rem;
+        }
+
+        .section-link {
+            color: var(--accent-primary);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.92rem;
+        }
+
+        .section-link:hover {
+            text-decoration: underline;
+        }
+
+        .chart-shell {
+            position: relative;
+            height: 320px;
+            max-height: 320px;
+            overflow: hidden;
+        }
+
+        .chart-shell.compact {
+            height: 240px;
+            max-height: 240px;
+        }
+
+        .chart-shell canvas {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .table-responsive .table {
+            margin-bottom: 0;
+        }
+
+        .table thead.table-light th,
+        .table thead th {
+            background: #f7fafc;
+            color: #334155;
+            font-size: 0.82rem;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            border-bottom-color: #dde7f2;
+        }
+
+        .table tbody tr {
+            transition: background-color 0.18s ease;
+        }
+
+        .table tbody tr:hover {
+            background: #fafcff;
+        }
+
+        .list-link-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 14px 16px;
+            text-decoration: none;
+            color: inherit;
+            background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .list-link-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 24px rgba(20, 33, 61, 0.08);
+            border-color: #bfd0e6;
+        }
+
+        .list-link-card .list-link-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: #eef4ff;
+            color: var(--accent-primary);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn {
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .btn-dark {
+            background: linear-gradient(135deg, #172849, #111d36);
+            border-color: #172849;
+            box-shadow: 0 10px 18px rgba(20, 33, 61, 0.12);
+        }
+
+        .btn-dark:hover,
+        .btn-dark:focus {
+            background: linear-gradient(135deg, #1f355f, #14213d);
+            border-color: #1f355f;
+        }
+
+        .btn-outline-secondary,
+        .btn-outline-primary,
+        .btn-outline-dark {
+            background: #fff;
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 12px;
+            border-color: #d7e2ee;
+            min-height: 46px;
+        }
+
+        textarea.form-control {
+            min-height: 120px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: #93c5fd;
+            box-shadow: 0 0 0 0.22rem rgba(37, 99, 235, 0.12);
+        }
+
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .status-chip.healthy {
+            color: #0f766e;
+            background: #ccfbf1;
+        }
+
+        .status-chip.below,
+        .status-chip.payable {
+            color: #b91c1c;
+            background: #fee2e2;
+        }
+
+        .status-chip.advance {
+            color: #92400e;
+            background: #fef3c7;
+        }
+
+        .status-chip.receivable {
+            color: #1d4ed8;
+            background: #dbeafe;
+        }
+
+        .status-chip.clear,
+        .status-chip.unknown {
+            color: #475569;
+            background: #e2e8f0;
+        }
+
+        .sidebar-footer {
+            margin: auto 12px 16px;
+            padding: 14px 0 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .sidebar-user {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .sidebar-user-mark {
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(252, 163, 17, 0.16);
+            color: #fff;
+            font-weight: 800;
+        }
+
+        .sidebar-user-name {
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .sidebar-user-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .sidebar-role-chip {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 3px 9px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            background: rgba(37, 99, 235, 0.18);
+            color: #bfdbfe;
+        }
+
+        .sidebar-session-text,
+        .sidebar-hint {
+            color: rgba(217, 227, 240, 0.7);
+            font-size: 0.75rem;
+        }
+
+        .sidebar-hint {
+            margin: 0 0 10px 52px;
+        }
+
+        .sidebar-logout {
+            width: 100%;
+            border: none;
+            background: transparent;
+            text-align: left;
+        }
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .content,
+            .content.expanded {
+                margin-left: 0;
+                padding: 16px;
+            }
+
+            .page-topbar {
+                display: flex;
+            }
+
+            .mobile-overlay.show {
+                display: block;
+            }
+            .sidebar-rail-toggle {
+                display: none !important;
+            }
+
+            .page-title-icon {
+                width: 44px;
+                height: 44px;
+                border-radius: 14px;
+            }
+
+            .chart-shell {
+                height: 260px;
+                max-height: 260px;
+            }
+
+            .chart-shell.compact {
+                height: 220px;
+                max-height: 220px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .content,
+            .content.expanded {
+                padding: 12px;
+            }
+
+            .page-header {
+                gap: 12px;
+            }
+
+            .page-header-copy {
+                width: 100%;
+                gap: 10px;
+            }
+
+            .page-actions {
+                width: 100%;
+            }
+
+            .page-actions .btn,
+            .page-actions .status-chip {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .page-card,
+            .metric-card {
+                border-radius: 16px;
+            }
+
+            .metric-value {
+                font-size: 1.8rem;
+            }
+
+            .table-responsive {
+                font-size: 0.92rem;
+            }
+        }
+    </style>
+    
+<style>
+    .money-explainer {
+        border: 1px solid #dbe7f5;
+        border-radius: 18px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        padding: 18px;
+    }
+
+    .movement-source {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border-radius: 999px;
+        padding: 4px 10px;
+        font-size: 0.8rem;
+        font-weight: 700;
+    }
+
+    .movement-source.cash {
+        color: #15803d;
+        background: #dcfce7;
+    }
+
+    .movement-source.bank {
+        color: #1d4ed8;
+        background: #dbeafe;
+    }
+
+    .movement-figure.in {
+        color: #15803d;
+        font-weight: 700;
+    }
+
+    .movement-figure.out {
+        color: #b91c1c;
+        font-weight: 700;
+    }
+</style>
+
+</head>
+<body>
+<div class="layout-shell">
+    <div class="mobile-overlay" id="mobileOverlay" onclick="toggleSidebarMobile()"></div>
+
+    
+
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <div class="d-flex align-items-center gap-3 sidebar-copy">
+                <div class="sidebar-brand-mark">PO</div>
+                <div>
+                    <p class="sidebar-title">POS IMS</p>
+                    <p class="sidebar-subtitle">Sales, stock, accounts</p>
+                </div>
+            </div>
+            <button class="toggle-btn" onclick="toggleSidebar()">
+                <i class="bi bi-list"></i>
+            </button>
+        </div>
+
+        <nav class="sidebar-nav">
+            
+            <a href="/dashboard/" class="nav-link-shell ">
+                <i class="bi bi-speedometer2"></i>
+                <span class="nav-copy">Dashboard</span>
+            </a>
+            
+            <a href="/pos/" class="nav-link-shell ">
+                <i class="bi bi-cart4"></i>
+                <span class="nav-copy">POS</span>
+            </a>
+            
+            <a href="/products/" class="nav-link-shell ">
+                <i class="bi bi-box-seam"></i>
+                <span class="nav-copy">Products</span>
+            </a>
+            <a href="/inventory/adjustments/" class="nav-link-shell ">
+                <i class="bi bi-boxes"></i>
+                <span class="nav-copy">Stock Control</span>
+            </a>
+            <a href="/purchases/" class="nav-link-shell ">
+                <i class="bi bi-truck"></i>
+                <span class="nav-copy">Purchases</span>
+            </a>
+            <a href="/accounts/expenses/" class="nav-link-shell ">
+                <i class="bi bi-receipt-cutoff"></i>
+                <span class="nav-copy">Expenses</span>
+            </a>
+            <a href="/parties/" class="nav-link-shell ">
+                <i class="bi bi-people"></i>
+                <span class="nav-copy">Parties</span>
+            </a>
+            <a href="/accounts/" class="nav-link-shell active">
+                <i class="bi bi-journal-text"></i>
+                <span class="nav-copy">Accounts</span>
+            </a>
+            <a href="/reports/" class="nav-link-shell ">
+                <i class="bi bi-graph-up-arrow"></i>
+                <span class="nav-copy">Reports</span>
+            </a>
+            <a href="/settings/" class="nav-link-shell ">
+                <i class="bi bi-gear"></i>
+                <span class="nav-copy">Settings</span>
+            </a>
+            
+        </nav>
+        <div class="sidebar-footer">
+            <div class="sidebar-user">
+                <div class="sidebar-user-mark">J</div>
+                <div class="sidebar-copy">
+                    <div class="sidebar-user-name">Jawad Hamza</div>
+                    <div class="sidebar-user-meta">
+                        <span class="sidebar-role-chip">Admin</span>
+                        
+                    </div>
+                </div>
+            </div>
+            
+            <form method="post" action="/logout/" class="logout-form">
+                <input type="hidden" name="csrfmiddlewaretoken" value="k4ZKG0wd6kKybsFqxvlrs2a7KNoHVAMfBHij02pBLloCIvRyA1nRUvthjNIyf3jt">
+                <button type="submit" class="nav-link-shell sidebar-logout">
+                    <i class="bi bi-box-arrow-right"></i>
+                    <span class="nav-copy">Logout</span>
+                </button>
+            </form>
+        </div>
+    </aside>
+    <button type="button" class="sidebar-rail-toggle" onclick="toggleSidebar()" aria-label="Expand sidebar">
+        <i class="bi bi-chevron-right"></i>
+    </button>
+
+    <main class="content" id="content">
+        <div class="content-inner">
+            <div class="page-topbar">
+                <button class="btn btn-outline-dark" onclick="toggleSidebarMobile()">
+                    <i class="bi bi-list"></i>
+                </button>
+                <div class="d-flex align-items-center gap-2">
+                    <strong>POS IMS</strong>
+                    <span class="badge text-bg-light">Admin</span>
+                </div>
+            </div>
+            
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon primary"><i class="bi bi-wallet2"></i></span>
+        <div>
+            <h1 class="page-title">Why Is Money Available Now This Much?</h1>
+            <p class="page-subtitle">This page shows every cash and bank movement that builds the current money available figure on the dashboard.</p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <a href="/accounts/" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Accounts</a>
+        <a href="/accounts/money/" class="btn btn-outline-secondary"><i class="bi bi-arrow-left-right"></i> Money Desk</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="metric-card primary">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Money Available Now</div>
+                    <div class="metric-value">Rs -95,027.60</div>
+                    <div class="metric-meta">Cash plus bank as of the latest posted voucher.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-wallet2"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="metric-card success">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Cash Balance</div>
+                    <div class="metric-value">Rs -55,027.60</div>
+                    <div class="metric-meta">12 cash movements posted.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-cash"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-4">
+        <div class="metric-card info">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Bank Balance</div>
+                    <div class="metric-value">Rs -40,000.00</div>
+                    <div class="metric-meta">1 bank movements posted.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-bank"></i></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="money-explainer mb-4">
+    <div class="fw-semibold mb-2">How to read this page</div>
+    <div class="small text-muted">A green <strong>Money In</strong> amount means cash or bank increased. A red <strong>Money Out</strong> amount means money left cash or bank. <strong>Available Money After Entry</strong> shows what the dashboard total became right after that voucher line was posted.</div>
+</div>
+
+<div class="page-card p-0 overflow-hidden">
+    <div class="section-heading p-4 border-bottom mb-0">
+        <div class="section-heading-copy">
+            <span class="section-title-icon section-icon-slate"><i class="bi bi-journal-richtext"></i></span>
+            <div>
+                <h2 class="section-title">Cash and Bank Movement Log</h2>
+                <p class="section-copy">Showing the most recent 13 of 13 posted cash and bank movements.</p>
+            </div>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4">Date</th>
+                    <th>Source</th>
+                    <th>Voucher</th>
+                    <th>Narration</th>
+                    <th class="text-end">Money In</th>
+                    <th class="text-end">Money Out</th>
+                    <th class="text-end">Source Balance After</th>
+                    <th class="text-end pe-4">Available Money After Entry</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td class="ps-4">March 8, 2026</td>
+                    <td>
+                        <span class="movement-source cash">
+                            <i class="bi bi-cash"></i>
+                            Cash
+                        </span>
+                    </td>
+                    <td>#17 | Sale</td>
+                    <td>Sale #8 via Cash</td>
+                    <td class="text-end"><span class="movement-figure in">Rs 20.00</span></td>
+                    <td class="text-end">-</td>
+                    <td class="text-end">Rs -55,027.60</td>
+                    <td class="text-end pe-4">Rs -95,027.60</td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">March 8, 2026</td>
+                    <td>
+                        <span class="movement-source cash">
+                            <i class="bi bi-cash"></i>
+                            Cash
+                        </span>
+                    </td>
+                    <td>#15 | Sale</td>
+                    <td>Sale #6 via Cash</td>
+                    <td class="text-end"><span class="movement-figure in">Rs 39.40</span></td>
+                    <td class="text-end">-</td>
+                    <td class="text-end">Rs -55,047.60</td>
+                    <td class="text-end pe-4">Rs -95,047.60</td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">March 8, 2026</td>
+                    <td>
+                        <span class="movement-source cash">
+                            <i class="bi bi-cash"></i>
+                            Cash
+                        </span>
+                    </td>
+                    <td>#14 | Sale</td>
+                    <td>Sale #5 via Cash</td>
+                    <td class="text-end"><span class="movement-figure in">Rs 30.00</span></td>
+                    <td class="text-end">-</td>
+                    <td class="text-end">Rs -55,087.00</td>
+                    <td class="text-end pe-4">Rs -95,087.00</td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">March 8, 2026</td>
+                    <td>
+                        <span class="movement-source cash">
+                            <i class="bi bi-cash"></i>
+                            Cash
+                        </span>
+                    </td>
+                    <td>#13 | Payment</td>
+                    <td>Expense payment #1 - Shop Rent from Cash</td>
+                    <td class="text-end">-</td>
+                    <td class="text-end"><span class="movement-figure out">Rs 5,000.00</span></td>
+                    <td class="text-end">Rs -55,117.00</td>
+                    <td class="text-end pe-4">Rs -95,117.00</td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">March 7, 2026</td>
+                    <td>
+                        <span class="movement-source cash">
+                            <i class="bi bi-cash"></i>
+                            Cash
+                        </span>
+                    </td>
+                    <td>#12 | Sale</td>
+                    <td>Sale #4</td>
+                    <td class="text-end"><span class="movement-figure in">Rs 20.00</span></td>
+                    <td class="text-end">-</td>
+                    <td class="text-end">Rs -50,117.00</td>
+                    <td class="text-end pe-4">Rs -90,117.00</td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">March 7, 2026</td>
+                    <td>
+                        <span class="movement-source bank">
+                            <i class="bi bi-bank"></i>
+                            Bank
+                        </span>
+                    </td>
+                    <td>#10 | Payment</td>
+                    <td>Payment - Mohib</td>
+                    <td class="text-end">-</td>
+                    <td class="text-end"><span class="movement-figure out">Rs 40,000.00</span></td>
+                    <td class="text-end">Rs -40,000.00</td>
+                    <td class="text-end pe-4">Rs -90,137.00</td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">March 7, 2026</td>
+                    <td>
+                        <span class="movement-source cash">
+                            <i class="bi bi-cash"></i>
+                            Cash
+                        </span>
+                    </td>
+                    <td>#9 | Purchase</td>
+                    <td>Purchase #3</td>
+                    <td class="text-end">-</td>
+                    <td class="text-end"><span class="movement-figure out">Rs 50,000.00</span></td>
+                    <td class="text-end">Rs -50,137.00</td>
+                    <td class="text-end pe-4">Rs -50,137.00</td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">March 7, 2026</td>
+                    <td>
+                        <span class="movement-source cash">
+                            <i class="bi bi-cash"></i>
+                            Cash
+                        </span>
+                    </td>
+                    <td>#8 | Payment</td>
+                    <td>Payment - Nafees</td>
+                    <td class="text-end">-</td>
+                    <td class="text-end"><span class="movement-figure out">Rs 50.00</span></td>
+                    <td class="text-end">Rs -137.00</td>
+                    <td class="text-end pe-4">Rs -137.00</td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">March 7, 2026</td>
+                    <td>
+                        <span class="movement-source cash">
+                            <i class="bi bi-cash"></i>
+                            Cash
+                        </span>
+                    </td>
+                    <td>#7 | Receipt</td>
+                    <td>Receipt - Jawad Hamza</td>
+                    <td class="text-end"><span class="movement-figure in">Rs 9.00</span></td>
+                    <td class="text-end">-</td>
+                    <td class="text-end">Rs -87.00</td>
+                    <td class="text-end pe-4">Rs -87.00</td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">March 7, 2026</td>
+                    <td>
+                        <span class="movement-source cash">
+                            <i class="bi bi-cash"></i>
+                            Cash
+                        </span>
+                    </td>
+                    <td>#6 | Payment</td>
+                    <td>Payment - Nafees</td>
+                    <td class="text-end">-</td>
+                    <td class="text-end"><span class="movement-figure out">Rs 100.00</span></td>
+                    <td class="text-end">Rs -96.00</td>
+                    <td class="text-end pe-4">Rs -96.00</td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">March 7, 2026</td>
+                    <td>
+                        <span class="movement-source cash">
+                            <i class="bi bi-cash"></i>
+                            Cash
+                        </span>
+                    </td>
+                    <td>#3 | Sale</td>
+                    <td>Sale #2</td>
+                    <td class="text-end"><span class="movement-figure in">Rs 10.00</span></td>
+                    <td class="text-end">-</td>
+                    <td class="text-end">Rs 4.00</td>
+                    <td class="text-end pe-4">Rs 4.00</td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">March 7, 2026</td>
+                    <td>
+                        <span class="movement-source cash">
+                            <i class="bi bi-cash"></i>
+                            Cash
+                        </span>
+                    </td>
+                    <td>#2 | Purchase</td>
+                    <td>Purchase #1</td>
+                    <td class="text-end">-</td>
+                    <td class="text-end"><span class="movement-figure out">Rs 16.00</span></td>
+                    <td class="text-end">Rs -6.00</td>
+                    <td class="text-end pe-4">Rs -6.00</td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">March 7, 2026</td>
+                    <td>
+                        <span class="movement-source cash">
+                            <i class="bi bi-cash"></i>
+                            Cash
+                        </span>
+                    </td>
+                    <td>#1 | Sale</td>
+                    <td>Sale #1</td>
+                    <td class="text-end"><span class="movement-figure in">Rs 10.00</span></td>
+                    <td class="text-end">-</td>
+                    <td class="text-end">Rs 10.00</td>
+                    <td class="text-end pe-4">Rs 10.00</td>
+                </tr>
+                
+            </tbody>
+        </table>
+    </div>
+</div>
+
+        </div>
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const content = document.getElementById('content');
+        sidebar.classList.toggle('collapsed');
+        content.classList.toggle('expanded');
+        localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+    }
+
+    function toggleSidebarMobile() {
+        document.getElementById('sidebar').classList.toggle('show');
+        document.getElementById('mobileOverlay').classList.toggle('show');
+    }
+
+    window.addEventListener('DOMContentLoaded', function() {
+        if (window.innerWidth > 992 && localStorage.getItem('sidebarCollapsed') === 'true') {
+            document.getElementById('sidebar').classList.add('collapsed');
+            document.getElementById('content').classList.add('expanded');
+        }
+    });
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+

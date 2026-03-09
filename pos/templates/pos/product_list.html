@@ -1,192 +1,269 @@
-{% extends "pos/base.html" %}
+﻿{% extends "pos/base.html" %}
 {% load barcode_tags %}
 
 {% block title %}Products{% endblock %}
 
-{% block extra_css %}
-<style>
-.pagination li a,
-.pagination li span {
-    min-width: 40px;
-    text-align: center;
-}
-.table td, .table th {
-    vertical-align: middle;
-}
-</style>
-{% endblock %}
-
 {% block content %}
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon success"><i class="bi bi-box-seam"></i></span>
+        <div>
+            <h1 class="page-title">Products</h1>
+            <p class="page-subtitle">Search, filter, and sort the catalog by brand, category, supplier, location, stock, and pricing.</p>
+            <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>New products should be created from Purchases so opening cost, sale price, and stock arrive together.</p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <a href="{% url 'brand_add' %}" class="btn btn-outline-secondary"><i class="bi bi-tag"></i> Brand</a>
+        <a href="{% url 'category_add' %}" class="btn btn-outline-secondary"><i class="bi bi-grid"></i> Category</a>
+    </div>
+</div>
 
-<h3 class="mb-4">📦 Product List</h3>
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card primary">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Matching Products</div>
+                    <div class="metric-value">{{ summary_total }}</div>
+                    <div class="metric-meta">Results after current filters.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-search"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card success">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Active</div>
+                    <div class="metric-value">{{ summary_active }}</div>
+                    <div class="metric-meta">Products ready for sale.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-check2-circle"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card warning">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Low Stock</div>
+                    <div class="metric-value">{{ summary_low_stock }}</div>
+                    <div class="metric-meta">Items close to reorder level.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-exclamation-triangle"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card slate">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Inactive</div>
+                    <div class="metric-value">{{ summary_inactive }}</div>
+                    <div class="metric-meta">Temporarily hidden products.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-pause-circle"></i></span>
+            </div>
+        </div>
+    </div>
+</div>
 
-<!-- SEARCH & ADD -->
-<div class="d-flex justify-content-between align-items-center mb-3">
-
-    <form class="d-flex" method="get">
-        <input
-            name="q"
-            value="{{ search_query }}"
-            class="form-control me-2"
-            placeholder="Search products..."
-        >
-        <button class="btn btn-outline-secondary" type="submit">
-            Search
-        </button>
+<div class="page-card p-3 p-lg-4 mb-4">
+    <div class="section-heading">
+        <div class="section-heading-copy">
+            <span class="section-title-icon"><i class="bi bi-funnel"></i></span>
+            <div>
+                <h2 class="section-title">Catalog Filters</h2>
+                <p class="section-copy">Use search, sorting, and status filters to narrow the product table quickly.</p>
+            </div>
+        </div>
+    </div>
+    <form class="row g-3 align-items-end" method="get" id="product-filter-form">
+        <div class="col-xl-4">
+            <label class="form-label fw-semibold" for="q">Search</label>
+            <input id="q" name="q" value="{{ search_query }}" class="form-control" placeholder="Name, SKU, barcode, supplier, location" autocomplete="off">
+        </div>
+        <div class="col-sm-6 col-xl-2">
+            <label class="form-label fw-semibold" for="brand">Brand</label>
+            <select id="brand" name="brand" class="form-select">
+                <option value="">All brands</option>
+                {% for brand in brands %}
+                <option value="{{ brand.id }}" {% if brand.id|stringformat:"s" == selected_brand %}selected{% endif %}>{{ brand.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-6 col-xl-2">
+            <label class="form-label fw-semibold" for="category">Category</label>
+            <select id="category" name="category" class="form-select">
+                <option value="">All categories</option>
+                {% for category in categories %}
+                <option value="{{ category.id }}" {% if category.id|stringformat:"s" == selected_category %}selected{% endif %}>{{ category.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-6 col-xl-2">
+            <label class="form-label fw-semibold" for="supplier">Supplier</label>
+            <select id="supplier" name="supplier" class="form-select">
+                <option value="">All suppliers</option>
+                {% for supplier in suppliers %}
+                <option value="{{ supplier.id }}" {% if supplier.id|stringformat:"s" == selected_supplier %}selected{% endif %}>{{ supplier.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-6 col-xl-2">
+            <label class="form-label fw-semibold" for="status">Status</label>
+            <select id="status" name="status" class="form-select">
+                <option value="">All statuses</option>
+                <option value="active" {% if selected_status == 'active' %}selected{% endif %}>Active</option>
+                <option value="low_stock" {% if selected_status == 'low_stock' %}selected{% endif %}>Low stock</option>
+                <option value="inactive" {% if selected_status == 'inactive' %}selected{% endif %}>Inactive</option>
+            </select>
+        </div>
+        <div class="col-sm-8 col-xl-4">
+            <label class="form-label fw-semibold" for="sort">Sort By</label>
+            <select id="sort" name="sort" class="form-select">
+                {% for value, label in sort_options %}
+                <option value="{{ value }}" {% if value == selected_sort %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="col-sm-4 col-xl-2 d-grid">
+            <button class="btn btn-dark" type="submit"><i class="bi bi-sliders"></i> Apply</button>
+        </div>
+        <div class="col-sm-12 col-xl-2 d-grid">
+            <a class="btn btn-outline-secondary" href="{% url 'product_list' %}"><i class="bi bi-arrow-counterclockwise"></i> Reset</a>
+        </div>
     </form>
-
-    <a href="{% url 'product_add' %}" class="btn btn-primary">
-        <i class="bi bi-plus-circle"></i> Add Product
-    </a>
-    <a href="{% url 'brand_add' %}" class="btn btn-sm btn-outline-primary">
-        <i class="bi bi-plus-circle"></i> Add Brand
-    </a>
-    <a href="{% url 'category_add' %}" class="btn btn-sm btn-outline-primary">
-        <i class="bi bi-plus-circle"></i> Add Category
-    </a>
 </div>
 
-<!-- TABLE -->
-<div class="table-responsive">
-    <table class="table table-hover table-striped align-middle">
-        <thead class="table-light">
-            <tr>
-                <th>#</th>
-                <th>Barcode</th>
-                <th>Brand</th>
-                <th>Name</th>
-                <th>Category</th>
-                <th>Supplier</th>
-                <th class="text-end">Price</th>
-                <th class="text-end">Stock</th>
-                <th>Location</th>
-
-                <th>Status</th>
-                <th class="text-center">Actions</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for product in products %}
-            <tr>
-                <td>{{ forloop.counter0|add:products.start_index }}</td>
-
-                <!-- Barcode image -->
-                <td>{% barcode_image product.sku 80 %}</td>
-
-                <!-- SKU text -->
-                <td>{{ product.brand }}</td>
-
-                <td>
-                    <a href="{% url 'product_view' product.id %}">
-                        {{ product.name }}
-                    </a>
-                </td>
-
-                <td>
-                    {% if product.category %}
-                        {{ product.category.name }}
-                    {% else %}
-                        -
-                    {% endif %}
-                </td>
-
-                <td>
-                    {% if product.supplier %}
-                        {{ product.supplier.name }}
-                    {% else %}
-                        -
-                    {% endif %}
-                </td>
-
-                <td class="text-end">Rs {{ product.price|floatformat:2 }}</td>
-                <td class="text-end">{{ product.stock }}</td>
-
-                <td>
-    {% if product.location %}
-        {{ product.location }}
-    {% else %}
-        -
-    {% endif %}
-</td>
-
-
-                <td>
-                    {% if product.is_active %}
-                        <span class="badge bg-success">Active</span>
-                    {% else %}
-                        <span class="badge bg-secondary">Inactive</span>
-                    {% endif %}
-                </td>
-
-                <td class="text-center">
-                    <a href="{% url 'product_edit' product.id %}"
-                       class="btn btn-sm btn-outline-primary">
-                        <i class="bi bi-pencil-square"></i>
-                    </a>
-
-                    <a href="{% url 'product_delete' product.id %}"
-                       class="btn btn-sm btn-outline-danger">
-                        <i class="bi bi-trash"></i>
-                    </a>
-                </td>
-            </tr>
-            {% empty %}
-            <tr>
-                <td colspan="10" class="text-center text-muted">
-                    No products found.
-                </td>
-            </tr>
-            {% endfor %}
-        </tbody>
-    </table>
+<div class="page-card p-0 overflow-hidden">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4">Product</th>
+                    <th>Barcode</th>
+                    <th>Brand</th>
+                    <th>Category</th>
+                    <th>Supplier</th>
+                    <th>Location</th>
+                    <th class="text-end">Cost</th>
+                    <th class="text-end">Sale</th>
+                    <th class="text-end">Margin</th>
+                    <th class="text-end">Stock</th>
+                    <th>Status</th>
+                    <th class="text-end pe-4">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for product in products %}
+                <tr>
+                    <td class="ps-4">
+                        <div>
+                            <a href="{% url 'product_view' product.id %}" class="fw-semibold text-decoration-none">{{ product.name }}</a>
+                            <div class="small text-muted">SKU {{ product.sku }}</div>
+                        </div>
+                    </td>
+                    <td>{% barcode_image product.barcode|default:product.sku 80 %}</td>
+                    <td>{{ product.brand|default:"-" }}</td>
+                    <td>{{ product.category|default:"-" }}</td>
+                    <td>{{ product.supplier|default:"-" }}</td>
+                    <td>{{ product.location|default:"-" }}</td>
+                    <td class="text-end">Rs {{ product.cost_price|floatformat:2 }}</td>
+                    <td class="text-end">Rs {{ product.price|floatformat:2 }}</td>
+                    <td class="text-end">
+                        {% if product.current_margin_percent or product.current_margin_percent == 0 %}
+                        <span class="status-chip {{ product.margin_status }}">{{ product.current_margin_percent|floatformat:2 }}%</span>
+                        {% else %}
+                        <span class="status-chip unknown">No cost</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end">
+                        <div>{{ product.stock }}</div>
+                        <div class="small text-muted">Low at {{ product.low_stock_threshold }}</div>
+                    </td>
+                    <td>
+                        {% if not product.is_active %}
+                        <span class="status-chip clear">Inactive</span>
+                        {% elif product.stock <= product.low_stock_threshold %}
+                        <span class="status-chip advance">Low stock</span>
+                        {% else %}
+                        <span class="status-chip healthy">Active</span>
+                        {% endif %}
+                    </td>
+                    <td class="text-end pe-4">
+                        <div class="btn-group btn-group-sm">
+                            <a href="{% url 'product_view' product.id %}" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></a>
+                            <a href="{% url 'product_edit' product.id %}" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>
+                            <a href="{% url 'product_delete' product.id %}" class="btn btn-outline-danger"><i class="bi bi-trash"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="12" class="text-center text-muted py-5">No products found for the selected filters.</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
 </div>
 
-<!-- PAGINATION -->
-<nav aria-label="Product pagination">
-  <ul class="pagination justify-content-center">
+{% if products.paginator.num_pages > 1 %}
+<nav class="mt-4">
+    <ul class="pagination justify-content-center mb-0">
+        {% if products.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page={{ products.previous_page_number }}{% if filter_querystring %}&{{ filter_querystring }}{% endif %}">Prev</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">Prev</span></li>
+        {% endif %}
 
-    {% if products.has_previous %}
-    <li class="page-item">
-      <a class="page-link"
-         href="?page={{ products.previous_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}">
-        « Prev
-      </a>
-    </li>
-    {% else %}
-    <li class="page-item disabled">
-      <span class="page-link">« Prev</span>
-    </li>
-    {% endif %}
+        {% for num in products.paginator.page_range %}
+            {% if products.number == num %}
+            <li class="page-item active"><span class="page-link">{{ num }}</span></li>
+            {% elif num > products.number|add:"-3" and num < products.number|add:"3" %}
+            <li class="page-item"><a class="page-link" href="?page={{ num }}{% if filter_querystring %}&{{ filter_querystring }}{% endif %}">{{ num }}</a></li>
+            {% endif %}
+        {% endfor %}
 
-    {% for num in products.paginator.page_range %}
-      {% if products.number == num %}
-        <li class="page-item active">
-          <span class="page-link">{{ num }}</span>
-        </li>
-
-      {% elif num > products.number|add:"-3" and num < products.number|add:"3" %}
-        <li class="page-item">
-          <a class="page-link"
-             href="?page={{ num }}{% if search_query %}&q={{ search_query }}{% endif %}">
-            {{ num }}
-          </a>
-        </li>
-      {% endif %}
-    {% endfor %}
-
-    {% if products.has_next %}
-    <li class="page-item">
-      <a class="page-link"
-         href="?page={{ products.next_page_number }}{% if search_query %}&q={{ search_query }}{% endif %}">
-        Next »
-      </a>
-    </li>
-    {% else %}
-    <li class="page-item disabled">
-      <span class="page-link">Next »</span>
-    </li>
-    {% endif %}
-  </ul>
+        {% if products.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ products.next_page_number }}{% if filter_querystring %}&{{ filter_querystring }}{% endif %}">Next</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">Next</span></li>
+        {% endif %}
+    </ul>
 </nav>
-
+{% endif %}
 {% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const form = document.getElementById("product-filter-form");
+    if (!form) return;
+    const queryInput = document.getElementById("q");
+    const liveSelects = Array.from(form.querySelectorAll("select"));
+    let timer = null;
+
+    function submitForm() {
+        form.requestSubmit ? form.requestSubmit() : form.submit();
+    }
+
+    if (queryInput) {
+        queryInput.addEventListener("input", function () {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(submitForm, 250);
+        });
+    }
+
+    liveSelects.forEach(function (field) {
+        field.addEventListener("change", submitForm);
+    });
+})();
+</script>
+{% endblock %}
+
+
+

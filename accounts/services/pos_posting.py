@@ -1,58 +1,76 @@
 """
-POS ACCOUNTING ENTRY POINT
-=========================
+POS accounting entry point.
 
-This module is the ONLY place where POS transactions
-(Sale / Purchase) are posted into accounting.
-
-Rules:
-- Supports cash, credit, and partial payments
-- Automatically creates AR / AP
-- Updates party sub-ledger
-- ONE voucher per POS transaction
-
-DO NOT:
-- Create AccountingEvent for POS
-- Post POS vouchers anywhere else
-
-If you need to change POS accounting logic,
-change it HERE.
+Sales and purchases are synchronized here so the same sale/purchase can be
+re-posted after edits without leaving duplicate vouchers behind.
 """
 
 from decimal import Decimal, InvalidOperation
+
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 
-from accounts.models import (
-    Voucher, VoucherLine, PartyLedgerEntry, Account
-)
+from accounts.models import Account, PartyLedgerEntry, Voucher, VoucherLine
+from accounts.services.cash_bank import resolve_money_account
+from pos.models import PurchaseItem, SaleItem
 
-
-# -------------------------
-# Helpers
-# -------------------------
 
 def _acc(title: str) -> Account:
-    """
-    Resolve an active account by title.
-    Fail loudly if accounting setup is broken.
-    """
     try:
         return Account.objects.get(title=title, is_active=True)
-    except Account.DoesNotExist:
-        raise ValueError(f"Required account not found or inactive: {title}")
+    except Account.DoesNotExist as exc:
+        raise ValueError(f"Required account not found or inactive: {title}") from exc
 
 
 def _to_decimal(value) -> Decimal:
     try:
         return Decimal(value)
-    except (InvalidOperation, TypeError):
-        raise ValueError("Invalid monetary value")
+    except (InvalidOperation, TypeError) as exc:
+        raise ValueError("Invalid monetary value") from exc
 
 
-# -------------------------
-# SALE POSTING (POS)
-# -------------------------
+def _money_label(payment_method: str, bank_account=None) -> str:
+    if payment_method == "cash":
+        return "Cash"
+    if bank_account is not None:
+        return bank_account.display_name
+    return "Bank"
+
+
+def _sync_voucher(*, voucher_type: str, ref_model: str, ref_id: int, narration: str, date) -> Voucher:
+    voucher, created = Voucher.objects.get_or_create(
+        voucher_type=voucher_type,
+        ref_model=ref_model,
+        ref_id=ref_id,
+        defaults={
+            "narration": narration,
+            "date": date,
+        },
+    )
+
+    if not created:
+        voucher.narration = narration
+        voucher.date = date
+        voucher.save(update_fields=["narration", "date"])
+        voucher.lines.all().delete()
+        voucher.party_entries.all().delete()
+
+    return voucher
+
+
+def _sale_cost_total(sale_id: int) -> Decimal:
+    total = Decimal("0")
+    for item in SaleItem.objects.filter(sale_id=sale_id).select_related("product"):
+        total += Decimal(item.cost_price) * Decimal(item.quantity)
+    return total
+
+
+def _purchase_inventory_total(purchase_id: int) -> Decimal:
+    total = Decimal("0")
+    for item in PurchaseItem.objects.filter(purchase_id=purchase_id).select_related("product"):
+        total += Decimal(item.cost_price) * Decimal(item.quantity)
+    return total
+
 
 @transaction.atomic
 def post_sale_from_pos(
@@ -61,79 +79,91 @@ def post_sale_from_pos(
     customer,
     total_amount,
     paid_amount,
-    payment_method: str,   # "cash" | "bank"
+    payment_method: str,
+    bank_account=None,
+    sale_date=None,
+    tax_amount=0,
 ):
-        # SAFETY: POS sale must always have an ID
     assert sale_id is not None, "POS sale_id is required"
-    """
-    POS Sale Posting Rules:
-    - Always post FULL sale amount to Sales
-    - Paid portion → Cash/Bank
-    - Unpaid portion → Accounts Receivable + Party Ledger
-    """
 
     total = _to_decimal(total_amount)
     paid = _to_decimal(paid_amount or 0)
+    tax = _to_decimal(tax_amount or 0)
 
     if total <= 0:
         raise ValueError("Sale total must be greater than zero")
-
     if paid < 0:
         raise ValueError("Paid amount cannot be negative")
-
     if paid > total:
         raise ValueError("Paid amount cannot exceed sale total")
+    if tax < 0:
+        raise ValueError("Tax amount cannot be negative")
+    if tax > total:
+        raise ValueError("Tax amount cannot exceed sale total")
 
     credit = total - paid
+    net_sales = total - tax
+    if credit > 0 and customer is None:
+        raise ValueError("Credit sale requires a customer")
 
-    voucher = Voucher.objects.create(
+    inventory_cost = _sale_cost_total(sale_id)
+    money_account = resolve_money_account(payment_method, bank_account)
+    voucher = _sync_voucher(
         voucher_type=Voucher.SALE,
         ref_model="Sale",
         ref_id=sale_id,
+        narration=f"Sale #{sale_id} via {_money_label(payment_method, bank_account)}",
+        date=sale_date,
     )
 
-    # 1️⃣ Cash / Bank received
     if paid > 0:
-        cash_account = (
-            _acc("Cash") if payment_method == "cash"
-            else _acc("Bank")
-        )
         VoucherLine.objects.create(
             voucher=voucher,
-            account=cash_account,
-            debit=paid
+            account=money_account,
+            debit=paid,
         )
 
-    # 2️⃣ Credit portion → Accounts Receivable
     if credit > 0:
-        ar = _acc("Accounts Receivable")
-
         VoucherLine.objects.create(
             voucher=voucher,
-            account=ar,
-            debit=credit
+            account=_acc("Accounts Receivable"),
+            debit=credit,
         )
-
         PartyLedgerEntry.objects.create(
             voucher=voucher,
             content_type=ContentType.objects.get_for_model(customer),
             object_id=customer.id,
-            debit=credit
+            debit=credit,
         )
 
-    # 3️⃣ Sales income (FULL amount always)
     VoucherLine.objects.create(
         voucher=voucher,
         account=_acc("Sales"),
-        credit=total
+        credit=net_sales,
     )
 
+    if tax > 0:
+        VoucherLine.objects.create(
+            voucher=voucher,
+            account=_acc("Sales Tax Payable"),
+            credit=tax,
+        )
+
+    if inventory_cost > 0:
+        VoucherLine.objects.create(
+            voucher=voucher,
+            account=_acc("Cost of Goods Sold"),
+            debit=inventory_cost,
+        )
+        VoucherLine.objects.create(
+            voucher=voucher,
+            account=_acc("Inventory"),
+            credit=inventory_cost,
+        )
+
+    voucher.clean()
     return voucher
 
-
-# -------------------------
-# PURCHASE POSTING (POS)
-# -------------------------
 
 @transaction.atomic
 def post_purchase_from_pos(
@@ -142,71 +172,61 @@ def post_purchase_from_pos(
     supplier,
     total_amount,
     paid_amount,
-    payment_method: str,   # "cash" | "bank"
+    payment_method: str,
+    bank_account=None,
+    purchase_date=None,
 ):
-        # SAFETY: POS purchase must always have an ID
     assert purchase_id is not None, "POS purchase_id is required"
-    """
-    POS Purchase Posting Rules:
-    - Always post FULL purchase amount to Inventory/Expense
-    - Paid portion → Cash/Bank
-    - Unpaid portion → Accounts Payable + Party Ledger
-    """
 
     total = _to_decimal(total_amount)
     paid = _to_decimal(paid_amount or 0)
 
     if total <= 0:
         raise ValueError("Purchase total must be greater than zero")
-
     if paid < 0:
         raise ValueError("Paid amount cannot be negative")
-
     if paid > total:
         raise ValueError("Paid amount cannot exceed purchase total")
 
     credit = total - paid
+    if credit > 0 and supplier is None:
+        raise ValueError("Credit purchase requires a supplier")
 
-    voucher = Voucher.objects.create(
+    inventory_total = _purchase_inventory_total(purchase_id) or total
+    money_account = resolve_money_account(payment_method, bank_account)
+    voucher = _sync_voucher(
         voucher_type=Voucher.PURCHASE,
         ref_model="Purchase",
         ref_id=purchase_id,
+        narration=f"Purchase #{purchase_id} via {_money_label(payment_method, bank_account)}",
+        date=purchase_date,
     )
 
-    # 1️⃣ Inventory / Expense (FULL amount)
     VoucherLine.objects.create(
         voucher=voucher,
-        account=_acc("Inventory"),  # or Expense account
-        debit=total
+        account=_acc("Inventory"),
+        debit=inventory_total,
     )
 
-    # 2️⃣ Cash / Bank paid
     if paid > 0:
-        cash_account = (
-            _acc("Cash") if payment_method == "cash"
-            else _acc("Bank")
-        )
         VoucherLine.objects.create(
             voucher=voucher,
-            account=cash_account,
-            credit=paid
+            account=money_account,
+            credit=paid,
         )
 
-    # 3️⃣ Credit portion → Accounts Payable
     if credit > 0:
-        ap = _acc("Accounts Payable")
-
         VoucherLine.objects.create(
             voucher=voucher,
-            account=ap,
-            credit=credit
+            account=_acc("Accounts Payable"),
+            credit=credit,
         )
-
         PartyLedgerEntry.objects.create(
             voucher=voucher,
             content_type=ContentType.objects.get_for_model(supplier),
             object_id=supplier.id,
-            credit=credit
+            credit=credit,
         )
 
+    voucher.clean()
     return voucher

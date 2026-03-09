@@ -1,103 +1,72 @@
-{% extends "pos/base.html" %}
-{% load static %}
-{% block title %}👨‍💼 Customers{% endblock %}
-
-{% block extra_css %}
-<style>
-.customer-card {
-    border-radius: 12px;
-    box-shadow: 0 2px 8px rgba(0,0,0,.08);
-    transition: .25s ease;
-}
-.customer-card:hover {
-    transform: translateY(-2px);
-    box-shadow: 0 6px 18px rgba(0,0,0,.12);
-}
-
-.avatar {
-    width: 48px;
-    height: 48px;
-    border-radius: 50%;
-    background: linear-gradient(135deg,#667eea,#764ba2);
-    color:#fff;
-    display:flex;
-    align-items:center;
-    justify-content:center;
-    font-weight:600;
-}
-
-.meta { font-size: 13px; color: #6c757d; }
-
-.badge.receivable { background:#2ecc71; }
-.badge.advance { background:#f39c12; }
-.badge.clear { background:#7f8c8d; }
-</style>
-{% endblock %}
+﻿{% extends "pos/base.html" %}
+{% block title %}Customers{% endblock %}
 
 {% block content %}
-<div class="container-fluid mt-4">
-
-<!-- HEADER -->
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="fw-bold mb-0">👨‍💼 Customers</h2>
-        <small class="text-muted">Total: {{ total_customers }}</small>
-    </div>
-    <div>
-        <a href="{% url 'add_customer_from_pos' %}" class="btn btn-primary">+ Add Customer</a>
-    </div>
-</div>
-
-<!-- SEARCH -->
-<form method="get" class="mb-4">
-    <input class="form-control" name="search" placeholder="Search..." value="{{ search_term }}">
-</form>
-
-<!-- LIST -->
-<div class="row g-3">
-{% for customer in customers %}
-<div class="col-lg-6">
-    <div class="card customer-card">
-        <div class="card-body d-flex justify-content-between">
-
-            <div class="d-flex">
-                <div class="avatar me-3">
-                    {{ customer.name|slice:":1"|upper }}
-                </div>
-                <div>
-                    <strong>{{ customer.name }}</strong>
-                    <div class="meta">
-                        {% if customer.phone %}📞 {{ customer.phone }}{% endif %}
-                        {% if customer.email %} · ✉️ {{ customer.email }}{% endif %}
-                    </div>
-                </div>
-            </div>
-
-            <div class="text-end">
-                {% if customer.balance_type %}
-                    <span class="badge {{ customer.balance_type }}">
-                        {{ customer.balance_type|upper }}
-                        {% if customer.balance_amount %}
-                            : {{ customer.balance_amount }}
-                        {% endif %}
-                    </span>
-                {% else %}
-                    <span class="badge clear">CLEAR</span>
-                {% endif %}
-                <div class="mt-2">
-                    <a href="{% url 'customer_detail' customer.id %}" class="btn btn-sm btn-outline-primary">
-                        View →
-                    </a>
-                </div>
-            </div>
-
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon"><i class="bi bi-people"></i></span>
+        <div>
+            <h1 class="page-title">Customers</h1>
+            <p class="page-subtitle">{{ total_customers }} customer records with live receivable status.</p>
         </div>
     </div>
-</div>
-{% empty %}
-<p class="text-muted">No customers found.</p>
-{% endfor %}
+    <div class="page-actions">
+        <a href="{% url 'add_customer_from_pos' %}" class="btn btn-dark"><i class="bi bi-plus-circle"></i> Add Customer</a>
+    </div>
 </div>
 
+<form method="get" class="page-card p-3 p-lg-4 mb-4" id="customer-search-form">
+    <div class="section-heading mb-3">
+        <div class="section-heading-copy">
+            <span class="section-title-icon"><i class="bi bi-search"></i></span>
+            <div>
+                <h2 class="section-title">Find Customer</h2>
+                <p class="section-copy">Search by name, phone, email, or address.</p>
+            </div>
+        </div>
+    </div>
+    <input class="form-control" id="customer-search-input" name="search" placeholder="Search name, phone, email, address" value="{{ search_term }}" autocomplete="off">
+</form>
+
+<div class="row g-3">
+{% for customer in customers %}
+    <div class="col-lg-6">
+        <div class="page-card p-3 h-100 d-flex justify-content-between align-items-start gap-3">
+            <div class="d-flex align-items-start gap-3">
+                <span class="section-title-icon"><i class="bi bi-person"></i></span>
+                <div>
+                    <div class="fw-semibold fs-5">{{ customer.name }}</div>
+                    <div class="text-muted small">{{ customer.phone|default:"-" }}{% if customer.email %} | {{ customer.email }}{% endif %}</div>
+                </div>
+            </div>
+            <div class="text-end">
+                <div><span class="status-chip {{ customer.balance_type }}">{{ customer.balance_type|title }}{% if customer.balance_amount %}: {{ customer.balance_amount }}{% endif %}</span></div>
+                <a href="{% url 'customer_detail' customer.id %}" class="btn btn-sm btn-outline-primary mt-2">View</a>
+            </div>
+        </div>
+    </div>
+{% empty %}
+    <div class="col-12"><div class="alert alert-light border mb-0">No customers found.</div></div>
+{% endfor %}
 </div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+    const form = document.getElementById("customer-search-form");
+    const input = document.getElementById("customer-search-input");
+    if (!form || !input) return;
+    let timer = null;
+    input.addEventListener("input", function () {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(function () {
+            form.requestSubmit ? form.requestSubmit() : form.submit();
+        }, 250);
+    });
+})();
+</script>
+{% endblock %}
+
+
+

@@ -3,228 +3,435 @@
 
 {% block extra_css %}
 <style>
-    .kpi-card {
-        border-left: 5px solid;
-        box-shadow: 0 2px 6px rgba(0,0,0,0.08);
-    }
-    .kpi-icon {
-        font-size: 2.4rem;
-        opacity: 0.8;
-    }
-    .table-section {
-        background: white;
-        padding: 15px;
-        border-radius: 8px;
-        box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    .dashboard-kpi {
+        text-decoration: none;
+        color: inherit;
+        display: block;
     }
 
-    .low-stock-card {
-    transition: all 0.25s ease;
-    cursor: pointer;
-}
+    .dashboard-kpi .metric-card {
+        padding: 1.1rem;
+    }
 
-.low-stock-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 8px 20px rgba(220, 53, 69, 0.25);
-}
+    .dashboard-kpi .kpi-hint {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--metric-accent, var(--accent-primary));
+        font-size: 0.86rem;
+        font-weight: 600;
+        margin-top: 0.9rem;
+    }
 
-.low-stock-card:hover .kpi-icon {
-    transform: scale(1.1);
-}
+    .snapshot-tile {
+        border: 1px solid #e2e8f0;
+        border-radius: 18px;
+        padding: 18px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+    }
 
-.low-stock-card .kpi-icon {
-    transition: transform 0.25s ease;
-}
+    .snapshot-tile.primary {
+        background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+    }
+
+    .snapshot-tile.success {
+        background: linear-gradient(180deg, #f5fcf7 0%, #ecfdf3 100%);
+    }
+
+    .snapshot-tile.warning {
+        background: linear-gradient(180deg, #fffaf1 0%, #fff4dd 100%);
+    }
+
+    .snapshot-tile .snapshot-icon {
+        width: 42px;
+        height: 42px;
+        border-radius: 14px;
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 1rem;
+        margin-bottom: 14px;
+    }
+
+    .snapshot-tile.primary .snapshot-icon {
+        background: rgba(37, 99, 235, 0.14);
+        color: #2563eb;
+    }
+
+    .snapshot-tile.success .snapshot-icon {
+        background: rgba(22, 163, 74, 0.14);
+        color: #15803d;
+    }
+
+    .snapshot-tile.warning .snapshot-icon {
+        background: rgba(245, 158, 11, 0.16);
+        color: #b45309;
+    }
+
+    .snapshot-tile strong {
+        display: block;
+        font-size: 1.15rem;
+        margin-top: 6px;
+    }
+
+    .table-panel {
+        height: 100%;
+    }
+
+    .table-panel .table td,
+    .table-panel .table th {
+        vertical-align: middle;
+    }
+
+    .section-icon-success {
+        background: #e9f9ef;
+        color: #15803d;
+    }
+
+    .section-icon-warning {
+        background: #fff2df;
+        color: #b45309;
+    }
+
+    .section-icon-danger {
+        background: #fdecec;
+        color: #dc2626;
+    }
 </style>
 {% endblock %}
 
 {% block content %}
-<h3 class="mb-4">📊 Dashboard Overview</h3>
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon"><i class="bi bi-speedometer2"></i></span>
+        <div>
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-subtitle">Fast commercial view of sales, profit, stock pressure, purchases, and dues.</p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <a href="{% url 'pos_screen' %}" class="btn btn-dark"><i class="bi bi-cart4"></i> Open POS</a>
+        <a href="{{ reports_center_url }}" class="btn btn-outline-secondary"><i class="bi bi-graph-up-arrow"></i> Reports Centre</a>
+    </div>
+</div>
 
-<div class="row g-3">
-
-    <!-- TOTAL SALES -->
-    <div class="col-md-3 col-sm-6">
-        <div class="card kpi-card border-primary">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-cash-stack text-primary kpi-icon"></i>
-                    <div class="ms-3">
-                        <h6 class="text-muted mb-1">Today Sales</h6>
-                        <h3 class="fw-bold">Rs {{ total_sales|floatformat:2 }}</h3>
-                        <small class="text-muted">Revenue generated today</small>
+<div class="row g-3 mb-4">
+    {% for kpi in dashboard_kpis %}
+    <div class="col-sm-6 col-xl-3">
+        <a href="{{ kpi.url }}" class="dashboard-kpi">
+            <div class="metric-card {{ kpi.accent }}">
+                <div class="d-flex justify-content-between align-items-start gap-3">
+                    <div>
+                        <div class="metric-label">{{ kpi.title }}</div>
+                        <div class="metric-value">
+                            {% if kpi.kind == 'money' %}
+                            Rs {{ kpi.value|floatformat:2 }}
+                            {% else %}
+                            {{ kpi.value }}
+                            {% endif %}
+                        </div>
+                        <div class="metric-meta">{{ kpi.meta }}</div>
                     </div>
+                    <span class="metric-icon"><i class="bi {{ kpi.icon|default:'bi-arrow-up-right' }}"></i></span>
+                </div>
+                <div class="kpi-hint">Open details <i class="bi bi-arrow-right"></i></div>
+            </div>
+        </a>
+    </div>
+    {% endfor %}
+</div>
+
+<div class="row g-4 mb-4 align-items-stretch">
+    <div class="col-xl-8">
+        <div class="page-card p-4 h-100">
+            <div class="section-heading">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon"><i class="bi bi-graph-up-arrow"></i></span>
+                    <div>
+                        <h2 class="section-title">7 Day Sales Trend</h2>
+                        <p class="section-copy">Net sales and gross profit across the last seven business days.</p>
+                    </div>
+                </div>
+                <a href="{{ reports_center_url }}" class="section-link">Open reports</a>
+            </div>
+            <div class="chart-shell">
+                <canvas id="salesTrendChart"></canvas>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="page-card p-4 h-100">
+            <div class="section-heading">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-success"><i class="bi bi-stars"></i></span>
+                    <div>
+                        <h2 class="section-title">Business Snapshot</h2>
+                        <p class="section-copy">Plain-language highlights for today and this month.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="d-grid gap-3">
+                <div class="snapshot-tile primary">
+                    <span class="snapshot-icon"><i class="bi bi-cash-coin"></i></span>
+                    <div class="text-muted small">Today Counter</div>
+                    <strong>Rs {{ today_sales.net_sales|floatformat:2 }}</strong>
+                    <div class="small text-muted mt-2">{{ today_sales.invoices }} invoices, paid Rs {{ today_sales.paid|floatformat:2 }}, due Rs {{ today_sales.due|floatformat:2 }}</div>
+                </div>
+                <div class="snapshot-tile success">
+                    <span class="snapshot-icon"><i class="bi bi-trophy"></i></span>
+                    <div class="text-muted small">Month Performance</div>
+                    <strong>Rs {{ month_sales.gross_profit|floatformat:2 }}</strong>
+                    <div class="small text-muted mt-2">Gross profit on Rs {{ month_sales.net_sales|floatformat:2 }} net sales. Margin {{ month_margin_percent|floatformat:2 }}%</div>
+                </div>
+                <div class="snapshot-tile warning">
+                    <span class="snapshot-icon"><i class="bi bi-bell"></i></span>
+                    <div class="text-muted small">Attention Needed</div>
+                    <strong>{{ low_stock_count }} stock alerts</strong>
+                    <div class="small text-muted mt-2">Expense bills due Rs {{ expense_due_total|floatformat:2 }} and monthly purchases Rs {{ month_purchase_total|floatformat:2 }}</div>
                 </div>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- TOTAL BILLS -->
-    <div class="col-md-3 col-sm-6">
-        <div class="card kpi-card border-success">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-receipt text-success kpi-icon"></i>
-                    <div class="ms-3">
-                        <h6 class="text-muted mb-1">Today Bills</h6>
-                        <h3 class="fw-bold">{{ total_bills }}</h3>
-                        <small class="text-muted">Transactions completed</small>
+<div class="row g-4 mb-4">
+    <div class="col-xl-6">
+        <div class="page-card p-4 table-panel">
+            <div class="section-heading">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon"><i class="bi bi-receipt"></i></span>
+                    <div>
+                        <h2 class="section-title">Recent Sales</h2>
+                        <p class="section-copy">Latest invoices flowing through the counter.</p>
                     </div>
                 </div>
+                <a href="{{ reports_center_url }}" class="section-link">More reports</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Invoice</th>
+                            <th>Customer</th>
+                            <th class="text-end">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for sale in recent_sales %}
+                        <tr>
+                            <td><a href="{% url 'invoice' sale.id %}" class="fw-semibold text-decoration-none">#{{ sale.id }}</a></td>
+                            <td>{{ sale.customer.name|default:"Walk-in" }}</td>
+                            <td class="text-end">Rs {{ sale.total_amount|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-muted py-4">No sales recorded yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
-
-    <!-- AVERAGE SALE -->
-    <div class="col-md-3 col-sm-6">
-        <div class="card kpi-card border-warning">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-graph-up text-warning kpi-icon"></i>
-                    <div class="ms-3">
-                        <h6 class="text-muted mb-1">Avg. Sale Value</h6>
-                        <h3 class="fw-bold">Rs {{ avg_sale|floatformat:2 }}</h3>
-                        <small class="text-muted">Avg revenue per bill</small>
+    <div class="col-xl-6">
+        <div class="page-card p-4 table-panel">
+            <div class="section-heading">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-warning"><i class="bi bi-truck"></i></span>
+                    <div>
+                        <h2 class="section-title">Recent Purchases</h2>
+                        <p class="section-copy">Latest stock receipts and supplier buying activity.</p>
                     </div>
                 </div>
+                <a href="{% url 'purchase_list' %}" class="section-link">Open purchases</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Purchase</th>
+                            <th>Supplier</th>
+                            <th class="text-end">Total</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for purchase in recent_purchases %}
+                        <tr>
+                            <td><a href="{% url 'purchase_detail' purchase.id %}" class="fw-semibold text-decoration-none">#{{ purchase.id }}</a></td>
+                            <td>{{ purchase.supplier.name|default:"Cash Purchase" }}</td>
+                            <td class="text-end">Rs {{ purchase.total_amount|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-muted py-4">No purchases recorded yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
+</div>
 
-    <!-- LOW STOCK -->
-<div class="col-md-3 col-sm-6">
-    <a href="{% url 'low_stock_list' %}"
-       class="text-decoration-none text-dark d-block h-100">
-
-        <div class="card kpi-card border-danger h-100 low-stock-card">
-            <div class="card-body">
-                <div class="d-flex align-items-center">
-                    <i class="bi bi-exclamation-circle text-danger kpi-icon"></i>
-
-                    <div class="ms-3">
-                        <h6 class="text-muted mb-1">Low Stock</h6>
-                        <h3 class="fw-bold">{{ low_stock_count }}</h3>
-                        <small class="text-muted">
-                            Products running low →
-                        </small>
+<div class="row g-4">
+    <div class="col-xl-4">
+        <div class="page-card p-4 table-panel">
+            <div class="section-heading">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-success"><i class="bi bi-bag-check"></i></span>
+                    <div>
+                        <h2 class="section-title">Top Products</h2>
+                        <p class="section-copy">Best-selling catalogue items overall.</p>
                     </div>
                 </div>
             </div>
-        </div>
-
-    </a>
-</div>
-
-</div>
-
-<!-- TABLES SECTION -->
-<div class="row mt-4 g-4">
-
-    <!-- LOW STOCK TABLE -->
-    <div class="col-lg-6 col-md-12">
-        <div class="table-section">
-            <h5 class="fw-bold mb-3">📦 Top 10 Low Stock</h5>
-            <table class="table table-hover table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>#</th>
-                        <th>Product</th>
-                        <th>Stock</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for p in top_low_stock %}
-                    <tr>
-                        <td>{{ forloop.counter }}</td>
-                        <td>{{ p.name }}</td>
-                        <td>{{ p.stock }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr><th>Product</th><th class="text-end">Qty Sold</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for item in best_selling %}
+                        <tr>
+                            <td>{{ item.product__name }}</td>
+                            <td class="text-end">{{ item.total_qty }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="2" class="text-center text-muted py-4">No sales data yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
-
-    <!-- BEST SELLERS TABLE -->
-    <div class="col-lg-6 col-md-12">
-        <div class="table-section">
-            <h5 class="fw-bold mb-3">🔥 Top Selling Products</h5>
-            <table class="table table-hover table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>#</th>
-                        <th>Product</th>
-                        <th>Qty Sold</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in best_selling %}
-                    <tr>
-                        <td>{{ forloop.counter }}</td>
-                        <td>{{ item.product__name }}</td>
-                        <td>{{ item.total_qty }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
+    <div class="col-xl-4">
+        <div class="page-card p-4 table-panel">
+            <div class="section-heading">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon"><i class="bi bi-people"></i></span>
+                    <div>
+                        <h2 class="section-title">Top Customers</h2>
+                        <p class="section-copy">Customers generating the highest billed value.</p>
+                    </div>
+                </div>
+                <a href="{% url 'customer_list' %}" class="section-link">Open parties</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr><th>Customer</th><th class="text-end">Spent</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for customer in top_customers %}
+                        <tr>
+                            <td>{{ customer.customer__name|default:"Walk-in" }}</td>
+                            <td class="text-end">Rs {{ customer.total_spent|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="2" class="text-center text-muted py-4">No customer sales yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
         </div>
     </div>
-
+    <div class="col-xl-4">
+        <div class="page-card p-4 table-panel">
+            <div class="section-heading">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-danger"><i class="bi bi-exclamation-triangle"></i></span>
+                    <div>
+                        <h2 class="section-title">Low Stock Snapshot</h2>
+                        <p class="section-copy">Items already at or below reorder point.</p>
+                    </div>
+                </div>
+                <a href="{% url 'low_stock_list' %}" class="section-link">Open low stock</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr><th>Product</th><th class="text-end">Stock</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for product in top_low_stock %}
+                        <tr>
+                            <td>{{ product.name }}</td>
+                            <td class="text-end text-danger fw-semibold">{{ product.stock }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="2" class="text-center text-muted py-4">No low stock alerts.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
 </div>
+{% endblock %}
 
-<!-- SECOND ROW OF TABLES (optional) -->
-<div class="row mt-4 g-4">
+{% block extra_js %}
+<script>
+(function () {
+    const canvas = document.getElementById('salesTrendChart');
+    if (!canvas) {
+        return;
+    }
 
-    <!-- BEST SELLERS THIS MONTH -->
-    <div class="col-lg-6 col-md-12">
-        <div class="table-section">
-            <h5 class="fw-bold mb-3">📅 Top Selling This Month</h5>
-            <table class="table table-hover table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>#</th>
-                        <th>Product</th>
-                        <th>Qty Sold</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for item in best_selling_month %}
-                    <tr>
-                        <td>{{ forloop.counter }}</td>
-                        <td>{{ item.product__name }}</td>
-                        <td>{{ item.total_qty }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-    <!-- TOP CUSTOMERS -->
-    <div class="col-lg-6 col-md-12">
-        <div class="table-section">
-            <h5 class="fw-bold mb-3">👥 Top Customers</h5>
-            <table class="table table-hover table-sm">
-                <thead class="table-light">
-                    <tr>
-                        <th>#</th>
-                        <th>Customer</th>
-                        <th>Spent</th>
-                    </tr>
-                </thead>
-                <tbody>
-                    {% for c in top_customers %}
-                    <tr>
-                        <td>{{ forloop.counter }}</td>
-                        <td>{{ c.customer__name|default:"Walk-in" }}</td>
-                        <td>{{ c.total_spent|floatformat:2 }}</td>
-                    </tr>
-                    {% endfor %}
-                </tbody>
-            </table>
-        </div>
-    </div>
-
-</div>
-
+    new Chart(canvas.getContext('2d'), {
+        type: 'line',
+        data: {
+            labels: [{% for label in sales_trend.labels %}'{{ label }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
+            datasets: [
+                {
+                    label: 'Net Sales',
+                    data: [{% for value in sales_trend.net_sales %}{{ value }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                    borderColor: 'rgba(37, 99, 235, 1)',
+                    backgroundColor: 'rgba(37, 99, 235, 0.14)',
+                    fill: true,
+                    tension: 0.35,
+                    borderWidth: 3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                },
+                {
+                    label: 'Gross Profit',
+                    data: [{% for value in sales_trend.gross_profit %}{{ value }}{% if not forloop.last %}, {% endif %}{% endfor %}],
+                    borderColor: 'rgba(22, 163, 74, 1)',
+                    backgroundColor: 'rgba(22, 163, 74, 0.10)',
+                    fill: false,
+                    tension: 0.35,
+                    borderWidth: 3,
+                    pointRadius: 3,
+                    pointHoverRadius: 5,
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            interaction: { mode: 'index', intersect: false },
+            layout: {
+                padding: { top: 8, right: 8, left: 0, bottom: 0 }
+            },
+            plugins: {
+                legend: {
+                    position: 'bottom',
+                    labels: { usePointStyle: true, boxWidth: 10 }
+                }
+            },
+            scales: {
+                x: {
+                    grid: { display: false }
+                },
+                y: {
+                    beginAtZero: true,
+                    grid: { color: 'rgba(148, 163, 184, 0.18)' },
+                    ticks: {
+                        maxTicksLimit: 6,
+                        callback: function(value) {
+                            return 'Rs ' + value;
+                        }
+                    }
+                }
+            }
+        }
+    });
+})();
+</script>
 {% endblock %}

@@ -1,0 +1,36 @@
+﻿<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+    <div>
+        <h5 class="mb-1">Purchase Lines</h5>
+        <p class="text-muted mb-0">Enter quantity received, landed cost, and the sale price you want active in POS.</p>
+    </div>
+    <button type="button" class="btn btn-outline-dark" id="addPurchaseLineBtn">
+        <i class="bi bi-plus-circle"></i> Add Another Line
+    </button>
+</div>
+
+<div class="table-responsive">
+    <table class="table align-middle">
+        <thead>
+            <tr>
+                <th style="min-width: 260px;">Product</th>
+                <th style="width: 120px;">Qty</th>
+                <th style="width: 180px;">Unit Cost</th>
+                <th style="width: 180px;">Sale Price</th>
+                <th style="width: 130px;" class="text-end">Actions</th>
+            </tr>
+        </thead>
+        <tbody id="purchaseLinesBody">
+            {% for form in formset %}
+                {% include "pos/partials/_purchase_line_row.html" with form=form %}
+            {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+<template id="purchaseLineTemplate">
+    {% include "pos/partials/_purchase_line_row.html" with form=formset.empty_form %}
+</template>
+
+<div class="small text-muted mt-3">
+    If a product is missing, create it in Quick Setup above and it will immediately appear in these line dropdowns.
+</div>

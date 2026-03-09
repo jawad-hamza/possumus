@@ -1,0 +1,1198 @@
+﻿
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Products</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --nav-bg: #14213d;
+            --nav-bg-alt: #1f355f;
+            --nav-text: #d9e3f0;
+            --nav-active: #fca311;
+            --page-bg: #f5f7fb;
+            --card-border: #dce3ee;
+            --content-max: 1440px;
+            --text-main: #14213d;
+            --text-soft: #5f6f86;
+            --surface-tint: #f8fbff;
+            --accent-primary: #2563eb;
+            --accent-success: #15803d;
+            --accent-info: #0f766e;
+            --accent-warning: #b45309;
+            --accent-danger: #dc2626;
+            --accent-slate: #334155;
+        }
+
+        body {
+            background: radial-gradient(circle at top, #ffffff 0%, var(--page-bg) 55%, #edf2f7 100%);
+            overflow-x: hidden;
+            color: var(--text-main);
+        }
+
+        a {
+            color: inherit;
+        }
+
+        .layout-shell {
+            min-height: 100vh;
+        }
+
+        .sidebar {
+            width: 250px;
+            min-height: 100vh;
+            position: fixed;
+            inset: 0 auto 0 0;
+            background: linear-gradient(180deg, var(--nav-bg), #0d162c 100%);
+            color: #fff;
+            z-index: 1030;
+            transition: width 0.25s ease, transform 0.25s ease;
+            overflow-y: auto;
+                    display: flex;
+            flex-direction: column;
+}
+
+        .sidebar.collapsed {
+            width: 78px;
+        }
+
+        .sidebar-brand {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+            padding: 22px 18px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .sidebar-brand-mark {
+            width: 40px;
+            height: 40px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 12px;
+            background: linear-gradient(135deg, var(--nav-active), #ffbf57);
+            color: #182a4d;
+            font-weight: 700;
+        }
+
+        .sidebar-title {
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+            margin: 0;
+        }
+
+        .sidebar-subtitle {
+            color: rgba(217, 227, 240, 0.72);
+            font-size: 0.75rem;
+            margin: 0;
+        }
+
+        .toggle-btn {
+            background: transparent;
+            border: none;
+            color: #fff;
+            font-size: 1.1rem;
+            width: 36px;
+            height: 36px;
+            border-radius: 10px;
+        }
+
+        .toggle-btn:hover {
+            background: rgba(255, 255, 255, 0.08);
+        }
+        .sidebar-rail-toggle {
+            display: none;
+            position: fixed;
+            top: 18px;
+            left: 66px;
+            width: 30px;
+            height: 42px;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid rgba(255, 255, 255, 0.12);
+            border-left: none;
+            border-radius: 0 14px 14px 0;
+            background: linear-gradient(180deg, #1f355f, #14213d);
+            color: #fff;
+            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.22);
+            z-index: 1035;
+        }
+
+        .sidebar.collapsed + .sidebar-rail-toggle {
+            display: inline-flex;
+        }
+
+        .sidebar-rail-toggle:hover {
+            background: linear-gradient(180deg, #284375, #172849);
+        }
+
+        .sidebar-nav {
+            padding: 14px 12px 24px;
+            flex: 1 1 auto;
+        }
+
+        .nav-link-shell {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--nav-text);
+            text-decoration: none;
+            padding: 12px 14px;
+            border-radius: 14px;
+            margin-bottom: 6px;
+            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+        }
+
+        .nav-link-shell:hover,
+        .nav-link-shell.active {
+            background: linear-gradient(90deg, rgba(252, 163, 17, 0.16), rgba(252, 163, 17, 0.06));
+            color: #fff;
+            transform: translateX(2px);
+        }
+
+        .nav-link-shell i {
+            font-size: 1.1rem;
+            width: 22px;
+            text-align: center;
+            color: var(--nav-active);
+        }
+
+        .sidebar.collapsed .sidebar-copy,
+        .sidebar.collapsed .nav-copy {
+            display: none;
+        }
+
+        .content {
+            margin-left: 250px;
+            padding: 24px;
+            transition: margin-left 0.25s ease;
+        }
+
+        .content.expanded {
+            margin-left: 78px;
+        }
+
+        .content-inner {
+            max-width: var(--content-max);
+            margin: 0 auto;
+        }
+
+        .page-topbar {
+            display: none;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .mobile-overlay {
+            display: none;
+            position: fixed;
+            inset: 0;
+            background: rgba(8, 15, 28, 0.48);
+            z-index: 1020;
+        }
+
+        .page-card {
+            border: 1px solid var(--card-border);
+            border-radius: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+            box-shadow: 0 10px 30px rgba(20, 33, 61, 0.06);
+        }
+
+        .page-header {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 16px;
+            margin-bottom: 1.5rem;
+        }
+
+        .page-header-copy {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            min-width: 0;
+        }
+
+        .page-title-icon,
+        .section-title-icon,
+        .metric-icon {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+
+        .page-title-icon {
+            width: 52px;
+            height: 52px;
+            border-radius: 16px;
+            font-size: 1.25rem;
+            color: #fff;
+            box-shadow: 0 14px 24px rgba(37, 99, 235, 0.18);
+            background: linear-gradient(135deg, #2563eb, #1d4ed8);
+        }
+
+        .page-title-icon.success {
+            background: linear-gradient(135deg, #16a34a, #15803d);
+            box-shadow: 0 14px 24px rgba(22, 163, 74, 0.18);
+        }
+
+        .page-title-icon.warning {
+            background: linear-gradient(135deg, #f59e0b, #d97706);
+            box-shadow: 0 14px 24px rgba(245, 158, 11, 0.18);
+        }
+
+        .page-title-icon.danger {
+            background: linear-gradient(135deg, #ef4444, #dc2626);
+            box-shadow: 0 14px 24px rgba(239, 68, 68, 0.18);
+        }
+
+        .page-title-icon.slate {
+            background: linear-gradient(135deg, #475569, #334155);
+            box-shadow: 0 14px 24px rgba(71, 85, 105, 0.18);
+        }
+
+        .page-title {
+            margin: 0;
+            font-size: clamp(1.65rem, 1.2rem + 1vw, 2.15rem);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+        }
+
+        .page-subtitle {
+            color: var(--text-soft);
+            margin: 6px 0 0;
+            max-width: 820px;
+        }
+
+        .page-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            align-items: center;
+        }
+
+        .metric-card {
+            position: relative;
+            overflow: hidden;
+            border: 1px solid var(--card-border);
+            border-radius: 18px;
+            background: linear-gradient(180deg, #ffffff 0%, var(--surface-tint) 100%);
+            padding: 1rem;
+            height: 100%;
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .metric-card::before {
+            content: "";
+            position: absolute;
+            inset: 0 0 auto 0;
+            height: 4px;
+            background: var(--metric-accent, var(--accent-primary));
+        }
+
+        .metric-card:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 16px 28px rgba(20, 33, 61, 0.12);
+        }
+
+        .metric-card.primary {
+            --metric-accent: var(--accent-primary);
+            --metric-soft: rgba(37, 99, 235, 0.12);
+        }
+
+        .metric-card.success {
+            --metric-accent: var(--accent-success);
+            --metric-soft: rgba(22, 163, 74, 0.12);
+        }
+
+        .metric-card.info {
+            --metric-accent: var(--accent-info);
+            --metric-soft: rgba(15, 118, 110, 0.12);
+        }
+
+        .metric-card.warning {
+            --metric-accent: var(--accent-warning);
+            --metric-soft: rgba(180, 83, 9, 0.12);
+        }
+
+        .metric-card.danger {
+            --metric-accent: var(--accent-danger);
+            --metric-soft: rgba(220, 38, 38, 0.12);
+        }
+
+        .metric-card.slate {
+            --metric-accent: var(--accent-slate);
+            --metric-soft: rgba(51, 65, 85, 0.12);
+        }
+
+        .metric-icon {
+            width: 42px;
+            height: 42px;
+            border-radius: 14px;
+            background: var(--metric-soft, rgba(37, 99, 235, 0.12));
+            color: var(--metric-accent, var(--accent-primary));
+            font-size: 1.1rem;
+        }
+
+        .metric-label {
+            color: var(--text-soft);
+            font-size: 0.82rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .metric-value {
+            font-size: clamp(1.6rem, 1.3rem + 0.6vw, 2rem);
+            font-weight: 700;
+            margin-top: 0.65rem;
+            line-height: 1.1;
+        }
+
+        .metric-meta {
+            color: var(--text-soft);
+            font-size: 0.9rem;
+            margin-top: 0.8rem;
+        }
+
+        .section-heading {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            gap: 12px;
+            margin-bottom: 1rem;
+        }
+
+        .section-heading-copy {
+            display: flex;
+            align-items: flex-start;
+            gap: 12px;
+        }
+
+        .section-title-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+            background: #eaf2ff;
+            color: var(--accent-primary);
+            font-size: 1rem;
+        }
+
+        .section-title-icon.section-icon-success {
+            background: #e9f9ef;
+            color: #15803d;
+        }
+
+        .section-title-icon.section-icon-warning {
+            background: #fff2df;
+            color: #b45309;
+        }
+
+        .section-title-icon.section-icon-danger {
+            background: #fdecec;
+            color: #dc2626;
+        }
+
+        .section-title-icon.section-icon-slate {
+            background: #edf2f7;
+            color: #334155;
+        }
+
+        .section-title {
+            margin: 0;
+            font-size: 1.15rem;
+            font-weight: 700;
+        }
+
+        .section-copy {
+            color: var(--text-soft);
+            margin: 4px 0 0;
+            font-size: 0.92rem;
+        }
+
+        .section-link {
+            color: var(--accent-primary);
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 0.92rem;
+        }
+
+        .section-link:hover {
+            text-decoration: underline;
+        }
+
+        .chart-shell {
+            position: relative;
+            height: 320px;
+            max-height: 320px;
+            overflow: hidden;
+        }
+
+        .chart-shell.compact {
+            height: 240px;
+            max-height: 240px;
+        }
+
+        .chart-shell canvas {
+            max-width: 100%;
+            max-height: 100%;
+        }
+
+        .table-responsive .table {
+            margin-bottom: 0;
+        }
+
+        .table thead.table-light th,
+        .table thead th {
+            background: #f7fafc;
+            color: #334155;
+            font-size: 0.82rem;
+            letter-spacing: 0.02em;
+            text-transform: uppercase;
+            border-bottom-color: #dde7f2;
+        }
+
+        .table tbody tr {
+            transition: background-color 0.18s ease;
+        }
+
+        .table tbody tr:hover {
+            background: #fafcff;
+        }
+
+        .list-link-card {
+            border: 1px solid #e2e8f0;
+            border-radius: 16px;
+            padding: 14px 16px;
+            text-decoration: none;
+            color: inherit;
+            background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
+            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+        }
+
+        .list-link-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 14px 24px rgba(20, 33, 61, 0.08);
+            border-color: #bfd0e6;
+        }
+
+        .list-link-card .list-link-icon {
+            width: 38px;
+            height: 38px;
+            border-radius: 12px;
+            background: #eef4ff;
+            color: var(--accent-primary);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn {
+            border-radius: 12px;
+            font-weight: 600;
+        }
+
+        .btn-dark {
+            background: linear-gradient(135deg, #172849, #111d36);
+            border-color: #172849;
+            box-shadow: 0 10px 18px rgba(20, 33, 61, 0.12);
+        }
+
+        .btn-dark:hover,
+        .btn-dark:focus {
+            background: linear-gradient(135deg, #1f355f, #14213d);
+            border-color: #1f355f;
+        }
+
+        .btn-outline-secondary,
+        .btn-outline-primary,
+        .btn-outline-dark {
+            background: #fff;
+        }
+
+        .form-control,
+        .form-select {
+            border-radius: 12px;
+            border-color: #d7e2ee;
+            min-height: 46px;
+        }
+
+        textarea.form-control {
+            min-height: 120px;
+        }
+
+        .form-control:focus,
+        .form-select:focus {
+            border-color: #93c5fd;
+            box-shadow: 0 0 0 0.22rem rgba(37, 99, 235, 0.12);
+        }
+
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            border-radius: 999px;
+            padding: 4px 10px;
+            font-size: 0.8rem;
+            font-weight: 600;
+        }
+
+        .status-chip.healthy {
+            color: #0f766e;
+            background: #ccfbf1;
+        }
+
+        .status-chip.below,
+        .status-chip.payable {
+            color: #b91c1c;
+            background: #fee2e2;
+        }
+
+        .status-chip.advance {
+            color: #92400e;
+            background: #fef3c7;
+        }
+
+        .status-chip.receivable {
+            color: #1d4ed8;
+            background: #dbeafe;
+        }
+
+        .status-chip.clear,
+        .status-chip.unknown {
+            color: #475569;
+            background: #e2e8f0;
+        }
+
+        .sidebar-footer {
+            margin: auto 12px 16px;
+            padding: 14px 0 0;
+            border-top: 1px solid rgba(255, 255, 255, 0.08);
+        }
+
+        .sidebar-user {
+            display: flex;
+            gap: 12px;
+            align-items: flex-start;
+            margin-bottom: 12px;
+        }
+
+        .sidebar-user-mark {
+            width: 40px;
+            height: 40px;
+            border-radius: 14px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(252, 163, 17, 0.16);
+            color: #fff;
+            font-weight: 800;
+        }
+
+        .sidebar-user-name {
+            font-weight: 700;
+            color: #ffffff;
+        }
+
+        .sidebar-user-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-top: 4px;
+        }
+
+        .sidebar-role-chip {
+            display: inline-flex;
+            align-items: center;
+            border-radius: 999px;
+            padding: 3px 9px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            background: rgba(37, 99, 235, 0.18);
+            color: #bfdbfe;
+        }
+
+        .sidebar-session-text,
+        .sidebar-hint {
+            color: rgba(217, 227, 240, 0.7);
+            font-size: 0.75rem;
+        }
+
+        .sidebar-hint {
+            margin: 0 0 10px 52px;
+        }
+
+        .sidebar-logout {
+            width: 100%;
+            border: none;
+            background: transparent;
+            text-align: left;
+        }
+        @media (max-width: 992px) {
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.show {
+                transform: translateX(0);
+            }
+
+            .content,
+            .content.expanded {
+                margin-left: 0;
+                padding: 16px;
+            }
+
+            .page-topbar {
+                display: flex;
+            }
+
+            .mobile-overlay.show {
+                display: block;
+            }
+            .sidebar-rail-toggle {
+                display: none !important;
+            }
+
+            .page-title-icon {
+                width: 44px;
+                height: 44px;
+                border-radius: 14px;
+            }
+
+            .chart-shell {
+                height: 260px;
+                max-height: 260px;
+            }
+
+            .chart-shell.compact {
+                height: 220px;
+                max-height: 220px;
+            }
+        }
+
+        @media (max-width: 576px) {
+            .content,
+            .content.expanded {
+                padding: 12px;
+            }
+
+            .page-header {
+                gap: 12px;
+            }
+
+            .page-header-copy {
+                width: 100%;
+                gap: 10px;
+            }
+
+            .page-actions {
+                width: 100%;
+            }
+
+            .page-actions .btn,
+            .page-actions .status-chip {
+                width: 100%;
+                justify-content: center;
+            }
+
+            .page-card,
+            .metric-card {
+                border-radius: 16px;
+            }
+
+            .metric-value {
+                font-size: 1.8rem;
+            }
+
+            .table-responsive {
+                font-size: 0.92rem;
+            }
+        }
+    </style>
+    
+</head>
+<body>
+<div class="layout-shell">
+    <div class="mobile-overlay" id="mobileOverlay" onclick="toggleSidebarMobile()"></div>
+
+    
+
+    <aside class="sidebar" id="sidebar">
+        <div class="sidebar-brand">
+            <div class="d-flex align-items-center gap-3 sidebar-copy">
+                <div class="sidebar-brand-mark">PO</div>
+                <div>
+                    <p class="sidebar-title">POS IMS</p>
+                    <p class="sidebar-subtitle">Sales, stock, accounts</p>
+                </div>
+            </div>
+            <button class="toggle-btn" onclick="toggleSidebar()">
+                <i class="bi bi-list"></i>
+            </button>
+        </div>
+
+        <nav class="sidebar-nav">
+            
+            <a href="/dashboard/" class="nav-link-shell ">
+                <i class="bi bi-speedometer2"></i>
+                <span class="nav-copy">Dashboard</span>
+            </a>
+            
+            <a href="/pos/" class="nav-link-shell ">
+                <i class="bi bi-cart4"></i>
+                <span class="nav-copy">POS</span>
+            </a>
+            
+            <a href="/products/" class="nav-link-shell active">
+                <i class="bi bi-box-seam"></i>
+                <span class="nav-copy">Products</span>
+            </a>
+            <a href="/inventory/adjustments/" class="nav-link-shell ">
+                <i class="bi bi-boxes"></i>
+                <span class="nav-copy">Stock Control</span>
+            </a>
+            <a href="/purchases/" class="nav-link-shell ">
+                <i class="bi bi-truck"></i>
+                <span class="nav-copy">Purchases</span>
+            </a>
+            <a href="/accounts/expenses/" class="nav-link-shell ">
+                <i class="bi bi-receipt-cutoff"></i>
+                <span class="nav-copy">Expenses</span>
+            </a>
+            <a href="/parties/" class="nav-link-shell ">
+                <i class="bi bi-people"></i>
+                <span class="nav-copy">Parties</span>
+            </a>
+            <a href="/accounts/" class="nav-link-shell ">
+                <i class="bi bi-journal-text"></i>
+                <span class="nav-copy">Accounts</span>
+            </a>
+            <a href="/reports/" class="nav-link-shell ">
+                <i class="bi bi-graph-up-arrow"></i>
+                <span class="nav-copy">Reports</span>
+            </a>
+            <a href="/settings/" class="nav-link-shell ">
+                <i class="bi bi-gear"></i>
+                <span class="nav-copy">Settings</span>
+            </a>
+            
+        </nav>
+        <div class="sidebar-footer">
+            <div class="sidebar-user">
+                <div class="sidebar-user-mark">J</div>
+                <div class="sidebar-copy">
+                    <div class="sidebar-user-name">Jawad Hamza</div>
+                    <div class="sidebar-user-meta">
+                        <span class="sidebar-role-chip">Admin</span>
+                        
+                    </div>
+                </div>
+            </div>
+            
+            <form method="post" action="/logout/" class="logout-form">
+                <input type="hidden" name="csrfmiddlewaretoken" value="xFLOaHNk6y94l4rKeG93AHhe4rgFKcbOOi4nuJGILzN8S7DShcbt2aAoDrAw4FI2">
+                <button type="submit" class="nav-link-shell sidebar-logout">
+                    <i class="bi bi-box-arrow-right"></i>
+                    <span class="nav-copy">Logout</span>
+                </button>
+            </form>
+        </div>
+    </aside>
+    <button type="button" class="sidebar-rail-toggle" onclick="toggleSidebar()" aria-label="Expand sidebar">
+        <i class="bi bi-chevron-right"></i>
+    </button>
+
+    <main class="content" id="content">
+        <div class="content-inner">
+            <div class="page-topbar">
+                <button class="btn btn-outline-dark" onclick="toggleSidebarMobile()">
+                    <i class="bi bi-list"></i>
+                </button>
+                <div class="d-flex align-items-center gap-2">
+                    <strong>POS IMS</strong>
+                    <span class="badge text-bg-light">Admin</span>
+                </div>
+            </div>
+            
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon success"><i class="bi bi-box-seam"></i></span>
+        <div>
+            <h1 class="page-title">Products</h1>
+            <p class="page-subtitle">Search, filter, and sort the catalog by brand, category, supplier, location, stock, and pricing.</p>
+            <p class="text-muted small mb-0"><i class="bi bi-info-circle me-1"></i>New products should be created from Purchases so opening cost, sale price, and stock arrive together.</p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <a href="/brands/add/" class="btn btn-outline-secondary"><i class="bi bi-tag"></i> Brand</a>
+        <a href="/categories/add/" class="btn btn-outline-secondary"><i class="bi bi-grid"></i> Category</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card primary">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Matching Products</div>
+                    <div class="metric-value">3</div>
+                    <div class="metric-meta">Results after current filters.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-search"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card success">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Active</div>
+                    <div class="metric-value">3</div>
+                    <div class="metric-meta">Products ready for sale.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-check2-circle"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card warning">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Low Stock</div>
+                    <div class="metric-value">1</div>
+                    <div class="metric-meta">Items close to reorder level.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-exclamation-triangle"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl-3">
+        <div class="metric-card slate">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Inactive</div>
+                    <div class="metric-value">0</div>
+                    <div class="metric-meta">Temporarily hidden products.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-pause-circle"></i></span>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-card p-3 p-lg-4 mb-4">
+    <div class="section-heading">
+        <div class="section-heading-copy">
+            <span class="section-title-icon"><i class="bi bi-funnel"></i></span>
+            <div>
+                <h2 class="section-title">Catalog Filters</h2>
+                <p class="section-copy">Use search, sorting, and status filters to narrow the product table quickly.</p>
+            </div>
+        </div>
+    </div>
+    <form class="row g-3 align-items-end" method="get" id="product-filter-form">
+        <div class="col-xl-4">
+            <label class="form-label fw-semibold" for="q">Search</label>
+            <input id="q" name="q" value="" class="form-control" placeholder="Name, SKU, barcode, supplier, location" autocomplete="off">
+        </div>
+        <div class="col-sm-6 col-xl-2">
+            <label class="form-label fw-semibold" for="brand">Brand</label>
+            <select id="brand" name="brand" class="form-select">
+                <option value="">All brands</option>
+                
+                <option value="2" >Dell</option>
+                
+                <option value="3" >Lenovo</option>
+                
+                <option value="1" >Nafees</option>
+                
+            </select>
+        </div>
+        <div class="col-sm-6 col-xl-2">
+            <label class="form-label fw-semibold" for="category">Category</label>
+            <select id="category" name="category" class="form-select">
+                <option value="">All categories</option>
+                
+                <option value="1" >Bakery</option>
+                
+                <option value="2" >Laptop</option>
+                
+            </select>
+        </div>
+        <div class="col-sm-6 col-xl-2">
+            <label class="form-label fw-semibold" for="supplier">Supplier</label>
+            <select id="supplier" name="supplier" class="form-select">
+                <option value="">All suppliers</option>
+                
+                <option value="3" >Mohib</option>
+                
+                <option value="1" >Nafees</option>
+                
+                <option value="2" >dawood</option>
+                
+            </select>
+        </div>
+        <div class="col-sm-6 col-xl-2">
+            <label class="form-label fw-semibold" for="status">Status</label>
+            <select id="status" name="status" class="form-select">
+                <option value="">All statuses</option>
+                <option value="active" >Active</option>
+                <option value="low_stock" >Low stock</option>
+                <option value="inactive" >Inactive</option>
+            </select>
+        </div>
+        <div class="col-sm-8 col-xl-4">
+            <label class="form-label fw-semibold" for="sort">Sort By</label>
+            <select id="sort" name="sort" class="form-select">
+                
+                <option value="name_asc" selected>Name A-Z</option>
+                
+                <option value="name_desc" >Name Z-A</option>
+                
+                <option value="brand" >Brand</option>
+                
+                <option value="category" >Category</option>
+                
+                <option value="supplier" >Supplier</option>
+                
+                <option value="location" >Location A-Z</option>
+                
+                <option value="location_desc" >Location Z-A</option>
+                
+                <option value="stock_low" >Lowest Stock</option>
+                
+                <option value="stock_high" >Highest Stock</option>
+                
+                <option value="price_low" >Lowest Sale Price</option>
+                
+                <option value="price_high" >Highest Sale Price</option>
+                
+                <option value="recent" >Newest First</option>
+                
+            </select>
+        </div>
+        <div class="col-sm-4 col-xl-2 d-grid">
+            <button class="btn btn-dark" type="submit"><i class="bi bi-sliders"></i> Apply</button>
+        </div>
+        <div class="col-sm-12 col-xl-2 d-grid">
+            <a class="btn btn-outline-secondary" href="/products/"><i class="bi bi-arrow-counterclockwise"></i> Reset</a>
+        </div>
+    </form>
+</div>
+
+<div class="page-card p-0 overflow-hidden">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead class="table-light">
+                <tr>
+                    <th class="ps-4">Product</th>
+                    <th>Barcode</th>
+                    <th>Brand</th>
+                    <th>Category</th>
+                    <th>Supplier</th>
+                    <th>Location</th>
+                    <th class="text-end">Cost</th>
+                    <th class="text-end">Sale</th>
+                    <th class="text-end">Margin</th>
+                    <th class="text-end">Stock</th>
+                    <th>Status</th>
+                    <th class="text-end pe-4">Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                
+                <tr>
+                    <td class="ps-4">
+                        <div>
+                            <a href="/products/3/" class="fw-semibold text-decoration-none">LOQ 15</a>
+                            <div class="small text-muted">SKU ll15</div>
+                        </div>
+                    </td>
+                    <td><img src="data:image/png;base64,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" width="80"></td>
+                    <td>Lenovo</td>
+                    <td>Laptop</td>
+                    <td>Mohib</td>
+                    <td>rack 1</td>
+                    <td class="text-end">Rs 90000.00</td>
+                    <td class="text-end">Rs 100000.00</td>
+                    <td class="text-end">
+                        
+                        <span class="status-chip healthy">11.11%</span>
+                        
+                    </td>
+                    <td class="text-end">
+                        <div>0</div>
+                        <div class="small text-muted">Low at 5</div>
+                    </td>
+                    <td>
+                        
+                        <span class="status-chip advance">Low stock</span>
+                        
+                    </td>
+                    <td class="text-end pe-4">
+                        <div class="btn-group btn-group-sm">
+                            <a href="/products/3/" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></a>
+                            <a href="/products/3/edit/" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>
+                            <a href="/products/3/delete/" class="btn btn-outline-danger"><i class="bi bi-trash"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">
+                        <div>
+                            <a href="/products/2/" class="fw-semibold text-decoration-none">Rusk</a>
+                            <div class="small text-muted">SKU nbr001</div>
+                        </div>
+                    </td>
+                    <td><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAASoAAAEYCAIAAABk6izeAAAL6UlEQVR4nO3df2hV9R/H8XPv7tzmZptb5qK1tFmJE5oVtAwTS1DbPzOoFYE/MLJklDmxQVEE2oaaUWEhxAoKUQz88UctylK3RBzOLK2VZS6iZIXNXe9yXr3nC9/D98Ph7t5z73X37tXX+3z8dXbv5753ZnvunPszn23bFgAFv+S7AiA/QImjHyBDfoAM+QEy5AfIkB8gQ36ADPkBMuQHyAQyN9rn85lt89I258KoV7rFvDDeKO+VUdPMDd03iXnhFe9GStOiJqQ6zfsmqf6kaZkW7yfyWJPMf5qYPP6Fk/kN8fipr2BaWnD0A2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP4D8gOzD0Q+QIT9AhvwAGfIDZMgPkPHZtq377kBW4+gHyJAfIEN+gAz5ATLkB8iQHyBDfoAM+QEy5AfIkB8gQ36ADPkBMuQHyJAfIEN+gAz5ATLkB8iQX8p++ukn3/+sXr3a+lfq6elpbm6+6667ysvLCwoKJk+ePHfu3C1btpw7d044CtFspOjkyZPmX6+pqenf9u83NDS0atUqn89nxVJWVrZnz55RHtXX19fZ2dnW1vb8888vXLiwuro6Pz/fzKmrq7OzFfldVfmFw+H777/fSuTtt98etVF//vmn94S6LM6Pk8+rSlNT0xdffOFsFxcXr1+//vTp06FQqLu7e9GiRWbZs88+29HRMWqjEJe6//8//9qj39GjR82OFRUVHT58OGrB2rVrzYJp06ZFIpFRGPXXX39de+21M2fOXLJkyauvvvrRRx998803W7duNTfP5qMf+V09+T300ENmx1pbW4cviEQid999t1mzY8eOURgV086dO8mPk8+rR19fn/mdHjdu3DPPPDN8jc/ne/HFF82X77zzTqZHwRv3/a4S7e3t5hOT6+vrCwoKYi6bN2/e+PHjne2Ojo5gMJjRUfCW1fn19PSsWbPmjjvumDBhQn5+fmVlZUNDw2effZbqnEuXLm3btq2urm7SpEn5+fnl5eUzZ85sbW09c+bMCPfwu+++e+6552pqaq655pq8vLzKysra2trGxsZ9+/ZFrWxvbzfbc+bMiTcwNzf33nvvdbbD4fDnn38+fE0aRyEBOzv88ccf5kdevnx5JBJZu3at3x/7r88TTzxx+fLlJO/7/frrr/fcc0/MOSUlJe+//36Sezh79mznVoWFhbZtX7x4ceXKlfH20LKsX375xX3zqVOnmquOHTvm8Y1eeeUVs/Kll14aviCNo+Lhvp8jYGWl5ubm9evXx7v23XffraioePnllxPOGRwcXLBgwYkTJ2Je29/fv2TJklAotGLFipR2z7btxx9/fMeOHUmuj0Qip06dMl/eeuutHovd17r/lKR9FBLKxpPPzs7ODRs2+P3+p556qqur6/z588FgsKOjY968eWZNa2ur+4AZT1tbm9NeQ0NDZ2fnwMBAf3//gQMH6uvrzZrGxsZDhw6ltIdbtmxx2ps2bdrmzZt7enoGBgZCodD333//xhtv3HzzzVHre3t7L1686GyXlpa6X1My3PXXX2+2f/zxx8yNQmJ2dohqye/3b9++PWrN5cuXFyxYYNZs2rQp5qjhf+ZbWlqGL2tubjYLampqPJ4Zizr5dO49Ome24XB4+MpwONzc3Nzb22suceddXV3t/Y1++OEHs/jGG2+MujaNozxw8unIxqOfZVnLli175JFHoi70+/0tLS3my7179yYzavbs2e7SjHXr1tXU1DjbX3/99f79+5PctwsXLpw5c2bp0qUbN24MBGLcOwgEAi0tLZWVleaSUChktseOHes9373AfcO0j0JCWZrfqlWrYl5+++2333DDDc728ePHkxm1Zs2amJf7/f6mpibz5QcffJD87pWUlGzatCn59e5f/by8PLPd1tZWVVVVWFg4Z86cb7/91rnQfT7pnd8IRyGhbMxv8uTJ7gf3otx2223ORjJPG4wdO/aBBx6Id+2DDz5oHrr86quvkt/Dxx57rKSkJPn1Fy5cMNtjxoxxNo4dO7Zs2bJTp04NDg7u27fP3B01CyzLGhoaivr/q6ZxFBLKxvyqq6s9rjW/90NDQ+ZBiHimT5/uPkREKS0tnTRpkrN98uTJ8+fPJ7mH8+fPt1LhPgqZfb506ZJ7jWnD/UPl5eVFvZ8ojaOQUDbmV1ZW5nFtbm6u2U6Y35QpU7wXVFVVORuRSOT3339Pcg9nzJhhpcJ9H2xoaMjZuPPOO996663KysqCgoJZs2aZRzvcx7fCwsLMjUJC2fi8n/eD6SkpLi5OfkHybw93HvlMnvtXf3Bw0Gw3/lfUYveC4c2kcRQSysaj32iW7F7g/mX1von7CJyM6667zmwnfLrSfZ/WfcO0j0JC5Dci7rOvhAuKioqSmZmTk5Pqbtx0003mUZCzZ8+ak8aY3OfAt9xyS+ZGISHyG5H+/n7vBe4TzoRnqlcsJyfH/VIY97Phw7lfnjL8NWVpHIWEyG9Efv755yQXBAKBiooKK2PMU/yWZR05csRjZVdXV8xbZWIUvJHfiBw/ftzj9Ozvv/8+ffq0sz116tQ0PuTj/VzFl19+GW9ZOBw+ePCgs52bmzt37tyMjoI38huRwcFBj/e5ffzxx5FIxNm+7777rEyaP3++edpt165d//zzT8xln3766dmzZ53tWbNmjRs3LqOj4I38RmrDhg0xL7dt+7XXXjNfuj8dLBMmTpy4cOFCZzsYDL755psxd2ndunXmy6effjrTo5CAnZVvt/VY2dDQYFYGg8ErfsfDCy+8YBbU1tam+nbbK9Dd3W2+Y1FRUVdXl/fHk3m8pTiNo2LiHQ8O8htRfuYVZw0NDQcPHgwGgwMDAx0dHe5PCsvJyenu7rYzn59t2+6PRSouLt64cWNvb28oFDp69OjixYvNVYFAYP/+/aM2ajjyc5DfiPJbsWLF9OnTrfh8Pl9bW5udhLTkFw6HPT6dxdi8efNojlq+fLmViokTJ9rZgft+I1JQUPDJJ5/U1tbGvLasrGzr1q1Lly61RksgEGhvb1+5cmW8BaWlpbt3707mwy/SOArxZONrPtOroqLiwIED27dv//DDD0+cONHX1zd+/PgpU6bU19cvXrx4woQJo7w/Y8aMef3115988sn33ntv7969v/3227lz58rLy6uqqh5++OFHH300+bcypXEUYvLxHi1AhZNPQIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP0CG/AAZ8gNkyA+QIT9AhvwAGfIDZMgPkCE/QIb8ABnyA2TID5AhP8BS+Q+2wQX57mHt+AAAAABJRU5ErkJggg==" width="80"></td>
+                    <td>Nafees</td>
+                    <td>Bakery</td>
+                    <td>Nafees</td>
+                    <td>-</td>
+                    <td class="text-end">Rs 15.00</td>
+                    <td class="text-end">Rs 20.00</td>
+                    <td class="text-end">
+                        
+                        <span class="status-chip healthy">33.33%</span>
+                        
+                    </td>
+                    <td class="text-end">
+                        <div>6</div>
+                        <div class="small text-muted">Low at 5</div>
+                    </td>
+                    <td>
+                        
+                        <span class="status-chip healthy">Active</span>
+                        
+                    </td>
+                    <td class="text-end pe-4">
+                        <div class="btn-group btn-group-sm">
+                            <a href="/products/2/" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></a>
+                            <a href="/products/2/edit/" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>
+                            <a href="/products/2/delete/" class="btn btn-outline-danger"><i class="bi bi-trash"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                
+                <tr>
+                    <td class="ps-4">
+                        <div>
+                            <a href="/products/1/" class="fw-semibold text-decoration-none">bun</a>
+                            <div class="small text-muted">SKU nbb001</div>
+                        </div>
+                    </td>
+                    <td><img src="data:image/png;base64,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" width="80"></td>
+                    <td>Nafees</td>
+                    <td>Bakery</td>
+                    <td>Nafees</td>
+                    <td>table 1</td>
+                    <td class="text-end">Rs 8.00</td>
+                    <td class="text-end">Rs 10.00</td>
+                    <td class="text-end">
+                        
+                        <span class="status-chip healthy">25.00%</span>
+                        
+                    </td>
+                    <td class="text-end">
+                        <div>6</div>
+                        <div class="small text-muted">Low at 3</div>
+                    </td>
+                    <td>
+                        
+                        <span class="status-chip healthy">Active</span>
+                        
+                    </td>
+                    <td class="text-end pe-4">
+                        <div class="btn-group btn-group-sm">
+                            <a href="/products/1/" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></a>
+                            <a href="/products/1/edit/" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>
+                            <a href="/products/1/delete/" class="btn btn-outline-danger"><i class="bi bi-trash"></i></a>
+                        </div>
+                    </td>
+                </tr>
+                
+            </tbody>
+        </table>
+    </div>
+</div>
+
+
+
+        </div>
+    </main>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const content = document.getElementById('content');
+        sidebar.classList.toggle('collapsed');
+        content.classList.toggle('expanded');
+        localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+    }
+
+    function toggleSidebarMobile() {
+        document.getElementById('sidebar').classList.toggle('show');
+        document.getElementById('mobileOverlay').classList.toggle('show');
+    }
+
+    window.addEventListener('DOMContentLoaded', function() {
+        if (window.innerWidth > 992 && localStorage.getItem('sidebarCollapsed') === 'true') {
+            document.getElementById('sidebar').classList.add('collapsed');
+            document.getElementById('content').classList.add('expanded');
+        }
+    });
+</script>
+
+<script>
+(function () {
+    const form = document.getElementById("product-filter-form");
+    if (!form) return;
+    const queryInput = document.getElementById("q");
+    const liveSelects = Array.from(form.querySelectorAll("select"));
+    let timer = null;
+
+    function submitForm() {
+        form.requestSubmit ? form.requestSubmit() : form.submit();
+    }
+
+    if (queryInput) {
+        queryInput.addEventListener("input", function () {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(submitForm, 250);
+        });
+    }
+
+    liveSelects.forEach(function (field) {
+        field.addEventListener("change", submitForm);
+    });
+})();
+</script>
+
+</body>
+</html>
+
+
+
+
+
+
+
+
+
+
+
+
