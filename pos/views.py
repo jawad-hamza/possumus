@@ -1,4 +1,4 @@
-from datetime import datetime, time, timedelta
+﻿from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 
@@ -9,7 +9,7 @@ from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, F, Q, Sum
 from django.db.models.functions import Coalesce
-from django.http import HttpResponse, JsonResponse
+from django.http import FileResponse, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
 from django.utils import timezone
@@ -21,25 +21,33 @@ from reportlab.pdfgen import canvas
 from accounts.forms import BankAccountForm
 from accounts.models import Account, AuditLog, BackupSnapshot, BankAccount, Expense
 from accounts.services.audit import record_audit
-from accounts.services.backup_restore import create_backup_snapshot, restore_backup_snapshot
+from accounts.services.backup_restore import (
+    backup_runtime_summary,
+    create_backup_snapshot,
+    database_vendor_label,
+    get_backup_file_path,
+    infer_backup_vendor,
+    restore_backup_snapshot,
+    upload_backup_snapshot,
+)
 from accounts.services.cash_bank import bank_account_queryset
+from accounts.services.expense_alerts import monthly_bill_alerts
 from accounts.services.party_badges import get_customer_badge, get_supplier_badge
 from accounts.services.pos_posting import post_purchase_from_pos, post_sale_from_pos
 from .forms import (
     BrandForm,
     CategoryForm,
     CompanyProfileForm,
+    CustomRoleForm,
     CustomerForm,
     FirstAdminSetupForm,
     LoginForm,
     ProductForm,
     PurchaseForm,
     PurchaseItemFormSet,
-    PurchaseReturnForm,
     QuickBrandForm,
     QuickCategoryForm,
     QuickProductForm,
-    SaleReturnForm,
     StockAdjustmentForm,
     SupplierForm,
     SystemSettingsForm,
@@ -49,15 +57,14 @@ from .models import (
     Brand,
     Category,
     CompanyProfile,
+    CustomRole,
     Customer,
     Product,
     Purchase,
     PurchaseEditLog,
     PurchaseItem,
-    PurchaseReturn,
     Sale,
     SaleItem,
-    SaleReturn,
     StockAdjustment,
     Supplier,
     SystemSettings,
@@ -65,13 +72,24 @@ from .models import (
     quantize_money,
 )
 from .services.access import (
+    ACCESS_MANAGE,
+    ACCESS_VIEW,
     ADMIN_ROLE,
+    MODULE_DEFINITIONS,
     admin_required,
     assign_role,
+    any_module_access_required,
     close_user_session,
     default_home_url,
+    describe_permissions,
+    get_user_role_value,
     ensure_role_groups,
+    get_role_choices,
+    get_role_label,
+    get_user_role_label,
+    get_user_role_summary,
     is_first_user_setup_required,
+    module_access_required,
     open_user_session,
     pos_access_required,
     user_can_access_sale,
@@ -92,12 +110,14 @@ from .services.navigation import (
     remember_customer_for_pos,
 )
 from .services.purchase_balances import annotate_purchase_balances
-from .services.returns import create_purchase_return, create_sale_return
 from .services.stock_control import create_stock_adjustment
 from .services.business_rules import (
     category_tax_rate_for_product,
+    expired_products,
     get_active_company_profile,
     get_system_settings,
+    near_expiry_products,
+    payment_method_totals_for_sale,
     sale_tax_amount,
     sale_tax_label,
     sale_totals_from_rows,
@@ -132,8 +152,8 @@ def _parse_report_date(value, default):
             return datetime.strptime(value, fmt).date()
         except ValueError:
             continue
-
     return default
+
 
 def _build_pos_url(
     *,
@@ -162,8 +182,9 @@ def _build_pos_url(
         params["tax_rate"] = str(_normalized_rate(tax_rate))
 
     base_url = reverse("pos_screen")
-    return f"{base_url}?{urlencode(params)}" if params else base_url
-
+    if not params:
+        return base_url
+    return f"{base_url}?{urlencode(params)}"
 
 
 def _normalize_cart(cart):
@@ -194,7 +215,7 @@ def _add_product_to_cart(cart, product):
     cart[product_id] = seed_cart_item(product)
     return True
 
-def _cart_state(cart):
+def _cart_state(cart, payment_method=Sale.CASH):
     cart = _normalize_cart(cart)
     product_ids = [int(product_id) for product_id in cart.keys()]
     products = Product.objects.in_bulk(product_ids)
@@ -221,6 +242,8 @@ def _cart_state(cart):
                     "line_discount_amount": Decimal("0"),
                     "minimum_price": Decimal("0"),
                     "category_tax_rate": Decimal("0"),
+                    "cash_category_tax_rate": Decimal("0"),
+                    "bank_category_tax_rate": Decimal("0"),
                     "stock": 0,
                     "has_custom_price": False,
                     "has_line_discount": False,
@@ -239,7 +262,9 @@ def _cart_state(cart):
         line_total = cart_line_total(quantity, unit_price, discount_percent)
         gross_line_total = quantize_money(unit_price * quantity)
         line_discount_amount = quantize_money(gross_line_total - line_total)
-        category_tax_rate = category_tax_rate_for_product(product)
+        cash_category_tax_rate = category_tax_rate_for_product(product, Sale.CASH)
+        bank_category_tax_rate = category_tax_rate_for_product(product, Sale.BANK)
+        category_tax_rate = bank_category_tax_rate if payment_method == Sale.BANK else cash_category_tax_rate
 
         pricing_error = ""
         stock_error = ""
@@ -274,6 +299,8 @@ def _cart_state(cart):
                 "line_discount_amount": line_discount_amount,
                 "minimum_price": minimum_price,
                 "category_tax_rate": category_tax_rate,
+                "cash_category_tax_rate": cash_category_tax_rate,
+                "bank_category_tax_rate": bank_category_tax_rate,
                 "stock": product.stock,
                 "has_custom_price": unit_price != original_price,
                 "has_line_discount": discount_percent > 0,
@@ -360,11 +387,24 @@ def _sales_summary(sales_queryset):
 
 
 def _date_range_url(route_name, start, end):
-    return f"{reverse(route_name)}?{urlencode({'start': start.isoformat(), 'end': end.isoformat()})}"
+    params = {}
+    if start:
+        params["from"] = start.isoformat() if hasattr(start, "isoformat") else str(start)
+    if end:
+        params["to"] = end.isoformat() if hasattr(end, "isoformat") else str(end)
+    base_url = reverse(route_name)
+    if not params:
+        return base_url
+    return f"{base_url}?{urlencode(params)}"
 
 
 def _sum_expense_due(expenses):
-    return quantize_money(sum((expense.balance_due for expense in expenses), Decimal("0")))
+    total_due = Decimal("0")
+    for expense in expenses:
+        amount = Decimal(getattr(expense, "amount", 0) or 0)
+        paid_amount = Decimal(getattr(expense, "paid_amount", 0) or 0)
+        total_due += max(amount - paid_amount, Decimal("0"))
+    return quantize_money(total_due)
 
 
 def _sales_trend(end_date, days=7):
@@ -385,7 +425,67 @@ def _sales_trend(end_date, days=7):
         net_sales.append(float(totals["net_sales"]))
         gross_profit.append(float(totals["gross_profit"]))
 
-    return {"labels": labels, "net_sales": net_sales, "gross_profit": gross_profit}
+    return {
+        "labels": labels,
+        "net_sales": net_sales,
+        "gross_profit": gross_profit,
+    }
+
+
+def _session_duration(log, now=None):
+    end_time = log.logout_at or now or timezone.now()
+    if end_time < log.login_at:
+        return timedelta(0)
+    return end_time - log.login_at
+
+
+def _format_duration(delta):
+    total_seconds = max(int(delta.total_seconds()), 0)
+    hours, remainder = divmod(total_seconds, 3600)
+    minutes, _ = divmod(remainder, 60)
+    if hours:
+        return f"{hours}h {minutes}m"
+    return f"{minutes}m"
+
+
+def _user_wage_summary(user):
+    staff_expenses = Expense.objects.filter(employee=user).select_related("category")
+    booked = quantize_money(sum((Decimal(expense.amount or 0) for expense in staff_expenses), Decimal("0")))
+    paid = quantize_money(sum((Decimal(expense.paid_amount or 0) for expense in staff_expenses), Decimal("0")))
+    due = quantize_money(sum((Decimal(expense.balance_due or 0) for expense in staff_expenses), Decimal("0")))
+    return {
+        "booked": booked,
+        "paid": paid,
+        "due": due,
+        "count": staff_expenses.count(),
+        "expenses": staff_expenses.order_by("-date", "-id"),
+    }
+
+
+def _employee_report_row(user, now=None):
+    sales_queryset = (
+        Sale.objects.filter(sold_by=user)
+        .select_related("customer")
+        .prefetch_related("items", "items__product")
+        .order_by("-created_at")
+    )
+    _, sales_totals = _sales_summary(sales_queryset)
+    logs = list(UserSessionLog.objects.filter(user=user).order_by("-login_at"))
+    total_duration = sum((_session_duration(log, now=now) for log in logs), timedelta(0))
+    wage_summary = _user_wage_summary(user)
+    return {
+        "user": user,
+        "role_label": get_user_role_label(user),
+        "sales_totals": sales_totals,
+        "sales_count": sales_totals["invoices"],
+        "total_time": total_duration,
+        "total_time_display": _format_duration(total_duration),
+        "active_sessions": sum(1 for log in logs if log.logout_at is None),
+        "wages_booked": wage_summary["booked"],
+        "wages_paid": wage_summary["paid"],
+        "wages_due": wage_summary["due"],
+        "wage_expense_count": wage_summary["count"],
+    }
 
 @transaction.atomic
 def scan_barcode(request, sku):
@@ -407,6 +507,30 @@ def scan_barcode(request, sku):
     _save_cart(request, cart)
     return JsonResponse({"status": "ok", "product_id": product.id})
 
+def products_by_category(request, category_id):
+    category = get_object_or_404(Category, pk=category_id, is_active=True)
+    products = (
+        Product.objects.filter(category=category, is_active=True)
+        .select_related("brand", "category", "supplier")
+        .order_by("name")
+    )
+    payload = [
+        {
+            "id": product.id,
+            "name": product.name,
+            "sku": product.sku,
+            "barcode": product.barcode,
+            "price": float(product.price or 0),
+            "stock": product.stock,
+            "location": product.location,
+            "brand": product.brand.name if product.brand_id else "",
+            "category": category.name,
+            "supplier": product.supplier.name if product.supplier_id else "",
+        }
+        for product in products
+    ]
+    return JsonResponse({"category": category.name, "products": payload})
+
 
 def home(request):
     if is_first_user_setup_required():
@@ -414,6 +538,33 @@ def home(request):
     if not request.user.is_authenticated:
         return redirect("login")
     return redirect(default_home_url(request.user))
+
+
+def setup_admin(request):
+    ensure_role_groups()
+    if not is_first_user_setup_required():
+        return redirect("login")
+
+    form = FirstAdminSetupForm(request.POST or None)
+    if request.method == "POST":
+        if form.is_valid():
+            with transaction.atomic():
+                user = form.save()
+                assign_role(user, ADMIN_ROLE)
+                login(request, user)
+                open_user_session(request, user)
+                record_audit(
+                    action="initial_admin_created",
+                    description="Initial administrator account created during first-time setup.",
+                    actor=user,
+                    target=user,
+                    metadata={"role": get_role_label(ADMIN_ROLE)},
+                )
+            messages.success(request, "Admin account created. You can now configure the business workspace.")
+            return redirect(default_home_url(user))
+        messages.error(request, "Please review the admin account details below.")
+
+    return render(request, "pos/setup_admin.html", {"form": form})
 
 
 def login_view(request):
@@ -459,25 +610,7 @@ def logout_view(request):
     return redirect("login")
 
 
-def setup_admin(request):
-    if not is_first_user_setup_required():
-        return redirect(default_home_url(request.user) if request.user.is_authenticated else "login")
-
-    ensure_role_groups()
-    form = FirstAdminSetupForm(request.POST or None)
-    if request.method == "POST":
-        if form.is_valid():
-            user = form.save()
-            assign_role(user, ADMIN_ROLE)
-            login(request, user)
-            open_user_session(request, user)
-            messages.success(request, "Owner account created. You can now manage the full system.")
-            return redirect("dashboard")
-        messages.error(request, "Please review the owner account details below.")
-
-    return render(request, "pos/setup_admin.html", {"form": form})
-
-
+@admin_required
 def settings_page(request):
     ensure_role_groups()
     user_model = get_user_model()
@@ -485,9 +618,12 @@ def settings_page(request):
     company_profile = get_active_company_profile(create=True)
 
     team_form = TeamUserForm(prefix="team")
+    role_form = CustomRoleForm(prefix="role")
     branding_form = CompanyProfileForm(prefix="branding", instance=company_profile)
     system_form = SystemSettingsForm(prefix="business", instance=settings_obj)
     bank_form = BankAccountForm(prefix="bank")
+    backup_runtime = backup_runtime_summary()
+    audit_page_size = 10
 
     if request.method == "POST":
         action = request.POST.get("action")
@@ -496,17 +632,57 @@ def settings_page(request):
             team_form = TeamUserForm(request.POST, prefix="team")
             if team_form.is_valid():
                 member = team_form.save()
-                role = team_form.cleaned_data["role"]
-                assign_role(member, role)
+                role_value = team_form.cleaned_data["role"]
+                role_label = get_role_label(role_value)
+                assign_role(member, role_value)
                 record_audit(
                     action="team_user_created",
-                    description=f"Login '{member.username}' created as {role.title()}.",
+                    description=f"Team member '{member.get_full_name() or member.username}' created from Settings.",
                     actor=request.user,
                     target=member,
+                    metadata={"role": role_label},
                 )
-                messages.success(request, f"{member.username} created as {role.title()}.")
+                messages.success(request, f"Team member '{member.get_full_name() or member.username}' created.")
                 return redirect("settings_page")
             messages.error(request, "Please review the team member details below.")
+
+        elif action == "create_role":
+            role_form = CustomRoleForm(request.POST, prefix="role")
+            if role_form.is_valid():
+                role = role_form.save()
+                record_audit(
+                    action="custom_role_created",
+                    description=f"Custom role '{role.name}' created from Settings.",
+                    actor=request.user,
+                    target=role,
+                    metadata={"permissions": role.permissions},
+                )
+                messages.success(request, f"Custom role '{role.name}' is ready to assign.")
+                return redirect("settings_page")
+            messages.error(request, "Please review the custom role details below.")
+
+        elif action == "change_user_role":
+            member = get_object_or_404(user_model, pk=request.POST.get("user_id"))
+            selected_role = (request.POST.get("role") or "").strip()
+            available_roles = {value for value, _ in get_role_choices()}
+
+            if member.id == request.user.id:
+                messages.error(request, "You cannot change the role of the account you are currently using.")
+            elif selected_role not in available_roles:
+                messages.error(request, "The selected role is no longer available.")
+            else:
+                assign_role(member, selected_role)
+                role_label = get_role_label(selected_role)
+                UserSessionLog.objects.filter(user=member, logout_at__isnull=True).update(role_name=role_label)
+                record_audit(
+                    action="team_user_role_changed",
+                    description=f"Role changed for {member.get_full_name() or member.username} to {role_label}.",
+                    actor=request.user,
+                    target=member,
+                    metadata={"role": role_label},
+                )
+                messages.success(request, f"Role updated for {member.get_full_name() or member.username}.")
+                return redirect("settings_page")
 
         elif action == "save_branding":
             branding_form = CompanyProfileForm(request.POST, request.FILES, prefix="branding", instance=company_profile)
@@ -556,8 +732,9 @@ def settings_page(request):
                     target=bank,
                 )
                 messages.success(request, f"Bank ledger '{bank.display_name}' created.")
-                return redirect("settings_page")
-            messages.error(request, "Please review the bank ledger details below.")
+                bank_form = BankAccountForm(prefix="bank")
+            else:
+                messages.error(request, "Please review the bank ledger details below.")
 
         elif action == "toggle_bank":
             bank = get_object_or_404(BankAccount, pk=request.POST.get("bank_id"))
@@ -571,7 +748,6 @@ def settings_page(request):
                 metadata={"is_active": bank.is_active},
             )
             messages.success(request, f"{bank.display_name} {'enabled' if bank.is_active else 'disabled'}.")
-            return redirect("settings_page")
 
         elif action == "create_backup":
             label = (request.POST.get("backup_label") or "").strip()
@@ -579,7 +755,16 @@ def settings_page(request):
             try:
                 snapshot = create_backup_snapshot(label=label, notes=notes, actor=request.user)
                 messages.success(request, f"Backup '{snapshot.label}' created.")
-                return redirect("settings_page")
+            except ValueError as exc:
+                messages.error(request, str(exc))
+
+        elif action == "upload_backup":
+            label = (request.POST.get("upload_backup_label") or "").strip()
+            notes = (request.POST.get("upload_backup_notes") or "").strip()
+            uploaded_file = request.FILES.get("backup_upload_file")
+            try:
+                snapshot = upload_backup_snapshot(uploaded_file=uploaded_file, label=label, notes=notes, actor=request.user)
+                messages.success(request, f"Backup '{snapshot.label}' uploaded.")
             except ValueError as exc:
                 messages.error(request, str(exc))
 
@@ -588,7 +773,6 @@ def settings_page(request):
             try:
                 restore_backup_snapshot(snapshot=snapshot, actor=request.user)
                 messages.success(request, f"Backup '{snapshot.label}' restored. Refresh any open pages to load restored data.")
-                return redirect("settings_page")
             except ValueError as exc:
                 messages.error(request, str(exc))
 
@@ -601,36 +785,80 @@ def settings_page(request):
                 member.save(update_fields=["is_active"])
                 if not member.is_active:
                     UserSessionLog.objects.filter(user=member, logout_at__isnull=True).update(logout_at=timezone.now())
+                status_copy = "enabled" if member.is_active else "disabled"
                 record_audit(
                     action="team_user_toggled",
-                    description=f"Login '{member.username}' {'enabled' if member.is_active else 'disabled'}.",
+                    description=f"{member.get_full_name() or member.username} was {status_copy} from Settings.",
                     actor=request.user,
                     target=member,
                     metadata={"is_active": member.is_active},
                 )
-                status_copy = "enabled" if member.is_active else "disabled"
-                messages.success(request, f"{member.username} has been {status_copy}.")
-            return redirect("settings_page")
+                messages.success(request, f"{member.get_full_name() or member.username} {status_copy}.")
 
-    raw_users = user_model.objects.all().order_by("username").annotate(
-        sales_count=Count("sales_made", distinct=True),
-        sales_value=Coalesce(Sum("sales_made__total_amount"), Decimal("0")),
+    raw_users = (
+        user_model.objects.order_by("username")
+        .annotate(
+            sales_count=Count("sales_made", distinct=True),
+            sales_value=Coalesce(Sum("sales_made__total_amount"), Decimal("0")),
+        )
     )
-    team_users = [
-        {
-            "user": member,
-            "role_label": "Admin" if member.is_superuser or member.is_staff else ("Cashier" if member.groups.filter(name="Cashier").exists() else "Unassigned"),
-            "sales_count": member.sales_count,
-            "sales_value": member.sales_value,
-        }
-        for member in raw_users
-    ]
+    team_users = []
+    for member in raw_users:
+        role_value = get_user_role_value(member)
+        role_label = get_user_role_label(member)
+        team_users.append(
+            {
+                "user": member,
+                "role_label": role_label,
+                "role_value": role_value,
+                "role_variant": "cashier" if role_value == "cashier" else ("custom" if role_value.startswith("custom:") else "admin"),
+                "access_summary": get_user_role_summary(member),
+                "sales_count": member.sales_count,
+                "sales_value": member.sales_value,
+            }
+        )
+
+    custom_roles = []
+    for role in CustomRole.objects.order_by("name"):
+        permission_items = []
+        for module in MODULE_DEFINITIONS:
+            level = (role.permissions or {}).get(module["key"], "none")
+            if level == "none":
+                continue
+            permission_items.append(
+                {
+                    "label": module["label"],
+                    "level": "Manage" if level == ACCESS_MANAGE else "View",
+                    "tone": "healthy" if level == ACCESS_MANAGE else "clear",
+                }
+            )
+        custom_roles.append(
+            {
+                "role": role,
+                "permissions_summary": describe_permissions(role.permissions),
+                "permission_items": permission_items,
+                "member_count": user_model.objects.filter(groups__name=role.group_name).distinct().count(),
+            }
+        )
 
     session_logs = UserSessionLog.objects.select_related("user").order_by("-login_at")[:20]
     categories = Category.objects.order_by("name")
     bank_accounts = BankAccount.objects.select_related("account").order_by("name", "account_number")
-    backup_snapshots = BackupSnapshot.objects.select_related("created_by").order_by("-created_at")[:10]
-    audit_logs = AuditLog.objects.select_related("actor").order_by("-created_at")[:25]
+    backup_snapshots = list(BackupSnapshot.objects.select_related("created_by").order_by("-created_at")[:10])
+    for snapshot in backup_snapshots:
+        snapshot.vendor = infer_backup_vendor(snapshot.file_name)
+        snapshot.vendor_label = database_vendor_label(snapshot.vendor)
+        snapshot.can_restore_here = snapshot.vendor == backup_runtime["vendor"]
+
+    audit_log_queryset = AuditLog.objects.select_related("actor").order_by("-created_at", "-id")
+    audit_event_count = audit_log_queryset.count()
+    audit_mode = "all" if (request.GET.get("audit_mode") or "").lower() == "all" else "page"
+    audit_page_obj = None
+    if audit_mode == "all":
+        audit_logs = list(audit_log_queryset)
+    else:
+        audit_page_obj = Paginator(audit_log_queryset, audit_page_size).get_page(request.GET.get("audit_page") or 1)
+        audit_logs = list(audit_page_obj.object_list)
 
     context = {
         "page_title": "Settings",
@@ -638,27 +866,54 @@ def settings_page(request):
         "page_icon": "bi-sliders",
         "page_icon_accent": "slate",
         "team_form": team_form,
+        "role_form": role_form,
         "branding_form": branding_form,
         "system_form": system_form,
         "bank_form": bank_form,
+        "role_choices": get_role_choices(),
         "team_users": team_users,
+        "custom_roles": custom_roles,
         "session_logs": session_logs,
         "categories": categories,
         "bank_accounts": bank_accounts,
+        "backup_runtime": backup_runtime,
         "backup_snapshots": backup_snapshots,
         "audit_logs": audit_logs,
+        "audit_mode": audit_mode,
+        "audit_page_obj": audit_page_obj,
+        "audit_page_size": audit_page_size,
         "settings_obj": settings_obj,
         "total_team_users": len(team_users),
-        "cashier_count": sum(1 for row in team_users if row["role_label"] == "Cashier"),
+        "cashier_count": sum(1 for row in team_users if row["role_value"] == "cashier"),
+        "custom_user_count": sum(1 for row in team_users if row["role_value"].startswith("custom:")),
+        "custom_role_count": len(custom_roles),
         "active_sessions_count": UserSessionLog.objects.filter(logout_at__isnull=True).count(),
         "taxable_category_count": categories.filter(tax_status=Category.TAXABLE).count(),
         "gst_enabled_category_count": categories.exclude(tax_status=Category.EXEMPT).count(),
         "bank_ledger_count": bank_accounts.count(),
         "active_bank_count": bank_accounts.filter(is_active=True).count(),
         "backup_count": BackupSnapshot.objects.count(),
-        "audit_event_count": AuditLog.objects.count(),
+        "audit_event_count": audit_event_count,
     }
     return render(request, "pos/settings.html", context)
+@admin_required
+def download_backup_snapshot(request, snapshot_id):
+    snapshot = get_object_or_404(BackupSnapshot, pk=snapshot_id)
+    try:
+        backup_path = get_backup_file_path(snapshot)
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("settings_page")
+
+    record_audit(
+        action="backup_downloaded",
+        description=f"Backup snapshot '{snapshot.label}' was downloaded.",
+        actor=request.user,
+        target=snapshot,
+        metadata={"file_name": snapshot.file_name},
+    )
+    return FileResponse(backup_path.open("rb"), as_attachment=True, filename=snapshot.file_name)
+
 PRODUCT_SORT_OPTIONS = [
     ("name_asc", "Name A-Z"),
     ("name_desc", "Name Z-A"),
@@ -707,6 +962,7 @@ def _json_form_errors(form):
     }
 
 
+@module_access_required("products")
 def product_list(request):
     query = request.GET.get("q", "").strip()
     selected_brand = _clean_choice_id(request.GET.get("brand"))
@@ -714,6 +970,9 @@ def product_list(request):
     selected_supplier = _clean_choice_id(request.GET.get("supplier"))
     selected_status = request.GET.get("status", "").strip()
     selected_sort = request.GET.get("sort", "name_asc").strip()
+    settings_obj = get_system_settings()
+    today = timezone.localdate()
+    expiry_alert_end = today + timedelta(days=int(settings_obj.expiry_alert_days or 30))
 
     queryset = Product.objects.select_related("category", "supplier", "brand")
 
@@ -766,6 +1025,22 @@ def product_list(request):
     paginator = Paginator(queryset, 20)
     products = paginator.get_page(request.GET.get("page"))
 
+    if settings_obj.enable_product_expiry:
+        for product in products.object_list:
+            expiry_date = product.expiry_date
+            if not expiry_date:
+                product.expiry_status_tone = "unknown"
+                product.expiry_status_label = "Not set"
+            elif expiry_date < today:
+                product.expiry_status_tone = "below"
+                product.expiry_status_label = f"Expired {(today - expiry_date).days}d ago"
+            elif expiry_date <= expiry_alert_end:
+                product.expiry_status_tone = "advance"
+                product.expiry_status_label = f"{(expiry_date - today).days}d left"
+            else:
+                product.expiry_status_tone = "healthy"
+                product.expiry_status_label = "OK"
+
     summary_queryset = queryset
     context = {
         "products": products,
@@ -784,10 +1059,10 @@ def product_list(request):
         "summary_active": summary_queryset.filter(is_active=True).count(),
         "summary_low_stock": summary_queryset.filter(is_active=True, stock__lte=F("low_stock_threshold")).count(),
         "summary_inactive": summary_queryset.filter(is_active=False).count(),
+        "expiry_tracking_enabled": settings_obj.enable_product_expiry,
     }
     return render(request, "pos/product_list.html", context)
-
-
+@module_access_required("products", minimum=ACCESS_MANAGE)
 def product_add(request):
     form = ProductForm(request.POST or None)
     if request.method == "POST":
@@ -799,7 +1074,7 @@ def product_add(request):
 
     return render(request, "pos/product_form.html", {"form": form, "title": "Add Product"})
 
-
+@module_access_required("products")
 def product_view(request, pk):
     product = get_object_or_404(Product.objects.select_related("category", "supplier", "brand"), id=pk)
     total_sold = SaleItem.objects.filter(product=product).aggregate(total=Coalesce(Sum("quantity"), 0))["total"]
@@ -822,7 +1097,7 @@ def product_view(request, pk):
         },
     )
 
-
+@module_access_required("products", minimum=ACCESS_MANAGE)
 def product_edit(request, pk):
     product = get_object_or_404(Product, id=pk)
     form = ProductForm(request.POST or None, instance=product)
@@ -837,6 +1112,7 @@ def product_edit(request, pk):
     return render(request, "pos/product_form.html", {"form": form, "title": "Edit Product"})
 
 
+@module_access_required("products", minimum=ACCESS_MANAGE)
 def product_delete(request, pk):
     product = get_object_or_404(Product, id=pk)
 
@@ -852,11 +1128,12 @@ def product_delete(request, pk):
 
     return render(request, "pos/product_confirm_delete.html", {"product": product})
 
-
+@module_access_required("dashboard")
 def dashboard(request):
     today = timezone.localdate()
     week_start = today - timedelta(days=6)
     month_start = today.replace(day=1)
+    settings_obj = get_system_settings()
 
     today_sales_queryset = (
         Sale.objects.filter(created_at__date=today)
@@ -886,6 +1163,10 @@ def dashboard(request):
         .order_by("stock", "name")
     )
     low_stock_count = low_stock_products.count()
+    near_expiry = near_expiry_products(settings_obj, today=today)
+    expired = expired_products(settings_obj, today=today)
+    near_expiry_count = near_expiry.count()
+    expired_count = expired.count()
     best_selling = (
         SaleItem.objects.values("product__id", "product__name")
         .annotate(total_qty=Sum("quantity"))
@@ -910,6 +1191,7 @@ def dashboard(request):
         total=Coalesce(Sum("total_amount"), Decimal("0"))
     )["total"]
     expense_due_total = _sum_expense_due(Expense.objects.all().only("amount", "paid_amount"))
+    expense_alert_count = len(monthly_bill_alerts(today=today))
     customer_badges = [get_customer_badge(customer) for customer in Customer.objects.filter(is_active=True).only("id", "name", "is_active")]
     supplier_badges = [get_supplier_badge(supplier) for supplier in Supplier.objects.filter(is_active=True).only("id", "name", "is_active")]
     customer_receivable_total = quantize_money(sum((badge["amount"] for badge in customer_badges if badge["balance_type"] == "receivable"), Decimal("0")))
@@ -919,6 +1201,7 @@ def dashboard(request):
     today_report_url = _date_range_url("daily_sales_report", today, today)
     week_report_url = _date_range_url("daily_sales_report", week_start, today)
     month_report_url = _date_range_url("daily_sales_report", month_start, today)
+    expiry_report_url = reverse("expiry_alert_report")
     month_margin_percent = quantize_money(
         (month_sales["gross_profit"] / month_sales["net_sales"]) * Decimal("100")
         if month_sales["net_sales"]
@@ -999,10 +1282,24 @@ def dashboard(request):
             "meta": f"{supplier_payable_count} supplier balances need settlement",
             "url": reverse("supplier_list"),
             "kind": "money",
-            "accent": "warning",
+            "accent": "slate",
             "icon": "bi-truck",
         },
     ]
+
+    if settings_obj.enable_product_expiry:
+        dashboard_kpis.insert(
+            5,
+            {
+                "title": "Expiry Alerts",
+                "value": near_expiry_count,
+                "meta": f"{expired_count} already expired",
+                "url": expiry_report_url,
+                "kind": "number",
+                "accent": "warning",
+                "icon": "bi-hourglass-split",
+            },
+        )
 
     return render(
         request,
@@ -1016,10 +1313,14 @@ def dashboard(request):
             "month_sales": month_sales,
             "month_purchase_total": month_purchase_total,
             "expense_due_total": expense_due_total,
+            "expense_alert_count": expense_alert_count,
             "today_collection_rate": today_collection_rate,
             "month_margin_percent": month_margin_percent,
             "dashboard_kpis": dashboard_kpis,
             "reports_center_url": reverse("reports_home"),
+            "expiry_report_url": expiry_report_url,
+            "near_expiry_count": near_expiry_count,
+            "expired_count": expired_count,
             "low_stock_count": low_stock_count,
             "top_low_stock": low_stock_products[:10],
             "best_selling": best_selling,
@@ -1032,10 +1333,12 @@ def dashboard(request):
     )
 
 
+@module_access_required("reports")
 def reports_home(request):
     today = timezone.localdate()
     week_start = today - timedelta(days=6)
     month_start = today.replace(day=1)
+    settings_obj = get_system_settings()
 
     today_sales_queryset = (
         Sale.objects.filter(created_at__date=today)
@@ -1065,20 +1368,39 @@ def reports_home(request):
         .order_by("stock", "name")
     )
     low_stock_count = low_stock_products.count()
+    near_expiry = near_expiry_products(settings_obj, today=today)
+    expired = expired_products(settings_obj, today=today)
+    near_expiry_count = near_expiry.count()
+    expired_count = expired.count()
+    near_expiry_preview = list(near_expiry[:8])
+    expired_preview = list(expired[:5])
+    for product in near_expiry_preview:
+        product.days_to_expiry = (product.expiry_date - today).days
+    for product in expired_preview:
+        product.days_overdue = (today - product.expiry_date).days
+
     month_purchase_total = Purchase.objects.filter(created_at__date__gte=month_start, created_at__date__lte=today).aggregate(
         total=Coalesce(Sum("total_amount"), Decimal("0"))
     )["total"]
     expense_due_total = _sum_expense_due(Expense.objects.all().only("amount", "paid_amount"))
+    expense_alert_count = len(monthly_bill_alerts(today=today))
     month_best_selling = (
         SaleItem.objects.filter(sale__created_at__date__gte=month_start, sale__created_at__date__lte=today)
         .values("product__id", "product__name")
         .annotate(total_qty=Sum("quantity"))
         .order_by("-total_qty")[:8]
     )
+    employee_rows = [
+        _employee_report_row(user, now=timezone.now())
+        for user in get_user_model().objects.filter(is_active=True).order_by("first_name", "username")
+    ]
+    employee_rows.sort(key=lambda row: (row["sales_totals"]["net_sales"], row["sales_count"]), reverse=True)
 
     today_report_url = _date_range_url("daily_sales_report", today, today)
     week_report_url = _date_range_url("daily_sales_report", week_start, today)
     month_report_url = _date_range_url("daily_sales_report", month_start, today)
+    expiry_report_url = reverse("expiry_alert_report")
+    employee_report_url = reverse("employee_report_list")
     report_kpis = [
         {
             "title": "Today Sales",
@@ -1115,6 +1437,15 @@ def reports_home(request):
             "kind": "number",
             "accent": "danger",
             "icon": "bi-boxes",
+        },
+        {
+            "title": "Expiry Alerts",
+            "value": near_expiry_count,
+            "meta": "Expiry tracking is off" if not settings_obj.enable_product_expiry else f"{expired_count} expired items",
+            "url": expiry_report_url,
+            "kind": "number",
+                "accent": "warning",
+            "icon": "bi-hourglass-split",
         },
     ]
     report_cards = [
@@ -1155,39 +1486,37 @@ def reports_home(request):
             "accent": "danger",
         },
         {
+            "eyebrow": "Expiry watch",
+            "title": "Near Expiry Report",
+            "description": "Catch stock that is about to expire so you can clear or rotate it before it becomes a loss.",
+            "metric_label": "Items flagged",
+            "metric_value": near_expiry_count + expired_count,
+            "metric_kind": "number",
+            "url": expiry_report_url,
+            "cta": "Open expiry report",
+            "icon": "bi-hourglass-split",
+        },
+        {
             "eyebrow": "Operating costs",
             "title": "Expense Register",
-            "description": "Track rent, utilities, transport, and any other bills with paid and unpaid portions.",
+            "description": "Track rent, utilities, wages, and any other bills with paid and unpaid portions.",
             "metric_label": "Bills due",
             "metric_value": expense_due_total,
             "metric_kind": "money",
             "url": reverse("expense_list"),
             "cta": "Open expenses",
             "icon": "bi-receipt-cutoff",
-            "accent": "warning",
         },
         {
-            "eyebrow": "Accounting summary",
-            "title": "Profit & Loss",
-            "description": "Business-language income and expense statement for the current books.",
-            "metric_label": "Month gross profit",
-            "metric_value": month_sales["gross_profit"],
-            "metric_kind": "money",
-            "url": reverse("profit_loss"),
-            "cta": "Open P&L",
-            "icon": "bi-pie-chart",
-            "accent": "success",
-        },
-        {
-            "eyebrow": "Financial position",
-            "title": "Balance Sheet",
-            "description": "Understand what the business owns and owes without digging through ledgers.",
-            "metric_label": "Month purchases",
-            "metric_value": month_purchase_total,
-            "metric_kind": "money",
-            "url": reverse("balance_sheet"),
-            "cta": "Open balance sheet",
-            "icon": "bi-bank",
+            "eyebrow": "Team performance",
+            "title": "Employee Report",
+            "description": "See session logs, total time, wages, profit, and sales generated by each login.",
+            "metric_label": "Active users",
+            "metric_value": len(employee_rows),
+            "metric_kind": "number",
+            "url": employee_report_url,
+            "cta": "Open employee reports",
+            "icon": "bi-people-fill",
             "accent": "slate",
         },
     ]
@@ -1201,15 +1530,87 @@ def reports_home(request):
             "month_start": month_start,
             "report_kpis": report_kpis,
             "report_cards": report_cards,
-            "top_low_stock": low_stock_products[:8],
-            "best_selling_month": month_best_selling,
             "today_report_url": today_report_url,
             "week_report_url": week_report_url,
             "month_report_url": month_report_url,
+            "expiry_report_url": expiry_report_url,
+            "employee_report_url": employee_report_url,
+            "top_low_stock": low_stock_products[:10],
+            "near_expiry_preview": near_expiry_preview,
+            "expired_preview": expired_preview,
+            "best_selling_month": month_best_selling,
+            "employee_rows": employee_rows[:8],
+            "month_purchase_total": month_purchase_total,
+            "expense_due_total": expense_due_total,
+        },
+    )
+@module_access_required("reports")
+def expiry_alert_report(request):
+    settings_obj = get_system_settings()
+    today = timezone.localdate()
+    near_expiry_list = list(near_expiry_products(settings_obj, today=today))
+    expired_list = list(expired_products(settings_obj, today=today))
+
+    for product in near_expiry_list:
+        product.days_to_expiry = (product.expiry_date - today).days
+    for product in expired_list:
+        product.days_overdue = (today - product.expiry_date).days
+
+    return render(
+        request,
+        "pos/expiry_alert_report.html",
+        {
+            "today": today,
+            "near_expiry_products": near_expiry_list,
+            "expired_products": expired_list,
+            "expiry_tracking_enabled": settings_obj.enable_product_expiry,
+            "expiry_alert_days": settings_obj.expiry_alert_days,
         },
     )
 
 
+@module_access_required("reports")
+def employee_report_list(request):
+    employee_rows = [
+        _employee_report_row(user, now=timezone.now())
+        for user in get_user_model().objects.filter(is_active=True).order_by("first_name", "username")
+    ]
+    employee_rows.sort(key=lambda row: (row["sales_totals"]["net_sales"], row["sales_count"]), reverse=True)
+    return render(request, "pos/employee_report_list.html", {"employee_rows": employee_rows})
+
+
+@module_access_required("reports")
+def employee_report_detail(request, user_id):
+    employee = get_object_or_404(get_user_model(), pk=user_id)
+    now = timezone.now()
+    metrics = _employee_report_row(employee, now=now)
+    session_logs = list(UserSessionLog.objects.filter(user=employee).order_by("-login_at"))
+    for log in session_logs:
+        log.duration_display = _format_duration(_session_duration(log, now=now))
+
+    wage_summary = _user_wage_summary(employee)
+    recent_sales = list(
+        Sale.objects.filter(sold_by=employee)
+        .select_related("customer")
+        .prefetch_related("items", "items__product")
+        .order_by("-created_at")[:20]
+    )
+    recent_sales = [_sale_profit_fields(sale) for sale in recent_sales]
+
+    return render(
+        request,
+        "pos/employee_report_detail.html",
+        {
+            "employee": employee,
+            "metrics": metrics,
+            "session_logs": session_logs,
+            "wage_expenses": wage_summary["expenses"][:20],
+            "recent_sales": recent_sales,
+        },
+    )
+
+
+@pos_access_required
 @transaction.atomic
 def pos_screen(request):
     system_settings = get_system_settings()
@@ -1226,10 +1627,11 @@ def pos_screen(request):
     if selected_bank_account_id not in active_bank_accounts:
         selected_bank_account_id = ""
 
+    valid_payment_methods = {choice[0] for choice in Sale.PAYMENT_METHOD_CHOICES}
     default_payment_method = system_settings.default_sale_payment_method or Sale.CASH
     payment_method = request.GET.get("payment_method", request.POST.get("payment_method", default_payment_method))
-    if payment_method not in {choice[0] for choice in Sale.PAYMENT_METHOD_CHOICES}:
-        payment_method = default_payment_method if default_payment_method in {choice[0] for choice in Sale.PAYMENT_METHOD_CHOICES} else Sale.CASH
+    if payment_method not in valid_payment_methods:
+        payment_method = default_payment_method if default_payment_method in valid_payment_methods else Sale.CASH
 
     discount_rate = request.GET.get("discount_rate", request.POST.get("discount_rate", "0"))
     tax_rate = request.GET.get("tax_rate", request.POST.get("tax_rate", "0")) if system_settings.allows_manual_tax else "0"
@@ -1241,6 +1643,17 @@ def pos_screen(request):
     if not system_settings.allow_credit_sales:
         prefill_credit_sale = False
 
+    def pos_redirect_url():
+        return _build_pos_url(
+            category=selected_category,
+            customer_id=selected_customer_id,
+            credit=prefill_credit_sale,
+            payment_method=payment_method,
+            bank_account_id=selected_bank_account_id,
+            discount_rate=discount_rate,
+            tax_rate=tax_rate,
+        )
+
     if request.method == "POST":
         action = request.POST.get("action")
         product_id = request.POST.get("product_id", "").strip()
@@ -1251,9 +1664,11 @@ def pos_screen(request):
         prefill_credit_sale = system_settings.allow_credit_sales and (
             request.POST.get("preserve_credit") == "1" or request.POST.get("is_credit") == "on"
         )
-        payment_method = request.POST.get("preserve_payment_method", payment_method)
-        discount_rate = request.POST.get("preserve_discount_rate", discount_rate)
-        tax_rate = request.POST.get("preserve_tax_rate", tax_rate) if system_settings.allows_manual_tax else "0"
+        payment_method = request.POST.get("preserve_payment_method", request.POST.get("payment_method", payment_method))
+        if payment_method not in valid_payment_methods:
+            payment_method = default_payment_method if default_payment_method in valid_payment_methods else Sale.CASH
+        discount_rate = request.POST.get("preserve_discount_rate", request.POST.get("discount_rate", discount_rate))
+        tax_rate = request.POST.get("preserve_tax_rate", request.POST.get("tax_rate", tax_rate)) if system_settings.allows_manual_tax else "0"
         selected_category = request.POST.get("selected_category", selected_category).strip()
 
         if action == "add" and product_id:
@@ -1261,17 +1676,7 @@ def pos_screen(request):
             if not _add_product_to_cart(cart, product):
                 messages.error(request, f"{product.name} has no more stock available.")
             _save_cart(request, cart)
-            return redirect(
-                _build_pos_url(
-                    category=selected_category,
-                    customer_id=selected_customer_id,
-                    credit=prefill_credit_sale,
-                    payment_method=payment_method,
-                    bank_account_id=selected_bank_account_id,
-                    discount_rate=discount_rate,
-                    tax_rate=tax_rate,
-                )
-            )
+            return redirect(pos_redirect_url())
 
         if action == "decrease" and product_id:
             if product_id in cart:
@@ -1279,32 +1684,12 @@ def pos_screen(request):
                 if int(cart[product_id]["quantity"]) <= 0:
                     cart.pop(product_id, None)
                 _save_cart(request, cart)
-            return redirect(
-                _build_pos_url(
-                    category=selected_category,
-                    customer_id=selected_customer_id,
-                    credit=prefill_credit_sale,
-                    payment_method=payment_method,
-                    bank_account_id=selected_bank_account_id,
-                    discount_rate=discount_rate,
-                    tax_rate=tax_rate,
-                )
-            )
+            return redirect(pos_redirect_url())
 
         if action == "remove_all" and product_id:
             cart.pop(product_id, None)
             _save_cart(request, cart)
-            return redirect(
-                _build_pos_url(
-                    category=selected_category,
-                    customer_id=selected_customer_id,
-                    credit=prefill_credit_sale,
-                    payment_method=payment_method,
-                    bank_account_id=selected_bank_account_id,
-                    discount_rate=discount_rate,
-                    tax_rate=tax_rate,
-                )
-            )
+            return redirect(pos_redirect_url())
 
         if action == "update_line" and product_id:
             product = get_object_or_404(Product, id=product_id, is_active=True)
@@ -1341,17 +1726,7 @@ def pos_screen(request):
                     else:
                         messages.success(request, f"{product.name} pricing updated.")
 
-            return redirect(
-                _build_pos_url(
-                    category=selected_category,
-                    customer_id=selected_customer_id,
-                    credit=prefill_credit_sale,
-                    payment_method=payment_method,
-                    bank_account_id=selected_bank_account_id,
-                    discount_rate=discount_rate,
-                    tax_rate=tax_rate,
-                )
-            )
+            return redirect(pos_redirect_url())
 
         if action == "checkout":
             if not cart:
@@ -1359,11 +1734,17 @@ def pos_screen(request):
             else:
                 product_ids = [int(pid) for pid in cart.keys()]
                 locked_products = Product.objects.select_for_update().in_bulk(product_ids)
-                cart_snapshot = _cart_state(cart)
+                cart_snapshot = _cart_state(cart, payment_method=payment_method)
 
                 if cart_snapshot["checkout_disabled"]:
-                    messages.error(request, "Review stock and pricing warnings before checkout.")
+                    messages.error(request, "Review the cart lines with stock or pricing issues before checkout.")
                 else:
+                    for row in cart_snapshot["rows"]:
+                        product = locked_products.get(int(row["product_id"]))
+                        if product is None or row["quantity"] > product.stock:
+                            messages.error(request, f"Stock changed for {row['name']}. Please review the cart.")
+                            return redirect(pos_redirect_url())
+
                     discount_rate_value = _normalized_rate(request.POST.get("discount_rate"))
                     tax_rate_value = _normalized_rate(request.POST.get("tax_rate")) if system_settings.allows_manual_tax else Decimal("0")
                     customer = (
@@ -1373,8 +1754,8 @@ def pos_screen(request):
                     )
                     is_credit = request.POST.get("is_credit") == "on"
                     payment_method_value = request.POST.get("payment_method") or default_payment_method
-                    if payment_method_value not in {choice[0] for choice in Sale.PAYMENT_METHOD_CHOICES}:
-                        payment_method_value = default_payment_method
+                    if payment_method_value not in valid_payment_methods:
+                        payment_method_value = default_payment_method if default_payment_method in valid_payment_methods else Sale.CASH
                     bank_account = active_bank_accounts.get(selected_bank_account_id) if payment_method_value == Sale.BANK else None
 
                     if is_credit and not system_settings.allow_credit_sales:
@@ -1390,9 +1771,15 @@ def pos_screen(request):
                             bank_account=bank_account,
                             paid_amount=Decimal("0"),
                             discount_rate=discount_rate_value,
-                            tax_rate=tax_rate_value,
+                            tax_rate=(
+                                system_settings.gst_rate_for_payment_method(payment_method_value)
+                                if system_settings.uses_payment_method_gst
+                                else tax_rate_value
+                            ),
                             tax_mode=Sale.TAX_MODE_CATEGORY if system_settings.uses_category_gst else Sale.TAX_MODE_MANUAL,
                             tax_label=system_settings.tax_label,
+                            cash_tax_rate_snapshot=system_settings.gst_rate_for_payment_method(Sale.CASH),
+                            bank_tax_rate_snapshot=system_settings.gst_rate_for_payment_method(Sale.BANK),
                         )
                         sale.full_clean()
                         sale.save()
@@ -1400,9 +1787,6 @@ def pos_screen(request):
                         settings_adjusted_lines = False
                         for row in cart_snapshot["rows"]:
                             product = locked_products.get(int(row["product_id"]))
-                            if product is None or row["quantity"] > product.stock:
-                                raise ValidationError(f"Stock changed for {row['name']}. Please review the cart.")
-
                             original_price = to_decimal(row["original_price"], product.price)
                             price = row["unit_price"] if system_settings.allow_price_override else original_price
                             discount_percent = row["discount_percent"] if system_settings.allow_line_discount else Decimal("0")
@@ -1422,10 +1806,13 @@ def pos_screen(request):
                                 price=validated["price"],
                                 discount_percent=validated["discount_percent"],
                                 cost_price=product.cost_price,
+                                cash_tax_rate_snapshot=row.get("cash_category_tax_rate", Decimal("0")),
+                                bank_tax_rate_snapshot=row.get("bank_category_tax_rate", Decimal("0")),
                             )
 
                         sale.refresh_from_db()
                         sale.paid_amount = Decimal("0") if is_credit else Decimal(sale.total_amount or 0)
+                        sale.bank_account = bank_account if payment_method_value == Sale.BANK and not is_credit else None
                         sale.full_clean()
                         sale.save(update_fields=["paid_amount", "bank_account"])
 
@@ -1440,13 +1827,6 @@ def pos_screen(request):
                             tax_amount=sale.tax_amount,
                         )
 
-                        record_audit(
-                            action="sale_completed",
-                            description=f"Sale #{sale.id} completed through POS.",
-                            actor=request.user,
-                            target=sale,
-                            metadata={"total_amount": str(sale.total_amount), "payment_method": sale.payment_method},
-                        )
                         request.session["cart"] = {}
                         request.session.modified = True
                         if settings_adjusted_lines:
@@ -1458,14 +1838,14 @@ def pos_screen(request):
                         return redirect("invoice", sale_id=sale.id)
 
     _save_cart(request, cart)
-    cart_state = _cart_state(cart)
-    sale_preview = sale_totals_from_rows(cart_state["rows"], discount_rate, tax_rate, system_settings)
+    cart_state = _cart_state(cart, payment_method=payment_method)
+    sale_preview = sale_totals_from_rows(cart_state["rows"], discount_rate, tax_rate, system_settings, payment_method=payment_method)
 
     products_queryset = Product.objects.filter(is_active=True)
     if selected_category:
         products_queryset = products_queryset.filter(category_id=selected_category)
 
-    products = products_queryset.select_related("category").order_by("name")
+    products = products_queryset.select_related("category", "brand").order_by("name")
     categories = Category.objects.filter(is_active=True).order_by("name")
     customers = Customer.objects.filter(is_active=True).order_by("name")
 
@@ -1491,8 +1871,11 @@ def pos_screen(request):
             "tax_rate_value": _normalized_rate(tax_rate) if system_settings.allows_manual_tax else Decimal("0"),
             "tax_label_value": system_settings.tax_label,
             "manual_tax_enabled": system_settings.allows_manual_tax,
+            "uses_payment_method_gst": system_settings.uses_payment_method_gst,
             "uses_category_gst": system_settings.uses_category_gst,
             "gst_enabled": system_settings.gst_enabled,
+            "cash_gst_rate_value": system_settings.gst_rate_for_payment_method(Sale.CASH),
+            "bank_gst_rate_value": system_settings.gst_rate_for_payment_method(Sale.BANK),
             "allow_credit_sales": system_settings.allow_credit_sales,
             "allow_price_override": system_settings.allow_price_override,
             "allow_line_discount": system_settings.allow_line_discount,
@@ -1500,9 +1883,6 @@ def pos_screen(request):
             "pos_customer_add_url": build_customer_add_url(),
         },
     )
-
-
-def invoice(request, sale_id):
     sale = get_object_or_404(Sale.objects.select_related("customer", "sold_by"), id=sale_id)
     if not user_can_access_sale(request.user, sale):
         messages.error(request, "Cashiers can only open receipts for their own sales.")
@@ -1515,6 +1895,8 @@ def invoice(request, sale_id):
     tax_amount = sale_tax_amount(sale, subtotal=subtotal, items=items)
     grand_total = Decimal(sale.total_amount or 0)
     settings_obj = get_system_settings()
+    payment_method_totals = payment_method_totals_for_sale(sale, subtotal=subtotal, items=items)
+    show_payment_method_totals = bool(payment_method_totals)
 
     previous_balance = None
     new_balance = None
@@ -1538,6 +1920,8 @@ def invoice(request, sale_id):
             "tax_rate": sale.tax_rate or Decimal("0"),
             "tax_amount": tax_amount,
             "tax_label_value": sale_tax_label(sale, settings_obj.tax_label),
+            "payment_method_totals": payment_method_totals,
+            "show_payment_method_totals": show_payment_method_totals,
             "grand_total": grand_total,
             "paid_amount": sale.paid_amount,
             "balance_due": sale.balance_due,
@@ -1610,6 +1994,49 @@ def add_supplier_from_pos(request):
     )
 
 
+def invoice(request, sale_id):
+    sale = get_object_or_404(Sale.objects.select_related("customer", "sold_by", "bank_account"), id=sale_id)
+    if not user_can_access_sale(request.user, sale):
+        messages.error(request, "Cashiers can only open receipts for their own sales.")
+        return redirect("pos_screen")
+
+    items = list(sale.items.select_related("product", "product__category"))
+    subtotal = sum((item.line_total for item in items), Decimal("0"))
+    line_discount_total = sum((item.line_discount_amount for item in items), Decimal("0"))
+    discount_amount = quantize_money(subtotal * (_normalized_rate(sale.discount_rate) / Decimal("100")))
+    tax_amount = sale_tax_amount(sale, subtotal=subtotal, items=items)
+    settings_obj = get_system_settings()
+    tax_label_value = sale_tax_label(sale, settings_obj.tax_label)
+    company = get_active_company_profile()
+    payment_method_totals = payment_method_totals_for_sale(sale, subtotal=subtotal, items=items)
+    customer_badge = get_customer_badge(sale.customer) if sale.customer_id else None
+    previous_balance = None
+    new_balance = None
+    if customer_badge:
+        new_balance = quantize_money(customer_badge["amount"])
+        previous_balance = quantize_money(new_balance - Decimal(sale.balance_due))
+
+    context = {
+        "sale": sale,
+        "items": items,
+        "subtotal": subtotal,
+        "line_discount_total": line_discount_total,
+        "discount_amount": discount_amount,
+        "tax_amount": tax_amount,
+        "tax_label_value": tax_label_value,
+        "grand_total": quantize_money(sale.total_amount or 0),
+        "paid_amount": quantize_money(sale.paid_amount or 0),
+        "balance_due": quantize_money(sale.balance_due),
+        "company": company,
+        "thermal_width_mm": settings_obj.thermal_printer_width_mm,
+        "payment_method_totals": payment_method_totals,
+        "show_payment_method_totals": bool(payment_method_totals),
+        "previous_balance": previous_balance,
+        "new_balance": new_balance,
+    }
+    return render(request, "pos/invoice.html", context)
+
+
 def invoice_pdf(request, sale_id):
     sale = get_object_or_404(Sale.objects.select_related("customer", "sold_by"), id=sale_id)
     if not user_can_access_sale(request.user, sale):
@@ -1621,9 +2048,13 @@ def invoice_pdf(request, sale_id):
     line_discount_total = sum((item.line_discount_amount for item in items), Decimal("0"))
     discount_amount = quantize_money(subtotal * (_normalized_rate(sale.discount_rate) / Decimal("100")))
     tax_amount = sale_tax_amount(sale, subtotal=subtotal, items=items)
-    tax_label_value = sale_tax_label(sale, get_system_settings().tax_label)
+    settings_obj = get_system_settings()
+    tax_label_value = sale_tax_label(sale, settings_obj.tax_label)
     grand_total = Decimal(sale.total_amount or 0)
-    printer_width_mm = get_system_settings().thermal_printer_width_mm
+    printer_width_mm = settings_obj.thermal_printer_width_mm
+    payment_method_totals = payment_method_totals_for_sale(sale, subtotal=subtotal, items=items)
+    show_payment_method_totals = bool(payment_method_totals)
+    cashier_name = sale.sold_by.get_full_name() or sale.sold_by.username if sale.sold_by_id else ""
 
     paper_width = printer_width_mm * mm
     left_margin = 4 * mm
@@ -1642,6 +2073,8 @@ def invoice_pdf(request, sale_id):
         total_lines += 1
     if tax_amount > 0:
         total_lines += 1
+    if show_payment_method_totals:
+        total_lines += len(payment_method_totals) * 2
     if sale.is_credit and sale.customer:
         total_lines += 3
 
@@ -1683,7 +2116,6 @@ def invoice_pdf(request, sale_id):
     pdf.drawString(left_margin, y, f"Cust: {(sale.customer.name if sale.customer else 'Walk-in')[:20]}")
     y -= line_height
     if sale.sold_by_id:
-        cashier_name = sale.sold_by.get_full_name() or sale.sold_by.username
         pdf.drawString(left_margin, y, f"Cashier: {cashier_name[:18]}")
         y -= line_height
     if sale.is_credit:
@@ -1738,6 +2170,15 @@ def invoice_pdf(request, sale_id):
         pdf.drawRightString(right_margin, y, f"{tax_amount:.2f}")
         y -= line_height
 
+    if show_payment_method_totals:
+        for option in payment_method_totals:
+            pdf.drawString(left_margin, y, option["tax_label_display"][:24])
+            pdf.drawRightString(right_margin, y, f"{option['tax_amount']:.2f}")
+            y -= line_height
+            pdf.drawString(left_margin, y, f"{option['label']} total")
+            pdf.drawRightString(right_margin, y, f"{option['total_amount']:.2f}")
+            y -= line_height
+
     pdf.setFont("Helvetica-Bold", 8.5)
     pdf.drawString(left_margin, y, "TOTAL")
     pdf.drawRightString(right_margin, y, f"{grand_total:.2f}")
@@ -1764,22 +2205,14 @@ def invoice_pdf(request, sale_id):
         y -= line_height
 
     pdf.setFont("Helvetica", 6.2)
-    pdf.drawCentredString(
-        paper_width / 2,
-        y,
-        company.invoice_footer[:32] if company and company.invoice_footer else "Thank you for your business.",
-    )
-
+    footer_text = (company.invoice_footer if company and company.invoice_footer else "Thank you for your business.")[:40]
+    pdf.drawCentredString(paper_width / 2, y, footer_text)
     pdf.showPage()
     pdf.save()
     return response
 
 
-def products_by_category(request, category_id):
-    products = Product.objects.filter(category_id=category_id, is_active=True).order_by("name")
-    return render(request, "pos/partials/product_grid.html", {"products": products})
-
-
+@module_access_required("reports")
 def daily_sales_report(request):
     today = timezone.localdate()
     start = _parse_report_date(request.GET.get("start"), today)
@@ -1828,10 +2261,12 @@ def daily_sales_report(request):
             "collection_rate": collection_rate,
             "gross_margin": gross_margin,
             "quick_ranges": quick_ranges,
-            "tax_label": get_system_settings().tax_label,        },
+            "tax_label": get_system_settings().tax_label,
+        },
     )
 
 
+@module_access_required("parties")
 def parties_home(request):
     recent_customers = Customer.objects.order_by("-created_at", "-id")[:5]
     recent_suppliers = Supplier.objects.order_by("-created_at", "-id")[:5]
@@ -1847,6 +2282,7 @@ def parties_home(request):
     )
 
 
+@module_access_required("parties")
 def customer_list(request):
     search = request.GET.get("search", "").strip()
     queryset = Customer.objects.order_by("name")
@@ -1877,6 +2313,7 @@ def customer_list(request):
     )
 
 
+@module_access_required("parties")
 def supplier_list(request):
     search = request.GET.get("search", "").strip()
     queryset = Supplier.objects.order_by("name")
@@ -1907,6 +2344,7 @@ def supplier_list(request):
     )
 
 
+@module_access_required("parties")
 def customer_detail(request, id):
     customer = get_object_or_404(Customer, id=id)
     sales = customer.sales.order_by("-created_at")
@@ -1927,6 +2365,7 @@ def customer_detail(request, id):
     )
 
 
+@module_access_required("parties")
 def supplier_detail(request, id):
     supplier = get_object_or_404(Supplier, id=id)
     purchases = supplier.purchases.order_by("-created_at")
@@ -1947,22 +2386,15 @@ def supplier_detail(request, id):
     )
 
 
+@module_access_required("parties")
 def party_statement_page(request):
     return render(request, "parties/party_statement.html")
 
 
+@module_access_required("products", minimum=ACCESS_MANAGE)
 def brand_add(request):
     form = BrandForm(request.POST or None)
-    if request.method == "POST":
-        if form.is_valid():
-            form.save()
-            messages.success(request, "Brand added successfully.")
-            return redirect("product_list")
-        messages.error(request, "Please fix the brand form.")
-
-    return render(request, "pos/brand_form.html", {"form": form})
-
-
+@module_access_required("products", minimum=ACCESS_MANAGE)
 def category_add(request):
     form = CategoryForm(request.POST or None)
     if request.method == "POST":
@@ -1983,6 +2415,7 @@ def category_add(request):
     )
 
 
+@module_access_required("products", minimum=ACCESS_MANAGE)
 def category_edit(request, pk):
     category = get_object_or_404(Category, pk=pk)
     form = CategoryForm(request.POST or None, instance=category)
@@ -2048,6 +2481,8 @@ def quick_create_product(request):
                     "brand_id": product.brand_id,
                     "category_id": product.category_id,
                     "supplier_id": product.supplier_id,
+                    "location": product.location,
+                    "expiry_date": product.expiry_date.isoformat() if product.expiry_date else "",
                 },
             }
         )
@@ -2069,9 +2504,10 @@ def _active_purchase_items(formset):
         items.append(item)
         total += item.line_total
 
-    return items, quantize_money(total)
+    return items, total
 
 
+@module_access_required("purchases")
 def purchase_list(request):
     purchases_queryset = Purchase.objects.select_related("supplier").order_by("-created_at", "-id")
     month_start = timezone.localdate().replace(day=1)
@@ -2093,6 +2529,7 @@ def purchase_list(request):
     )
 
 
+@module_access_required("purchases", minimum=ACCESS_MANAGE)
 @transaction.atomic
 def purchase_add(request):
     purchase_form = PurchaseForm(request.POST or None)
@@ -2147,6 +2584,7 @@ def purchase_add(request):
     return render(request, "pos/purchase_add.html", context)
 
 
+@module_access_required("purchases")
 def purchase_detail(request, pk):
     purchase = get_object_or_404(
         Purchase.objects.select_related("supplier").prefetch_related("items__product", "edit_logs"),
@@ -2156,6 +2594,7 @@ def purchase_detail(request, pk):
     return render(request, "pos/purchase_detail.html", {"purchase": purchase})
 
 
+@module_access_required("purchases", minimum=ACCESS_MANAGE)
 @transaction.atomic
 def purchase_edit(request, pk):
     purchase = get_object_or_404(Purchase.objects.select_related("supplier"), pk=pk)
@@ -2237,6 +2676,7 @@ def purchase_edit(request, pk):
     return render(request, "pos/purchase_edit.html", context)
 
 
+@module_access_required("stock_control", minimum=ACCESS_MANAGE)
 def stock_adjustments(request):
     selected_product_id = (request.GET.get("product") or request.POST.get("product") or "").strip()
     initial = {}
@@ -2277,6 +2717,7 @@ def stock_adjustments(request):
     )
 
 
+@module_access_required("pos", minimum=ACCESS_MANAGE)
 def sale_return_view(request, sale_id):
     sale = get_object_or_404(
         Sale.objects.select_related("customer", "sold_by").prefetch_related("items__product__category", "items__return_items", "returns__items__product"),
@@ -2377,6 +2818,8 @@ def purchase_return_view(request, pk):
         },
     )
 
+
+@module_access_required("reports")
 def low_stock_list(request):
     products = (
         Product.objects.filter(stock__lte=F("low_stock_threshold"), is_active=True)
@@ -2384,69 +2827,6 @@ def low_stock_list(request):
         .order_by("stock", "name")
     )
     return render(request, "pos/low_stock_list.html", {"products": products})
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-test = admin_required(test)
-settings_page = admin_required(settings_page)
-scan_barcode = pos_access_required(scan_barcode)
-product_list = admin_required(product_list)
-product_add = admin_required(product_add)
-product_view = admin_required(product_view)
-product_edit = admin_required(product_edit)
-product_delete = admin_required(product_delete)
-dashboard = admin_required(dashboard)
-reports_home = admin_required(reports_home)
-pos_screen = pos_access_required(pos_screen)
-invoice = pos_access_required(invoice)
-add_customer_from_pos = pos_access_required(add_customer_from_pos)
-add_supplier_from_pos = admin_required(add_supplier_from_pos)
-invoice_pdf = pos_access_required(invoice_pdf)
-products_by_category = pos_access_required(products_by_category)
-daily_sales_report = admin_required(daily_sales_report)
-parties_home = admin_required(parties_home)
-customer_list = admin_required(customer_list)
-supplier_list = admin_required(supplier_list)
-customer_detail = admin_required(customer_detail)
-supplier_detail = admin_required(supplier_detail)
-party_statement_page = admin_required(party_statement_page)
-brand_add = admin_required(brand_add)
-category_add = admin_required(category_add)
-quick_create_brand = admin_required(quick_create_brand)
-quick_create_category = admin_required(quick_create_category)
-quick_create_supplier = admin_required(quick_create_supplier)
-quick_create_product = admin_required(quick_create_product)
-purchase_list = admin_required(purchase_list)
-purchase_add = admin_required(purchase_add)
-purchase_detail = admin_required(purchase_detail)
-purchase_edit = admin_required(purchase_edit)
-low_stock_list = admin_required(low_stock_list)
-stock_adjustments = admin_required(stock_adjustments)
-sale_return_view = admin_required(sale_return_view)
-purchase_return_view = admin_required(purchase_return_view)
-
-
-
-
 
 
 

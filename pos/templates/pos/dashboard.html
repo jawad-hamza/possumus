@@ -1,4 +1,4 @@
-{% extends "pos/base.html" %}
+﻿{% extends "pos/base.html" %}
 {% block title %}Dashboard{% endblock %}
 
 {% block extra_css %}
@@ -119,7 +119,7 @@
     {% for kpi in dashboard_kpis %}
     <div class="col-sm-6 col-xl-3">
         <a href="{{ kpi.url }}" class="dashboard-kpi">
-            <div class="metric-card {{ kpi.accent }}">
+            <div class="metric-card {{ kpi.accent|default:'primary' }}">
                 <div class="d-flex justify-content-between align-items-start gap-3">
                     <div>
                         <div class="metric-label">{{ kpi.title }}</div>
@@ -187,7 +187,7 @@
                     <span class="snapshot-icon"><i class="bi bi-bell"></i></span>
                     <div class="text-muted small">Attention Needed</div>
                     <strong>{{ low_stock_count }} stock alerts</strong>
-                    <div class="small text-muted mt-2">Expense bills due Rs {{ expense_due_total|floatformat:2 }} and monthly purchases Rs {{ month_purchase_total|floatformat:2 }}</div>
+                    <div class="small text-muted mt-2">Expense bills due Rs {{ expense_due_total|floatformat:2 }}, {{ expense_alert_count|default:0 }} recurring bills to record, and monthly purchases Rs {{ month_purchase_total|floatformat:2 }}</div>
                 </div>
             </div>
         </div>
@@ -220,7 +220,7 @@
                         {% for sale in recent_sales %}
                         <tr>
                             <td><a href="{% url 'invoice' sale.id %}" class="fw-semibold text-decoration-none">#{{ sale.id }}</a></td>
-                            <td>{{ sale.customer.name|default:"Walk-in" }}</td>
+                            <td>{% if sale.customer %}{{ sale.customer.name }}{% else %}Walk-in{% endif %}</td>
                             <td class="text-end">Rs {{ sale.total_amount|floatformat:2 }}</td>
                         </tr>
                         {% empty %}
@@ -256,7 +256,7 @@
                         {% for purchase in recent_purchases %}
                         <tr>
                             <td><a href="{% url 'purchase_detail' purchase.id %}" class="fw-semibold text-decoration-none">#{{ purchase.id }}</a></td>
-                            <td>{{ purchase.supplier.name|default:"Cash Purchase" }}</td>
+                            <td>{% if purchase.supplier %}{{ purchase.supplier.name }}{% else %}Cash Purchase{% endif %}</td>
                             <td class="text-end">Rs {{ purchase.total_amount|floatformat:2 }}</td>
                         </tr>
                         {% empty %}
@@ -435,3 +435,5 @@
 })();
 </script>
 {% endblock %}
+
+

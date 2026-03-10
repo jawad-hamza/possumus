@@ -1,4 +1,5 @@
-from django import forms
+﻿from django import forms
+from django.contrib.auth import get_user_model
 from django.db.models import F
 
 from accounts.models import (
@@ -51,13 +52,52 @@ class BankAccountForm(StyledModelForm):
 class ExpenseCategoryForm(StyledModelForm):
     class Meta:
         model = ExpenseCategory
-        fields = ["name"]
-        labels = {"name": "Expense Type"}
-        help_texts = {"name": "Examples: Shop Rent, Electricity, Gas, Internet, Packing Material."}
+        fields = ["name", "expense_pattern", "default_due_day", "default_amount", "alert_days_before"]
+        labels = {
+            "name": "Expense Type",
+            "expense_pattern": "Billing Style",
+            "default_due_day": "Monthly Due Day",
+            "default_amount": "Default Amount",
+            "alert_days_before": "Alert Before (days)",
+        }
+        help_texts = {
+            "name": "Examples: Shop Rent, Electricity, Gas, Internet, Packing Material.",
+            "expense_pattern": "Use monthly fixed for same-amount bills, monthly variable for bills like electricity, or custom for one-off expenses.",
+            "default_due_day": "Optional. Set a calendar day like 1, 5, or 25 to trigger monthly reminders.",
+            "default_amount": "Optional. Helpful for fixed bills like rent or wages.",
+            "alert_days_before": "How many days before the due date staff should start seeing reminders.",
+        }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
+        self.fields["default_due_day"].required = False
+        self.fields["default_amount"].required = False
+        self.fields["alert_days_before"].required = False
+        self.fields["default_due_day"].widget.attrs.setdefault("min", 1)
+        self.fields["default_due_day"].widget.attrs.setdefault("max", 31)
+        self.fields["alert_days_before"].widget.attrs.setdefault("min", 0)
+
+    def clean(self):
+        cleaned_data = super().clean()
+        pattern = cleaned_data.get("expense_pattern")
+        due_day = cleaned_data.get("default_due_day")
+        default_amount = cleaned_data.get("default_amount")
+        alert_days = cleaned_data.get("alert_days_before")
+
+        if pattern == ExpenseCategory.CUSTOM:
+            cleaned_data["default_due_day"] = None
+            self.instance.default_due_day = None
+        if default_amount is not None and default_amount < 0:
+            self.add_error("default_amount", "Default amount cannot be negative.")
+        if due_day is not None and not 1 <= int(due_day) <= 31:
+            self.add_error("default_due_day", "Due day must be between 1 and 31.")
+        if alert_days in (None, ""):
+            cleaned_data["alert_days_before"] = 7
+            self.instance.alert_days_before = 7
+        elif int(alert_days) < 0:
+            self.add_error("alert_days_before", "Alert days cannot be negative.")
+        return cleaned_data
 
 
 class ExpenseForm(StyledModelForm):
@@ -67,6 +107,7 @@ class ExpenseForm(StyledModelForm):
             "category",
             "title",
             "vendor",
+            "employee",
             "date",
             "due_date",
             "amount",
@@ -78,6 +119,7 @@ class ExpenseForm(StyledModelForm):
         labels = {
             "title": "Bill Title / Reference",
             "vendor": "Paid To / Vendor",
+            "employee": "Employee / Staff",
             "date": "Expense Date",
             "due_date": "Due Date",
             "amount": "Total Amount",
@@ -88,6 +130,7 @@ class ExpenseForm(StyledModelForm):
         help_texts = {
             "title": "Optional. Example: March shop rent, February electricity bill.",
             "vendor": "Optional. Example: landlord, utility company, internet provider.",
+            "employee": "Optional. Use this when the bill is a wage or staff-related payment so employee reports stay accurate.",
             "paid_amount": "Enter 0 if the bill is still unpaid. The remaining amount becomes a liability.",
             "payment_method": "Used only for the amount paid now.",
             "bank_account": "Optional. Leave blank to post the paid amount to the generic Bank account.",
@@ -102,8 +145,10 @@ class ExpenseForm(StyledModelForm):
         self._apply_bootstrap()
         self.fields["category"].queryset = ExpenseCategory.objects.filter(is_active=True).order_by("name")
         self.fields["bank_account"].queryset = bank_account_queryset()
+        self.fields["employee"].queryset = get_user_model().objects.filter(is_active=True).order_by("first_name", "username")
         self.fields["title"].required = False
         self.fields["vendor"].required = False
+        self.fields["employee"].required = False
         self.fields["due_date"].required = False
         self.fields["notes"].required = False
         self.fields["bank_account"].required = False
@@ -119,6 +164,9 @@ class ExpenseForm(StyledModelForm):
         if cleaned_data.get("payment_method") == Expense.CASH:
             cleaned_data["bank_account"] = None
             self.instance.bank_account = None
+        if cleaned_data.get("employee") and not cleaned_data.get("title"):
+            cleaned_data["title"] = f"Wages - {cleaned_data['employee'].get_full_name() or cleaned_data['employee'].username}"
+            self.instance.title = cleaned_data["title"]
         return cleaned_data
 
 
@@ -288,3 +336,7 @@ class MoneyTransferForm(StyledModelForm):
             self.instance.to_bank_name = ""
             self.instance.to_bank_account_number = ""
         return cleaned_data
+
+
+
+

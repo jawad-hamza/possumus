@@ -11,6 +11,7 @@ urlpatterns = [
     path("logout/", views.logout_view, name="logout"),
     path("setup/admin/", views.setup_admin, name="setup_admin"),
     path("settings/", views.settings_page, name="settings_page"),
+    path("settings/backups/<int:snapshot_id>/download/", views.download_backup_snapshot, name="download_backup_snapshot"),
     path("test/", views.test, name="test"),
     path("dashboard/", views.dashboard, name="dashboard"),
     path("pos/", views.pos_screen, name="pos_screen"),
@@ -25,6 +26,10 @@ urlpatterns = [
     path("invoice/<int:sale_id>/return/", views.sale_return_view, name="sale_return"),
     path("reports/", views.reports_home, name="reports_home"),
     path("reports/daily-sales/", views.daily_sales_report, name="daily_sales_report"),
+    path("reports/low-stock/", views.low_stock_list, name="low_stock_list"),
+    path("reports/expiry-alerts/", views.expiry_alert_report, name="expiry_alert_report"),
+    path("reports/employees/", views.employee_report_list, name="employee_report_list"),
+    path("reports/employees/<int:user_id>/", views.employee_report_detail, name="employee_report_detail"),
     path("reports/low-stock/", views.low_stock_list, name="low_stock_list"),
     path("products/", views.product_list, name="product_list"),
     path("products/add/", views.product_add, name="product_add"),
@@ -53,5 +58,5 @@ urlpatterns = [
     path("accounts/", include("accounts.urls")),
 ]
 
-urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)
-
+if settings.DEBUG:
+    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

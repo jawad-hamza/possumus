@@ -10,18 +10,25 @@ from accounts.services.party_statement import get_party_statement, get_unified_p
 from accounts.services.settlements import create_payment, create_receipt
 from api.serializers import PartyStatementSerializer, SettlementCreateSerializer
 from pos.models import Customer, Supplier
-from pos.services.access import is_admin
+from pos.services.access import ACCESS_MANAGE, ACCESS_VIEW, user_can_access_module
 
 
-class IsAdminRole(BasePermission):
-    message = "Admin access required."
+class HasPartiesViewAccess(BasePermission):
+    message = "Party access required."
 
     def has_permission(self, request, view):
-        return bool(request.user and request.user.is_authenticated and is_admin(request.user))
+        return bool(request.user and request.user.is_authenticated and user_can_access_module(request.user, "parties", ACCESS_VIEW))
+
+
+class HasPartiesManageAccess(BasePermission):
+    message = "Party manage access required."
+
+    def has_permission(self, request, view):
+        return bool(request.user and request.user.is_authenticated and user_can_access_module(request.user, "parties", ACCESS_MANAGE))
 
 
 class PartyStatementAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated, HasPartiesViewAccess]
 
     def get(self, request):
         customer_id = request.query_params.get("customer_id")
@@ -51,7 +58,7 @@ class PartyStatementAPIView(APIView):
 
 
 class SettlementAPIView(APIView):
-    permission_classes = [IsAuthenticated, IsAdminRole]
+    permission_classes = [IsAuthenticated, HasPartiesManageAccess]
 
     def post(self, request):
         serializer = SettlementCreateSerializer(data=request.data)
@@ -82,4 +89,7 @@ class SettlementAPIView(APIView):
             voucher = create_payment(party=supplier, amount=amount, payment_method=payment_method, bank_account=bank_account)
 
         return Response({"voucher_id": voucher.id, "status": "ok"}, status=status.HTTP_201_CREATED)
+
+
+
 

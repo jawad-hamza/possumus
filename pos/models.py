@@ -6,6 +6,7 @@ from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
 from django.db import models
 from django.utils import timezone
+from django.utils.text import slugify
 
 
 TWO_PLACES = Decimal("0.01")
@@ -29,27 +30,43 @@ class Category(models.Model):
     is_active = models.BooleanField(default=True)
     tax_status = models.CharField(max_length=20, choices=TAX_STATUS_CHOICES, default=EXEMPT)
     gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    cash_gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    bank_gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
 
     def __str__(self):
         return self.name
 
     @property
     def effective_gst_rate(self):
-        if self.tax_status == self.TAXABLE:
-            return quantize_money(self.gst_rate or 0)
-        return Decimal("0")
+        return self.gst_rate_for_payment_method("cash")
+
+    def gst_rate_for_payment_method(self, payment_method):
+        if self.tax_status != self.TAXABLE:
+            return Decimal("0")
+        if payment_method == "bank":
+            return quantize_money(self.bank_gst_rate if Decimal(self.bank_gst_rate or 0) > 0 else (self.gst_rate or 0))
+        if payment_method == "cash":
+            return quantize_money(self.cash_gst_rate if Decimal(self.cash_gst_rate or 0) > 0 else (self.gst_rate or 0))
+        return quantize_money(self.gst_rate or 0)
 
     def clean(self):
         errors = {}
-        gst_rate = Decimal(self.gst_rate or 0)
+        rates = {
+            "gst_rate": Decimal(self.gst_rate or 0),
+            "cash_gst_rate": Decimal(self.cash_gst_rate or 0),
+            "bank_gst_rate": Decimal(self.bank_gst_rate or 0),
+        }
 
-        if gst_rate < 0:
-            errors["gst_rate"] = "GST rate cannot be negative."
-        if gst_rate > 100:
-            errors["gst_rate"] = "GST rate cannot exceed 100%."
+        for field_name, rate in rates.items():
+            if rate < 0:
+                errors[field_name] = "GST rate cannot be negative."
+            if rate > 100:
+                errors[field_name] = "GST rate cannot exceed 100%."
 
         if self.tax_status != self.TAXABLE:
             self.gst_rate = Decimal("0")
+            self.cash_gst_rate = Decimal("0")
+            self.bank_gst_rate = Decimal("0")
 
         if errors:
             raise ValidationError(errors)
@@ -114,6 +131,7 @@ class Product(models.Model):
         help_text="Alert when stock falls to this level",
     )
     location = models.CharField(max_length=100, blank=True)
+    expiry_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
     def __str__(self):
@@ -223,6 +241,8 @@ class Sale(models.Model):
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tax_mode = models.CharField(max_length=20, choices=TAX_MODE_CHOICES, default=TAX_MODE_MANUAL)
     tax_label = models.CharField(max_length=30, default="GST")
+    cash_tax_rate_snapshot = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    bank_tax_rate_snapshot = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
@@ -235,12 +255,11 @@ class Sale(models.Model):
 
         if paid_amount < 0:
             errors["paid_amount"] = "Paid amount cannot be negative."
-        if self.is_credit or paid_amount == 0 or self.payment_method == self.CASH:
+        if self.is_credit or self.payment_method == self.CASH:
             self.bank_account = None
 
         if errors:
             raise ValidationError(errors)
-
 
     def safe_decimal(self, value):
         try:
@@ -260,7 +279,16 @@ class Sale(models.Model):
     def net_sales_amount(self):
         return quantize_money(Decimal(self.total_amount or 0) - Decimal(self.tax_amount or 0))
 
-    def _category_tax_amount(self, items, discount_amount):
+    def _selected_tax_rate(self):
+        if self.tax_mode == self.TAX_MODE_CATEGORY:
+            return Decimal("0")
+        if self.payment_method == self.BANK and Decimal(self.bank_tax_rate_snapshot or 0) > 0:
+            return Decimal(self.bank_tax_rate_snapshot or 0)
+        if self.payment_method == self.CASH and Decimal(self.cash_tax_rate_snapshot or 0) > 0:
+            return Decimal(self.cash_tax_rate_snapshot or 0)
+        return min(max(self.safe_decimal(self.tax_rate), Decimal("0")), Decimal("100"))
+
+    def _category_tax_amount(self, items, discount_amount, payment_method=None):
         subtotal = sum((item.line_total for item in items), Decimal("0"))
         if subtotal <= 0:
             return Decimal("0")
@@ -277,8 +305,7 @@ class Sale(models.Model):
                 remaining_discount -= allocated_discount
 
             taxable_base = max(Decimal(item.line_total) - Decimal(allocated_discount), Decimal("0"))
-            category = getattr(item.product, "category", None)
-            tax_rate = Decimal(category.effective_gst_rate if category else 0)
+            tax_rate = Decimal(item.tax_rate_for_payment_method(payment_method or self.payment_method) if hasattr(item, "tax_rate_for_payment_method") else 0)
             total_tax += quantize_money(taxable_base * (tax_rate / Decimal("100")))
 
         return quantize_money(total_tax)
@@ -288,15 +315,15 @@ class Sale(models.Model):
         subtotal = sum((item.line_total for item in items), Decimal("0"))
 
         discount_rate = min(max(self.safe_decimal(self.discount_rate), Decimal("0")), Decimal("100"))
-        tax_rate = min(max(self.safe_decimal(self.tax_rate), Decimal("0")), Decimal("100"))
-
         discount_amount = subtotal * (discount_rate / Decimal("100"))
         after_discount = subtotal - discount_amount
         if self.tax_mode == self.TAX_MODE_CATEGORY:
-            tax_amount = self._category_tax_amount(items, discount_amount)
+            tax_amount = self._category_tax_amount(items, discount_amount, payment_method=self.payment_method)
             self.tax_rate = Decimal("0")
         else:
-            tax_amount = after_discount * (tax_rate / Decimal("100"))
+            selected_rate = self._selected_tax_rate()
+            self.tax_rate = quantize_money(selected_rate)
+            tax_amount = after_discount * (selected_rate / Decimal("100"))
 
         self.tax_amount = quantize_money(tax_amount)
         self.total_amount = quantize_money(after_discount + tax_amount)
@@ -311,6 +338,20 @@ class SaleItem(models.Model):
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    cash_tax_rate_snapshot = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    bank_tax_rate_snapshot = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+
+    def tax_rate_for_payment_method(self, payment_method):
+        if payment_method == Sale.BANK:
+            rate = Decimal(self.bank_tax_rate_snapshot or 0)
+        else:
+            rate = Decimal(self.cash_tax_rate_snapshot or 0)
+        if rate > 0:
+            return quantize_money(rate)
+        category = getattr(self.product, "category", None)
+        if category:
+            return quantize_money(category.gst_rate_for_payment_method(payment_method))
+        return Decimal("0")
 
     @property
     def discounted_unit_price(self):
@@ -621,7 +662,7 @@ class LedgerEntry(models.Model):
 
 class UserSessionLog(models.Model):
     user = models.ForeignKey(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="session_logs")
-    role_name = models.CharField(max_length=20)
+    role_name = models.CharField(max_length=80)
     session_key = models.CharField(max_length=40, blank=True)
     ip_address = models.GenericIPAddressField(null=True, blank=True)
     login_at = models.DateTimeField(default=timezone.now)
@@ -632,6 +673,62 @@ class UserSessionLog(models.Model):
 
     def __str__(self):
         return f"{self.user} | {self.role_name} | {self.login_at:%Y-%m-%d %H:%M}"
+
+
+
+class CustomRole(models.Model):
+    name = models.CharField(max_length=80, unique=True)
+    slug = models.SlugField(max_length=90, unique=True, blank=True)
+    description = models.CharField(max_length=255, blank=True)
+    permissions = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    @property
+    def group_name(self):
+        return f"CustomRole:{self.slug}"
+
+    def ensure_group(self):
+        from django.contrib.auth.models import Group
+
+        Group.objects.get_or_create(name=self.group_name)
+
+    def clean(self):
+        self.name = (self.name or "").strip()
+        self.description = (self.description or "").strip()
+        if not self.name:
+            raise ValidationError({"name": "Role name is required."})
+
+        reserved_names = {"admin", "cashier"}
+        if self.name.lower() in reserved_names:
+            raise ValidationError({"name": "This role name is reserved for the built-in system roles."})
+
+        duplicate_qs = type(self).objects.exclude(pk=self.pk).filter(name__iexact=self.name)
+        if duplicate_qs.exists():
+            raise ValidationError({"name": "A role with this name already exists."})
+
+    def _build_unique_slug(self):
+        base_slug = slugify(self.name) or "role"
+        candidate = base_slug
+        counter = 2
+        while type(self).objects.exclude(pk=self.pk).filter(slug=candidate).exists():
+            candidate = f"{base_slug}-{counter}"
+            counter += 1
+        return candidate
+
+    def save(self, *args, **kwargs):
+        self.name = (self.name or "").strip()
+        self.description = (self.description or "").strip()
+        if not self.slug:
+            self.slug = self._build_unique_slug()
+        super().save(*args, **kwargs)
+        self.ensure_group()
 
 
 class CompanyProfile(models.Model):
@@ -675,6 +772,11 @@ class SystemSettings(models.Model):
     gst_enabled = models.BooleanField(default=False)
     tax_mode = models.CharField(max_length=20, choices=TAX_MODE_CHOICES, default=MANUAL_CART)
     tax_label = models.CharField(max_length=30, default="GST")
+    use_payment_method_gst = models.BooleanField(default=False)
+    cash_gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    bank_gst_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    enable_product_expiry = models.BooleanField(default=False)
+    expiry_alert_days = models.PositiveIntegerField(default=30)
     allow_credit_sales = models.BooleanField(default=True)
     allow_price_override = models.BooleanField(default=True)
     allow_line_discount = models.BooleanField(default=True)
@@ -703,21 +805,26 @@ class SystemSettings(models.Model):
         return self.gst_enabled and self.tax_mode == self.CATEGORY_GST
 
     @property
+    def uses_payment_method_gst(self):
+        return self.gst_enabled and self.tax_mode == self.MANUAL_CART and self.use_payment_method_gst
+
+    @property
     def allows_manual_tax(self):
-        return self.gst_enabled and self.tax_mode == self.MANUAL_CART
+        return self.gst_enabled and self.tax_mode == self.MANUAL_CART and not self.use_payment_method_gst
+
+    def gst_rate_for_payment_method(self, payment_method):
+        if payment_method == Sale.BANK:
+            return quantize_money(Decimal(self.bank_gst_rate or 0))
+        return quantize_money(Decimal(self.cash_gst_rate or 0))
 
     def save(self, *args, **kwargs):
         self.pk = 1
         self.tax_label = (self.tax_label or "GST").strip() or "GST"
         self.thermal_printer_width_mm = max(int(self.thermal_printer_width_mm or 50), 50)
+        self.expiry_alert_days = max(int(self.expiry_alert_days or 30), 1)
+        self.cash_gst_rate = quantize_money(max(Decimal(self.cash_gst_rate or 0), Decimal("0")))
+        self.bank_gst_rate = quantize_money(max(Decimal(self.bank_gst_rate or 0), Decimal("0")))
         super().save(*args, **kwargs)
-
-
-
-
-
-
-
 
 class StockAdjustment(models.Model):
     ADJUSTMENT = "adjustment"
@@ -882,5 +989,15 @@ class PurchaseReturnItem(models.Model):
 
     def __str__(self):
         return f"{self.product.name} x {self.quantity}"
+
+
+
+
+
+
+
+
+
+
 
 

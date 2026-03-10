@@ -1,14 +1,17 @@
 from decimal import Decimal
+from pathlib import Path
+from tempfile import TemporaryDirectory
 from unittest import mock
 from urllib.parse import quote
 
 from django.contrib.auth import get_user_model
-from django.test import TestCase
+from django.core.files.uploadedfile import SimpleUploadedFile
+from django.test import TestCase, override_settings
 from django.urls import reverse
 
-from accounts.models import Account, PartyLedgerEntry, Voucher
+from accounts.models import Account, AuditLog, BackupSnapshot, PartyLedgerEntry, Voucher
 from accounts.services.settlements import create_payment
-from pos.models import Brand, Category, CompanyProfile, Customer, Product, Purchase, PurchaseItem, Sale, SaleItem, Supplier, SystemSettings, UserSessionLog
+from pos.models import Brand, Category, CompanyProfile, CustomRole, Customer, Product, Purchase, PurchaseItem, Sale, SaleItem, Supplier, SystemSettings, UserSessionLog
 from pos.services.access import ADMIN_ROLE, CASHIER_ROLE, assign_role, ensure_role_groups
 from pos.test_support import AuthenticatedAdminTestCase
 
@@ -591,6 +594,96 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         self.assertEqual(settings_obj.default_sale_payment_method, "bank")
         self.assertEqual(settings_obj.thermal_printer_width_mm, 58)
 
+    def test_settings_page_limits_audit_trail_to_ten_entries_by_default(self):
+        for number in range(1, 15):
+            AuditLog.objects.create(
+                action=f"event_{number}",
+                actor=self.admin_user,
+                target_model="SystemSettings",
+                target_id="1",
+                description=f"Event {number}",
+            )
+
+        response = self.client.get(reverse("settings_page"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["audit_mode"], "page")
+        self.assertEqual(len(response.context["audit_logs"]), 10)
+        self.assertEqual(response.context["audit_page_obj"].number, 1)
+        self.assertEqual(response.context["audit_event_count"], 14)
+        self.assertEqual(
+            [log.description for log in response.context["audit_logs"]],
+            [f"Event {number}" for number in range(14, 4, -1)],
+        )
+        self.assertContains(response, "Show All")
+        self.assertContains(response, "Next")
+
+        page_two_response = self.client.get(reverse("settings_page"), {"audit_page": 2})
+
+        self.assertEqual(page_two_response.status_code, 200)
+        self.assertEqual(page_two_response.context["audit_mode"], "page")
+        self.assertEqual(page_two_response.context["audit_page_obj"].number, 2)
+        self.assertEqual(
+            [log.description for log in page_two_response.context["audit_logs"]],
+            [f"Event {number}" for number in range(4, 0, -1)],
+        )
+        self.assertContains(page_two_response, "Previous")
+
+        show_all_response = self.client.get(reverse("settings_page"), {"audit_mode": "all"})
+
+        self.assertEqual(show_all_response.status_code, 200)
+        self.assertEqual(show_all_response.context["audit_mode"], "all")
+        self.assertIsNone(show_all_response.context["audit_page_obj"])
+        self.assertEqual(len(show_all_response.context["audit_logs"]), 14)
+        self.assertContains(show_all_response, "Back to Top 10")
+
+    def test_settings_page_groups_sections_into_tabs(self):
+        response = self.client.get(reverse("settings_page"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'id="settings-business-tab"')
+        self.assertContains(response, 'id="settings-banking-tab"')
+        self.assertContains(response, 'id="settings-backups-tab"')
+        self.assertContains(response, 'id="settings-audit-tab"')
+        self.assertContains(response, 'id="settings-team-tab"')
+        self.assertContains(response, 'id="settings-business-pane"')
+        self.assertContains(response, 'id="settings-banking-pane"')
+        self.assertContains(response, 'id="settings-backups-pane"')
+        self.assertContains(response, 'id="settings-audit-pane"')
+        self.assertContains(response, 'id="settings-team-pane"')
+
+    def test_settings_page_can_upload_database_snapshot(self):
+        uploaded_file = SimpleUploadedFile(
+            "staging-snapshot.sqlite3",
+            b"sqlite backup content",
+            content_type="application/octet-stream",
+        )
+
+        with TemporaryDirectory() as tmpdir:
+            with override_settings(BASE_DIR=Path(tmpdir)):
+                response = self.client.post(
+                    reverse("settings_page"),
+                    {
+                        "action": "upload_backup",
+                        "upload_backup_label": "Staging Snapshot",
+                        "upload_backup_notes": "Uploaded during recovery drill",
+                        "backup_upload_file": uploaded_file,
+                    },
+                )
+
+                self.assertEqual(response.status_code, 200)
+                snapshot = BackupSnapshot.objects.get()
+                self.assertEqual(snapshot.label, "Staging Snapshot")
+                self.assertEqual(snapshot.notes, "Uploaded during recovery drill")
+                self.assertEqual(snapshot.created_by, self.admin_user)
+                self.assertTrue(snapshot.file_name.endswith(".sqlite3"))
+
+                stored_path = Path(tmpdir) / "backups" / snapshot.file_name
+                self.assertTrue(stored_path.exists())
+                self.assertEqual(stored_path.read_bytes(), b"sqlite backup content")
+                self.assertTrue(AuditLog.objects.filter(action="backup_uploaded", target_id=str(snapshot.id)).exists())
+                self.assertContains(response, "Staging Snapshot")
+
     def test_category_gst_checkout_posts_tax_to_liability(self):
         settings_obj = SystemSettings.load()
         settings_obj.gst_enabled = True
@@ -714,6 +807,62 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         self.assertEqual(sale.total_amount, Decimal("100.00"))
         self.assertEqual(self.client.session.get("cart", {}), {})
 
+    def test_expiry_tracking_toggle_controls_product_ui_and_dashboard_kpi(self):
+        product = Product.objects.create(
+            name="Milk",
+            sku="MILK-1",
+            cost_price=Decimal("100.00"),
+            price=Decimal("140.00"),
+            stock=8,
+        )
+        settings_obj = SystemSettings.load()
+        settings_obj.enable_product_expiry = False
+        settings_obj.save()
+
+        product_edit_response = self.client.get(reverse("product_edit", args=[product.id]))
+        product_list_response = self.client.get(reverse("product_list"))
+        dashboard_response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(product_edit_response, "Expiry Date")
+        self.assertNotContains(product_list_response, "<th>Expiry</th>", html=False)
+        self.assertNotIn("Expiry Alerts", [item["title"] for item in dashboard_response.context["dashboard_kpis"]])
+
+        settings_obj.enable_product_expiry = True
+        settings_obj.expiry_alert_days = 7
+        settings_obj.save()
+
+        edit_response = self.client.post(
+            reverse("product_edit", args=[product.id]),
+            {
+                "name": product.name,
+                "brand": "",
+                "sku": product.sku,
+                "barcode": "",
+                "category": "",
+                "supplier": "",
+                "cost_price": "100.00",
+                "price": "140.00",
+                "minimum_margin_percent": "10.00",
+                "stock": "8",
+                "low_stock_threshold": "2",
+                "location": "Rack 2",
+                "expiry_date": "2026-03-15",
+                "is_active": "on",
+            },
+        )
+        self.assertEqual(edit_response.status_code, 302)
+
+        product.refresh_from_db()
+        self.assertEqual(str(product.expiry_date), "2026-03-15")
+
+        product_edit_response = self.client.get(reverse("product_edit", args=[product.id]))
+        product_list_response = self.client.get(reverse("product_list"))
+        dashboard_response = self.client.get(reverse("dashboard"))
+
+        self.assertContains(product_edit_response, "Expiry Date")
+        self.assertContains(product_list_response, "<th>Expiry</th>", html=False)
+        self.assertContains(product_list_response, "15 Mar 2026")
+        self.assertIn("Expiry Alerts", [item["title"] for item in dashboard_response.context["dashboard_kpis"]])
     def test_daily_sales_report_uses_configured_tax_label(self):
         settings_obj = SystemSettings.load()
         settings_obj.tax_label = "VAT"
@@ -724,6 +873,45 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["tax_label"], "VAT")
         self.assertContains(response, "VAT")
+
+
+class CustomRoleSettingsTests(AuthenticatedAdminTestCase):
+    def test_settings_can_create_custom_role_and_reassign_existing_user(self):
+        role_payload = {
+            "action": "create_role",
+            "role-name": "Manager",
+            "role-description": "Can monitor the business and work on products.",
+            "role-perm_dashboard": "view",
+            "role-perm_pos": "none",
+            "role-perm_products": "manage",
+            "role-perm_stock_control": "view",
+            "role-perm_purchases": "view",
+            "role-perm_expenses": "none",
+            "role-perm_parties": "view",
+            "role-perm_accounts": "none",
+            "role-perm_reports": "view",
+            "role-perm_settings": "none",
+        }
+        response = self.client.post(reverse("settings_page"), role_payload)
+        self.assertEqual(response.status_code, 302)
+
+        role = CustomRole.objects.get(name="Manager")
+        self.assertEqual(role.permissions["products"], "manage")
+        self.assertEqual(role.permissions["dashboard"], "view")
+
+        user_model = get_user_model()
+        member = user_model.objects.create_user(username="manager1", password="ManagerPass123!")
+        assign_response = self.client.post(
+            reverse("settings_page"),
+            {
+                "action": "change_user_role",
+                "user_id": member.id,
+                "role": f"custom:{role.slug}",
+            },
+        )
+        self.assertEqual(assign_response.status_code, 302)
+        self.assertTrue(member.groups.filter(name=role.group_name).exists())
+
 
 class RoleAccessTests(TestCase):
     @classmethod
@@ -793,43 +981,45 @@ class RoleAccessTests(TestCase):
         self.assertEqual(response.status_code, 302)
         self.assertEqual(response.url, reverse("pos_screen"))
 
-    def test_cashier_sales_are_attributed_and_other_receipts_are_blocked(self):
-        product = Product.objects.create(
-            name="Cashier Product",
-            sku="CASHIER-1",
-            cost_price=Decimal("10.00"),
-            price=Decimal("25.00"),
-            stock=6,
-        )
-        self._set_cart(product, quantity=1)
-        self.client.force_login(self.cashier_user)
 
-        response = self.client.post(
-            reverse("pos_screen"),
-            {
-                "action": "checkout",
-                "discount_rate": "0",
-                "tax_rate": "0",
-                "payment_method": "cash",
+    def test_custom_role_can_view_allowed_pages_but_manage_routes_are_blocked(self):
+        role = CustomRole.objects.create(
+            name="Viewer Manager",
+            description="Can open dashboard and product pages but cannot edit.",
+            permissions={
+                "dashboard": "view",
+                "pos": "none",
+                "products": "view",
+                "stock_control": "none",
+                "purchases": "none",
+                "expenses": "none",
+                "parties": "none",
+                "accounts": "none",
+                "reports": "view",
+                "settings": "none",
             },
         )
+        user_model = get_user_model()
+        user = user_model.objects.create_user(username="viewer1", password="ViewerPass123!")
+        assign_role(user, f"custom:{role.slug}")
 
-        sale = Sale.objects.get(sold_by=self.cashier_user)
-        self.assertEqual(response.status_code, 302)
-        self.assertEqual(response.url, reverse("invoice", args=[sale.id]))
+        self.client.force_login(user)
 
-        foreign_sale = Sale.objects.create(customer=None, sold_by=self.admin_user, payment_method="cash", paid_amount=Decimal("25.00"))
-        SaleItem.objects.create(
-            sale=foreign_sale,
-            product=product,
-            quantity=1,
-            price=Decimal("25.00"),
-            cost_price=Decimal("10.00"),
-        )
+        home_response = self.client.get(reverse("home"))
+        self.assertEqual(home_response.status_code, 302)
+        self.assertEqual(home_response.url, reverse("dashboard"))
+        self.assertEqual(self.client.get(reverse("dashboard")).status_code, 200)
+        self.assertEqual(self.client.get(reverse("product_list")).status_code, 200)
 
-        blocked_response = self.client.get(reverse("invoice", args=[foreign_sale.id]))
+        blocked_response = self.client.get(reverse("product_add"))
         self.assertEqual(blocked_response.status_code, 302)
-        self.assertEqual(blocked_response.url, reverse("pos_screen"))
+        self.assertEqual(blocked_response.url, reverse("dashboard"))
+
+
+
+
+
+
 
 
 

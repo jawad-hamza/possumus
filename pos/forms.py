@@ -1,3 +1,4 @@
+﻿from decimal import Decimal
 from django import forms
 from django.contrib.auth import get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
@@ -7,6 +8,7 @@ from .models import (
     Brand,
     Category,
     CompanyProfile,
+    CustomRole,
     Customer,
     Product,
     Purchase,
@@ -18,12 +20,11 @@ from .models import (
     SystemSettings,
 )
 from accounts.services.cash_bank import bank_account_queryset
-from .services.access import ADMIN_ROLE, CASHIER_ROLE
-
-
-ROLE_CHOICES = (
-    (ADMIN_ROLE, "Admin"),
-    (CASHIER_ROLE, "Cashier"),
+from .services.access import (
+    ACCESS_CHOICES,
+    CASHIER_ROLE,
+    MODULE_DEFINITIONS,
+    get_role_choices,
 )
 
 
@@ -90,7 +91,7 @@ class TeamUserForm(StyledFieldsMixin, UserCreationForm):
     first_name = forms.CharField(max_length=150, required=False)
     last_name = forms.CharField(max_length=150, required=False)
     email = forms.EmailField(required=False)
-    role = forms.ChoiceField(choices=ROLE_CHOICES, initial=CASHIER_ROLE)
+    role = forms.ChoiceField(choices=(), initial=CASHIER_ROLE)
     is_active = forms.BooleanField(required=False, initial=True)
 
     class Meta(UserCreationForm.Meta):
@@ -102,7 +103,8 @@ class TeamUserForm(StyledFieldsMixin, UserCreationForm):
         self._apply_bootstrap()
         self.fields["username"].label = "Login ID"
         self.fields["username"].help_text = "Unique ID used by the team member to sign in."
-        self.fields["role"].help_text = "Admins get full access. Cashiers are limited to POS and their receipts."
+        self.fields['role'].choices = get_role_choices()
+        self.fields['role'].help_text = 'Choose Admin, Cashier, or a custom role created below. Custom roles follow the page permissions configured in Settings.'
         self.fields["password1"].help_text = "Use a strong password with at least 8 characters."
 
     def save(self, commit=True):
@@ -114,6 +116,54 @@ class TeamUserForm(StyledFieldsMixin, UserCreationForm):
         if commit:
             user.save()
         return user
+
+
+class CustomRoleForm(StyledModelForm):
+    description = forms.CharField(required=False, max_length=255)
+
+    class Meta:
+        model = CustomRole
+        fields = ["name", "description"]
+        help_texts = {
+            "name": "Example: Manager, Accountant, Floor Supervisor.",
+            "description": "Optional note to explain what this role is meant to do.",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+        existing_permissions = getattr(self.instance, "permissions", {}) or {}
+        for module in MODULE_DEFINITIONS:
+            field_name = f"perm_{module['key']}"
+            self.fields[field_name] = forms.ChoiceField(
+                label=module["label"],
+                choices=ACCESS_CHOICES,
+                initial=existing_permissions.get(module["key"], "none"),
+                help_text=module["description"],
+            )
+            self.fields[field_name].widget.attrs.setdefault("class", "form-select")
+
+    def clean_name(self):
+        return (self.cleaned_data.get("name") or "").strip()
+
+    def clean(self):
+        cleaned_data = super().clean()
+        permissions = {}
+        for module in MODULE_DEFINITIONS:
+            permissions[module["key"]] = cleaned_data.get(f"perm_{module['key']}") or "none"
+
+        if not any(level != "none" for level in permissions.values()):
+            raise forms.ValidationError("Give this role access to at least one page before saving it.")
+
+        cleaned_data["permissions"] = permissions
+        return cleaned_data
+
+    def save(self, commit=True):
+        role = super().save(commit=False)
+        role.permissions = self.cleaned_data["permissions"]
+        if commit:
+            role.save()
+        return role
 
 
 class CompanyProfileForm(StyledModelForm):
@@ -156,6 +206,11 @@ class SystemSettingsForm(StyledModelForm):
             "gst_enabled",
             "tax_mode",
             "tax_label",
+            "use_payment_method_gst",
+            "cash_gst_rate",
+            "bank_gst_rate",
+            "enable_product_expiry",
+            "expiry_alert_days",
             "allow_credit_sales",
             "allow_price_override",
             "allow_line_discount",
@@ -166,6 +221,11 @@ class SystemSettingsForm(StyledModelForm):
             "gst_enabled": "Enable GST / Tax",
             "tax_mode": "Tax Mode",
             "tax_label": "Tax Label",
+            "use_payment_method_gst": "Use Payment Method GST",
+            "cash_gst_rate": "Cash GST Rate (%)",
+            "bank_gst_rate": "Bank GST Rate (%)",
+            "enable_product_expiry": "Enable Product Expiry Tracking",
+            "expiry_alert_days": "Expiry Alert Window (days)",
             "allow_credit_sales": "Allow Credit Sales",
             "allow_price_override": "Allow Price Override",
             "allow_line_discount": "Allow Line Discount",
@@ -175,15 +235,35 @@ class SystemSettingsForm(StyledModelForm):
         help_texts = {
             "tax_mode": "Use category GST to tax each product line from its category. Manual cart tax keeps the old cart-level tax box.",
             "tax_label": "Examples: GST, VAT, Sales Tax.",
+            "use_payment_method_gst": "When enabled, Cash and Bank use the GST rates configured below and the POS tax box becomes automatic.",
+            "cash_gst_rate": "Applied when the sale is completed as a cash sale.",
+            "bank_gst_rate": "Applied when the sale is completed as a bank sale.",
+            "enable_product_expiry": "Show expiry date fields across products and purchases.",
+            "expiry_alert_days": "How many days before expiry the dashboard should start warning you.",
             "thermal_printer_width_mm": "50mm is standard for small thermal receipt printers.",
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
+        self.fields["use_payment_method_gst"].required = False
+        self.fields["cash_gst_rate"].required = False
+        self.fields["bank_gst_rate"].required = False
+        self.fields["enable_product_expiry"].required = False
+        self.fields["expiry_alert_days"].required = False
 
     def clean_tax_label(self):
         return (self.cleaned_data.get("tax_label") or "GST").strip() or "GST"
+
+    def clean(self):
+        cleaned_data = super().clean()
+        if cleaned_data.get("cash_gst_rate") in (None, ""):
+            cleaned_data["cash_gst_rate"] = self.instance.cash_gst_rate if self.instance.pk else Decimal("0")
+        if cleaned_data.get("bank_gst_rate") in (None, ""):
+            cleaned_data["bank_gst_rate"] = self.instance.bank_gst_rate if self.instance.pk else Decimal("0")
+        if cleaned_data.get("expiry_alert_days") in (None, ""):
+            cleaned_data["expiry_alert_days"] = self.instance.expiry_alert_days if self.instance.pk else 30
+        return cleaned_data
 
 
 class CustomerForm(StyledModelForm):
@@ -222,6 +302,7 @@ class ProductForm(StyledModelForm):
             "stock",
             "low_stock_threshold",
             "location",
+            "expiry_date",
             "is_active",
         ]
         labels = {
@@ -229,6 +310,7 @@ class ProductForm(StyledModelForm):
             "cost_price": "Current Cost",
             "minimum_margin_percent": "Minimum Margin (%)",
             "location": "Storage Location",
+            "expiry_date": "Expiry Date",
         }
         help_texts = {
             "barcode": "Optional. If blank, SKU can still be scanned.",
@@ -236,6 +318,7 @@ class ProductForm(StyledModelForm):
             "price": "Current selling price used on POS checkout.",
             "minimum_margin_percent": "Purchase updates must keep this margin or higher.",
             "location": "Example: Warehouse A / Rack 3",
+            "expiry_date": "Optional. Leave blank for products that do not expire.",
         }
 
     def __init__(self, *args, **kwargs):
@@ -244,6 +327,8 @@ class ProductForm(StyledModelForm):
         self.fields["brand"].queryset = Brand.objects.filter(is_active=True).order_by("name")
         self.fields["category"].queryset = Category.objects.filter(is_active=True).order_by("name")
         self.fields["supplier"].queryset = Supplier.objects.filter(is_active=True).order_by("name")
+        self.fields["expiry_date"].required = False
+        self.fields["expiry_date"].widget = forms.DateInput(attrs={"type": "date", "class": "form-control"})
 
 
 class QuickProductForm(StyledModelForm):
@@ -260,15 +345,18 @@ class QuickProductForm(StyledModelForm):
             "minimum_margin_percent",
             "low_stock_threshold",
             "location",
+            "expiry_date",
         ]
         labels = {
             "price": "Opening Sale Price",
             "minimum_margin_percent": "Minimum Margin (%)",
             "low_stock_threshold": "Low Stock Alert",
+            "expiry_date": "Expiry Date",
         }
         help_texts = {
             "price": "Use the intended retail price. Purchase will update it later if needed.",
             "barcode": "Optional. Leave blank if you only use SKU.",
+            "expiry_date": "Optional. Leave blank for non-expiring products.",
         }
 
     def __init__(self, *args, **kwargs):
@@ -282,8 +370,10 @@ class QuickProductForm(StyledModelForm):
         self.fields["supplier"].required = False
         self.fields["barcode"].required = False
         self.fields["location"].required = False
+        self.fields["expiry_date"].required = False
         self.fields["minimum_margin_percent"].initial = 0
         self.fields["low_stock_threshold"].initial = 5
+        self.fields["expiry_date"].widget = forms.DateInput(attrs={"type": "date", "class": "form-control"})
 
     def save(self, commit=True):
         product = super().save(commit=False)
@@ -375,19 +465,45 @@ class QuickBrandForm(StyledModelForm):
 class CategoryForm(StyledModelForm):
     class Meta:
         model = Category
-        fields = ["name", "tax_status", "gst_rate", "is_active"]
+        fields = ["name", "tax_status", "gst_rate", "cash_gst_rate", "bank_gst_rate", "is_active"]
         labels = {
             "tax_status": "GST Status",
-            "gst_rate": "GST Rate (%)",
+            "gst_rate": "Default GST Rate (%)",
+            "cash_gst_rate": "Cash GST Rate (%)",
+            "bank_gst_rate": "Bank GST Rate (%)",
         }
         help_texts = {
             "tax_status": "Taxable categories will apply GST automatically in POS when category GST mode is enabled.",
-            "gst_rate": "Use 0 for exempt or zero-rated categories.",
+            "gst_rate": "Used as the base category GST and as the default when cash/bank rates are left blank.",
+            "cash_gst_rate": "Applied automatically when this category is sold as a cash sale in Category GST mode.",
+            "bank_gst_rate": "Applied automatically when this category is sold as a bank sale in Category GST mode.",
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
+        self.fields["cash_gst_rate"].required = False
+        self.fields["bank_gst_rate"].required = False
+
+    def clean(self):
+        cleaned_data = super().clean()
+        base_rate = cleaned_data.get("gst_rate")
+        if cleaned_data.get("tax_status") != Category.TAXABLE:
+            cleaned_data["gst_rate"] = Decimal("0")
+            cleaned_data["cash_gst_rate"] = Decimal("0")
+            cleaned_data["bank_gst_rate"] = Decimal("0")
+            self.instance.gst_rate = Decimal("0")
+            self.instance.cash_gst_rate = Decimal("0")
+            self.instance.bank_gst_rate = Decimal("0")
+            return cleaned_data
+
+        if cleaned_data.get("cash_gst_rate") in (None, ""):
+            cleaned_data["cash_gst_rate"] = base_rate if base_rate not in (None, "") else Decimal("0")
+            self.instance.cash_gst_rate = cleaned_data["cash_gst_rate"]
+        if cleaned_data.get("bank_gst_rate") in (None, ""):
+            cleaned_data["bank_gst_rate"] = base_rate if base_rate not in (None, "") else Decimal("0")
+            self.instance.bank_gst_rate = cleaned_data["bank_gst_rate"]
+        return cleaned_data
 
 
 class QuickCategoryForm(StyledModelForm):
@@ -539,3 +655,10 @@ class PurchaseReturnForm(StyledFieldsMixin, forms.Form):
         elif not cleaned_data.get("bank_account"):
             self.add_error("bank_account", "Choose which bank ledger received this supplier refund.")
         return cleaned_data
+
+
+
+
+
+
+

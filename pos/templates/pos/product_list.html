@@ -1,4 +1,4 @@
-﻿{% extends "pos/base.html" %}
+{% extends "pos/base.html" %}
 {% load barcode_tags %}
 
 {% block title %}Products{% endblock %}
@@ -149,6 +149,7 @@
                     <th>Category</th>
                     <th>Supplier</th>
                     <th>Location</th>
+                    {% if expiry_tracking_enabled %}<th>Expiry</th>{% endif %}
                     <th class="text-end">Cost</th>
                     <th class="text-end">Sale</th>
                     <th class="text-end">Margin</th>
@@ -171,6 +172,16 @@
                     <td>{{ product.category|default:"-" }}</td>
                     <td>{{ product.supplier|default:"-" }}</td>
                     <td>{{ product.location|default:"-" }}</td>
+                    {% if expiry_tracking_enabled %}
+                    <td>
+                        {% if product.expiry_date %}
+                        <div>{{ product.expiry_date|date:"d M Y" }}</div>
+                        <div class="small mt-1"><span class="status-chip {{ product.expiry_status_tone }}">{{ product.expiry_status_label }}</span></div>
+                        {% else %}
+                        <span class="text-muted">-</span>
+                        {% endif %}
+                    </td>
+                    {% endif %}
                     <td class="text-end">Rs {{ product.cost_price|floatformat:2 }}</td>
                     <td class="text-end">Rs {{ product.price|floatformat:2 }}</td>
                     <td class="text-end">
@@ -203,7 +214,7 @@
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="12" class="text-center text-muted py-5">No products found for the selected filters.</td>
+                    <td colspan="{% if expiry_tracking_enabled %}13{% else %}12{% endif %}" class="text-center text-muted py-5">No products found for the selected filters.</td>
                 </tr>
                 {% endfor %}
             </tbody>
@@ -264,6 +275,8 @@
 })();
 </script>
 {% endblock %}
+
+
 
 
 

@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.contenttypes.models import ContentType
@@ -30,14 +30,37 @@ from accounts.models import (
 from accounts.services.audit import record_audit
 from accounts.services.balance_sheet import get_balance_sheet
 from accounts.services.cash_bank import bank_account_queryset, total_bank_balance
+from accounts.services.expense_alerts import expense_initial_for_category, monthly_bill_alerts
 from accounts.services.expense_posting import post_expense
 from accounts.services.money_desk import post_capital_entry, post_expense_payment, post_money_transfer
 from accounts.services.profit_loss import get_profit_and_loss
 from accounts.services.trial_balance import get_trial_balance
-from pos.services.access import admin_required
+from pos.services.access import module_access_required
 
 
 ZERO = Decimal("0.00")
+
+DEFAULT_EXPENSE_CONFIG = {
+    "Rent": {"expense_pattern": ExpenseCategory.MONTHLY_FIXED, "alert_days_before": 7},
+    "Electricity": {"expense_pattern": ExpenseCategory.MONTHLY_VARIABLE, "alert_days_before": 7},
+    "Wages": {"expense_pattern": ExpenseCategory.MONTHLY_FIXED, "alert_days_before": 7},
+    "Misc": {"expense_pattern": ExpenseCategory.CUSTOM, "alert_days_before": 7},
+}
+DEFAULT_EXPENSE_TYPES = tuple(DEFAULT_EXPENSE_CONFIG.keys())
+
+
+def _ensure_default_expense_categories():
+    categories = []
+    for name, defaults in DEFAULT_EXPENSE_CONFIG.items():
+        category, _ = ExpenseCategory.objects.get_or_create(
+            name=name,
+            defaults={"is_active": True, **defaults},
+        )
+        if not category.is_active:
+            category.is_active = True
+            category.save(update_fields=["is_active"])
+        categories.append(category)
+    return categories
 
 
 def _sum_account(title: str):
@@ -263,19 +286,25 @@ def money_breakdown(request):
 
 
 def expense_list(request):
-    selected_category = request.GET.get("category", "").strip()
-    selected_expense_id = request.GET.get("expense", "").strip()
+    default_expense_types = _ensure_default_expense_categories()
+    today = timezone.localdate()
+    month_start = today.replace(day=1)
 
-    initial_expense = {}
-    if selected_category.isdigit():
-        initial_expense["category"] = selected_category
+    selected_category_param = request.GET.get("category", "").strip()
+    selected_type_param = request.GET.get("type", "").strip() or selected_category_param
+    selected_expense_param = request.GET.get("expense", "").strip()
+
+    selected_category = ExpenseCategory.objects.filter(pk=selected_category_param).first() if selected_category_param.isdigit() else None
+    selected_type = ExpenseCategory.objects.filter(pk=selected_type_param).first() if selected_type_param.isdigit() else None
+
+    initial_expense = expense_initial_for_category(selected_category, today=today) if selected_category else {}
 
     selected_expense = None
     expense_payment_initial = {}
-    if selected_expense_id.isdigit():
+    if selected_expense_param.isdigit():
         selected_expense = (
-            Expense.objects.select_related("category", "category__account", "voucher")
-            .filter(pk=selected_expense_id)
+            Expense.objects.select_related("category", "category__account", "voucher", "employee")
+            .filter(pk=selected_expense_param)
             .first()
         )
         if selected_expense and selected_expense.balance_due > 0:
@@ -284,22 +313,34 @@ def expense_list(request):
 
     if request.method == "POST":
         action = request.POST.get("action")
-        category_form = ExpenseCategoryForm(prefix="type")
+        posted_type_id = request.POST.get("type_id", "").strip()
+        bound_type = ExpenseCategory.objects.filter(pk=posted_type_id).first() if posted_type_id.isdigit() else selected_type
+
+        category_form = ExpenseCategoryForm(prefix="type", instance=bound_type)
         expense_form = ExpenseForm(prefix="expense", initial=initial_expense)
         expense_payment_form = ExpensePaymentForm(prefix="payment", initial=expense_payment_initial)
 
         if action == "add_category":
-            category_form = ExpenseCategoryForm(request.POST, prefix="type")
+            category_form = ExpenseCategoryForm(request.POST, prefix="type", instance=bound_type)
             if category_form.is_valid():
                 category = category_form.save()
                 record_audit(
-                    action="expense_category_created",
-                    description=f"Expense type '{category.name}' created from Expenses page.",
+                    action="expense_category_updated" if bound_type else "expense_category_created",
+                    description=f"Expense type '{category.name}' saved from Expenses page.",
                     actor=request.user,
                     target=category,
                 )
-                messages.success(request, f"Expense type '{category.name}' added.")
-                return redirect(f"{reverse('expense_list')}?category={category.id}")
+                messages.success(request, f"Expense type '{category.name}' saved.")
+                return redirect(f"{reverse('expense_list')}?category={category.id}&type={category.id}")
+
+            requested_name = (request.POST.get("type-name") or "").strip()
+            existing_category = ExpenseCategory.objects.filter(name__iexact=requested_name).first() if requested_name and not bound_type else None
+            if existing_category:
+                if not existing_category.is_active:
+                    existing_category.is_active = True
+                    existing_category.save(update_fields=["is_active"])
+                messages.success(request, f"Expense type '{existing_category.name}' is already available.")
+                return redirect(f"{reverse('expense_list')}?category={existing_category.id}&type={existing_category.id}")
             messages.error(request, "Please review the expense type details.")
         elif action == "pay_expense":
             expense_payment_form = ExpensePaymentForm(request.POST, prefix="payment")
@@ -332,6 +373,7 @@ def expense_list(request):
                             description=f"Expense '{expense.display_title}' recorded for {expense.amount}.",
                             actor=request.user,
                             target=expense,
+                            metadata={"employee_id": expense.employee_id or ""},
                         )
                     messages.success(request, f"Expense '{expense.display_title}' recorded successfully.")
                     return redirect("expense_list")
@@ -339,16 +381,22 @@ def expense_list(request):
                     expense_form.add_error(None, str(exc))
             messages.error(request, "Please review the expense form.")
     else:
-        category_form = ExpenseCategoryForm(prefix="type")
+        category_form = ExpenseCategoryForm(prefix="type", instance=selected_type)
         expense_form = ExpenseForm(prefix="expense", initial=initial_expense)
         expense_payment_form = ExpensePaymentForm(prefix="payment", initial=expense_payment_initial)
 
-    today = timezone.localdate()
-    month_start = today.replace(day=1)
-    expenses = Expense.objects.select_related("category", "category__account", "voucher").order_by("-date", "-id")
+    expenses = Expense.objects.select_related("category", "category__account", "voucher", "employee").order_by("-date", "-id")
     open_expenses = expenses.filter(amount__gt=F("paid_amount")).order_by("date", "id")
     this_month = expenses.filter(date__gte=month_start)
     recent_expense_payments = ExpensePayment.objects.select_related("expense", "expense__category", "voucher").order_by("-date", "-id")
+    expense_types = ExpenseCategory.objects.filter(is_active=True).order_by("name")
+    expense_reminders = monthly_bill_alerts(today=today)
+    for reminder in expense_reminders:
+        reminder["record_url"] = f"{reverse('expense_list')}?category={reminder['category'].id}&type={reminder['category'].id}#record-expense"
+
+    expense_alert_count = len(expense_reminders)
+    expense_overdue_count = sum(1 for reminder in expense_reminders if reminder["status"] == "overdue")
+    expense_due_soon_count = expense_alert_count - expense_overdue_count
 
     context = {
         "category_form": category_form,
@@ -359,11 +407,20 @@ def expense_list(request):
         "recent_expense_payments": recent_expense_payments[:10],
         "selected_expense": selected_expense,
         "selected_expense_id": str(selected_expense.id) if selected_expense else "",
-        "expense_types": ExpenseCategory.objects.filter(is_active=True).order_by("name"),
+        "selected_category": str(selected_category.id) if selected_category else "",
+        "selected_type": selected_type,
+        "selected_type_id": str(selected_type.id) if selected_type else "",
+        "expense_types": expense_types,
+        "default_expense_types": default_expense_types,
+        "custom_expense_types": expense_types.exclude(name__in=DEFAULT_EXPENSE_TYPES),
+        "expense_reminders": expense_reminders,
+        "expense_alert_count": expense_alert_count,
+        "expense_overdue_count": expense_overdue_count,
+        "expense_due_soon_count": expense_due_soon_count,
         "month_total": this_month.aggregate(total=Coalesce(Sum("amount"), ZERO))["total"],
         "month_paid": this_month.aggregate(total=Coalesce(Sum("paid_amount"), ZERO))["total"],
         "outstanding_total": sum((expense.balance_due for expense in expenses), ZERO),
-        "expense_type_count": ExpenseCategory.objects.filter(is_active=True).count(),
+        "expense_type_count": expense_types.count(),
         "expense_payable_balance": _sum_account("Expense Payable"),
         "open_expense_count": open_expenses.count(),
         "cleared_expense_count": max(expenses.count() - open_expenses.count(), 0),
@@ -586,12 +643,20 @@ def party_statement(request, model, pk):
     )
 
 
-accounts_home = admin_required(accounts_home)
-money_breakdown = admin_required(money_breakdown)
-expense_list = admin_required(expense_list)
-money_desk = admin_required(money_desk)
-trial_balance_view = admin_required(trial_balance_view)
-profit_loss_view = admin_required(profit_loss_view)
-balance_sheet_view = admin_required(balance_sheet_view)
-account_ledger = admin_required(account_ledger)
-party_statement = admin_required(party_statement)
+accounts_home = module_access_required("accounts", minimum="view")(accounts_home)
+money_breakdown = module_access_required("accounts", minimum="view")(money_breakdown)
+expense_list = module_access_required("expenses", minimum="view")(expense_list)
+money_desk = module_access_required("accounts", minimum="view")(money_desk)
+trial_balance_view = module_access_required("accounts", minimum="view")(trial_balance_view)
+profit_loss_view = module_access_required("accounts", minimum="view")(profit_loss_view)
+balance_sheet_view = module_access_required("accounts", minimum="view")(balance_sheet_view)
+account_ledger = module_access_required("accounts", minimum="view")(account_ledger)
+party_statement = module_access_required("accounts", minimum="view")(party_statement)
+
+
+
+
+
+
+
+

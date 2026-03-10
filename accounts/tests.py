@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 
 from django.urls import reverse
 from django.utils import timezone
@@ -177,7 +177,8 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
         page_response = self.client.get(reverse("expense_list"), {"expense": expense.id})
         self.assertEqual(page_response.status_code, 200)
         self.assertEqual(page_response.context["selected_expense_id"], str(expense.id))
-        self.assertContains(page_response, "Selected Bill: March Internet")
+        self.assertContains(page_response, "Selected Bill")
+        self.assertContains(page_response, "March Internet")
 
         payment_response = self.client.post(
             reverse("expense_list"),
@@ -200,6 +201,75 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
         self.assertEqual(expense.balance_due, Decimal("0.00"))
         self.assertTrue(payment.voucher.lines.filter(account__title="Expense Payable", debit=Decimal("2000.00")).exists())
         self.assertTrue(payment.voucher.lines.filter(account__title="Bank", credit=Decimal("2000.00")).exists())
+    def test_default_expense_types_use_monthly_patterns(self):
+        response = self.client.get(reverse("expense_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(ExpenseCategory.objects.get(name="Rent").expense_pattern, ExpenseCategory.MONTHLY_FIXED)
+        self.assertEqual(ExpenseCategory.objects.get(name="Electricity").expense_pattern, ExpenseCategory.MONTHLY_VARIABLE)
+        self.assertEqual(ExpenseCategory.objects.get(name="Wages").expense_pattern, ExpenseCategory.MONTHLY_FIXED)
+        self.assertEqual(ExpenseCategory.objects.get(name="Misc").expense_pattern, ExpenseCategory.CUSTOM)
+
+    def test_expense_page_shows_due_soon_monthly_bill_alert(self):
+        today = timezone.localdate()
+        due_day = min(today.day + 3, 28)
+        ExpenseCategory.objects.create(
+            name="Internet Bill",
+            expense_pattern=ExpenseCategory.MONTHLY_VARIABLE,
+            default_due_day=due_day,
+            alert_days_before=7,
+        )
+
+        response = self.client.get(reverse("expense_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["expense_alert_count"], 1)
+        self.assertContains(response, "Internet Bill")
+
+    def test_selecting_monthly_fixed_type_prefills_due_date_and_amount(self):
+        today = timezone.localdate()
+        due_day = min(today.day + 2, 28)
+        category = ExpenseCategory.objects.create(
+            name="Warehouse Rent",
+            expense_pattern=ExpenseCategory.MONTHLY_FIXED,
+            default_due_day=due_day,
+            default_amount=Decimal("5500.00"),
+            alert_days_before=7,
+        )
+
+        response = self.client.get(reverse("expense_list"), {"category": category.id, "type": category.id})
+
+        self.assertEqual(response.status_code, 200)
+        expected_due = today.replace(day=due_day)
+        self.assertEqual(response.context["selected_category"], str(category.id))
+        self.assertEqual(str(response.context["expense_form"]["due_date"].value()), expected_due.isoformat())
+        self.assertEqual(str(response.context["expense_form"]["amount"].value()), "5500.00")
+        self.assertContains(response, "Using saved rule")
+
+    def test_recorded_monthly_bill_hides_current_cycle_alert(self):
+        today = timezone.localdate()
+        due_day = min(today.day + 1, 28)
+        category = ExpenseCategory.objects.create(
+            name="Generator Maintenance Plan",
+            expense_pattern=ExpenseCategory.MONTHLY_FIXED,
+            default_due_day=due_day,
+            default_amount=Decimal("1500.00"),
+            alert_days_before=7,
+        )
+        Expense.objects.create(
+            category=category,
+            title=f"{today.strftime('%B')} Generator Maintenance Plan",
+            date=today,
+            due_date=today.replace(day=due_day),
+            amount=Decimal("1500.00"),
+            paid_amount=Decimal("0.00"),
+            payment_method=Expense.CASH,
+        )
+
+        response = self.client.get(reverse("expense_list"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["expense_alert_count"], 0)
     def test_owner_capital_entry_increases_money_available(self):
         response = self.client.post(
             reverse("money_desk"),
@@ -245,6 +315,9 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
         self.assertTrue(transfer.voucher.lines.filter(account__title="Bank", debit=Decimal("150.00")).exists())
         self.assertTrue(transfer.voucher.lines.filter(account__title="Cash", credit=Decimal("150.00")).exists())
         self.assertIn("HBL (99887766)", transfer.voucher.narration)
+
+
+
 
 
 

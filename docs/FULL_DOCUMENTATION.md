@@ -401,6 +401,20 @@ The repository currently uses SQLite for local operation. That is fine for devel
 
 The documentation in this repository does not replace a deployment hardening pass. Secret management, allowed hosts, HTTPS, cookie security, and production database planning should be handled before live deployment.
 
+### Current deployment verdict
+
+At the time of this documentation pass, the application is not yet ready to hand directly to a client VPS without a production-hardening step.
+
+Main blockers:
+
+- development-only Django settings are still active in `possumus/settings.py`
+- the default database is SQLite
+- backup/restore currently supports SQLite only
+- static file serving is not production-configured yet
+- `requirements.txt` is not yet a clean server runtime manifest
+
+Use `docs/DEPLOYMENT.md` as the current deployment checklist and handoff note.
+
 ## 17. Included documentation outputs
 
 This repository now includes:
@@ -408,6 +422,7 @@ This repository now includes:
 - `README.md`
 - `docs/HOW_TO_USE.md`
 - `docs/FULL_DOCUMENTATION.md`
+- `docs/DEPLOYMENT.md`
 - `docs/How_to_Use_POS_IMS.pdf`
 - `docs/POS_IMS_Full_Documentation.pdf`
 - `docs/POS_IMS_Source_Code.pdf`
@@ -427,3 +442,4 @@ Generation command:
 ```powershell
 .\.venv\Scripts\python.exe docs\generate_pdfs.py
 ```
+

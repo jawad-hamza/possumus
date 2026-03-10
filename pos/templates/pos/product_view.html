@@ -1,4 +1,4 @@
-{% extends "pos/base.html" %}
+﻿{% extends "pos/base.html" %}
 {% load barcode_tags %}
 
 {% block title %}{{ product.name }}{% endblock %}
@@ -25,6 +25,7 @@
                 <dt class="col-5 text-muted">Category</dt><dd class="col-7">{{ product.category|default:"-" }}</dd>
                 <dt class="col-5 text-muted">Supplier</dt><dd class="col-7">{{ product.supplier|default:"-" }}</dd>
                 <dt class="col-5 text-muted">Location</dt><dd class="col-7">{{ product.location|default:"-" }}</dd>
+                <dt class="col-5 text-muted">Expiry</dt><dd class="col-7">{{ product.expiry_date|date:"d M Y"|default:"-" }}</dd>
                 <dt class="col-5 text-muted">Status</dt>
                 <dd class="col-7">
                     {% if product.is_active %}
@@ -145,5 +146,6 @@
     </div>
 </div>
 {% endblock %}
+
 
 

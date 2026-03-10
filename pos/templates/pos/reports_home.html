@@ -1,4 +1,4 @@
-{% extends "pos/base.html" %}
+﻿{% extends "pos/base.html" %}
 {% block title %}Reports Centre{% endblock %}
 
 {% block extra_css %}
@@ -236,4 +236,84 @@
         </div>
     </div>
 </div>
+
+<div class="row g-4 mt-1">
+    <div class="col-xl-6">
+        <div class="page-card p-4 h-100">
+            <div class="section-heading">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-warning"><i class="bi bi-hourglass-split"></i></span>
+                    <div>
+                        <h2 class="section-title">Expiry Watchlist</h2>
+                        <p class="section-copy">Products that need quick action before expiry becomes a write-off.</p>
+                    </div>
+                </div>
+                <a href="{{ expiry_report_url }}" class="section-link">Open expiry report</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr><th>Product</th><th>Expiry</th><th class="text-end">Days Left</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for product in near_expiry_preview %}
+                        <tr>
+                            <td>{{ product.name }}</td>
+                            <td>{{ product.expiry_date|date:"d M Y" }}</td>
+                            <td class="text-end text-warning fw-semibold">{{ product.days_to_expiry }}</td>
+                        </tr>
+                        {% empty %}
+                        {% for product in expired_preview %}
+                        <tr>
+                            <td>{{ product.name }}</td>
+                            <td>{{ product.expiry_date|date:"d M Y" }}</td>
+                            <td class="text-end text-danger fw-semibold">Expired</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-muted py-4">No expiry alerts right now.</td></tr>
+                        {% endfor %}
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="page-card p-4 h-100">
+            <div class="section-heading">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-success"><i class="bi bi-people-fill"></i></span>
+                    <div>
+                        <h2 class="section-title">Employee Report</h2>
+                        <p class="section-copy">Who sold, how long they worked, what profit they generated, and what has been paid to them.</p>
+                    </div>
+                </div>
+                <a href="{{ employee_report_url }}" class="section-link">Open staff reports</a>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead>
+                        <tr><th>User</th><th class="text-end">Sales</th><th class="text-end">Profit</th><th class="text-end">Time</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for row in employee_rows %}
+                        <tr>
+                            <td>
+                                <a href="{% url 'employee_report_detail' row.user.id %}" class="fw-semibold text-decoration-none">{{ row.user.get_full_name|default:row.user.username }}</a>
+                                <div class="small text-muted">{{ row.role_label }}{% if row.wages_paid > 0 %} | Wages paid Rs {{ row.wages_paid|floatformat:2 }}{% endif %}</div>
+                            </td>
+                            <td class="text-end">Rs {{ row.sales_totals.net_sales|floatformat:2 }}</td>
+                            <td class="text-end">Rs {{ row.sales_totals.gross_profit|floatformat:2 }}</td>
+                            <td class="text-end">{{ row.total_time_display }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted py-4">No active users yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 {% endblock %}
+

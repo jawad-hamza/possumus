@@ -1,0 +1,116 @@
+﻿{% extends "pos/base.html" %}
+{% block title %}Employee Detail{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon success"><i class="bi bi-person-workspace"></i></span>
+        <div>
+            <h1 class="page-title">{{ employee.get_full_name|default:employee.username }}</h1>
+            <p class="page-subtitle">Role {{ metrics.role_label }} | {{ metrics.sales_count }} sales | {{ metrics.total_time_display }} total logged time.</p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <a href="{% url 'employee_report_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> All Employees</a>
+    </div>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-md-3"><div class="metric-card primary"><div class="metric-label">Net Sales</div><div class="metric-value">Rs {{ metrics.sales_totals.net_sales|floatformat:2 }}</div></div></div>
+    <div class="col-md-3"><div class="metric-card success"><div class="metric-label">Gross Profit</div><div class="metric-value">Rs {{ metrics.sales_totals.gross_profit|floatformat:2 }}</div></div></div>
+    <div class="col-md-3"><div class="metric-card warning"><div class="metric-label">Wages Paid</div><div class="metric-value">Rs {{ metrics.wages_paid|floatformat:2 }}</div></div></div>
+    <div class="col-md-3"><div class="metric-card slate"><div class="metric-label">Open Sessions</div><div class="metric-value">{{ metrics.active_sessions }}</div><div class="metric-meta">Total time {{ metrics.total_time_display }}</div></div></div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-6">
+        <div class="page-card p-4 h-100">
+            <div class="section-heading mb-3">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon"><i class="bi bi-clock-history"></i></span>
+                    <div>
+                        <h2 class="section-title">Session Logs</h2>
+                        <p class="section-copy">Login and logout history for this user.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Login</th><th>Logout</th><th class="text-end">Duration</th></tr></thead>
+                    <tbody>
+                        {% for log in session_logs %}
+                        <tr>
+                            <td>{{ log.login_at|date:"d M Y H:i" }}</td>
+                            <td>{% if log.logout_at %}{{ log.logout_at|date:"d M Y H:i" }}{% else %}<span class="text-success fw-semibold">Active</span>{% endif %}</td>
+                            <td class="text-end">{{ log.duration_display }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-muted py-4">No session logs yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="page-card p-4 h-100">
+            <div class="section-heading mb-3">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-warning"><i class="bi bi-wallet2"></i></span>
+                    <div>
+                        <h2 class="section-title">Wage / Staff Payments</h2>
+                        <p class="section-copy">Expense documents linked to this user.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Expense</th><th>Date</th><th class="text-end">Booked</th><th class="text-end">Paid</th></tr></thead>
+                    <tbody>
+                        {% for expense in wage_expenses %}
+                        <tr>
+                            <td>{{ expense.display_title }}<div class="small text-muted">{{ expense.category.name }}</div></td>
+                            <td>{{ expense.date|date:"d M Y" }}</td>
+                            <td class="text-end">Rs {{ expense.amount|floatformat:2 }}</td>
+                            <td class="text-end">Rs {{ expense.paid_amount|floatformat:2 }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted py-4">No staff-linked expenses yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<div class="page-card p-4 mt-4">
+    <div class="section-heading mb-3">
+        <div class="section-heading-copy">
+            <span class="section-title-icon section-icon-success"><i class="bi bi-receipt"></i></span>
+            <div>
+                <h2 class="section-title">Recent Sales</h2>
+                <p class="section-copy">Latest invoices handled by this user.</p>
+            </div>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="table table-sm align-middle mb-0">
+            <thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th class="text-end">Total</th><th class="text-end">Profit</th></tr></thead>
+            <tbody>
+                {% for sale in recent_sales %}
+                <tr>
+                    <td><a href="{% url 'invoice' sale.id %}" class="fw-semibold text-decoration-none">#{{ sale.id }}</a></td>
+                    <td>{{ sale.created_at|date:"d M Y H:i" }}</td>
+                    <td>{{ sale.customer.name|default:"Walk-in" }}</td>
+                    <td class="text-end">Rs {{ sale.total_amount|floatformat:2 }}</td>
+                    <td class="text-end">Rs {{ sale.report_gross_profit|default:0|floatformat:2 }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="text-center text-muted py-4">No sales recorded by this user yet.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

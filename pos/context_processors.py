@@ -1,4 +1,11 @@
-from pos.services.access import get_user_role_label, is_admin, is_cashier
+from pos.services.access import (
+    get_navigation_access,
+    get_navigation_manage_access,
+    get_user_role_label,
+    get_user_role_summary,
+    is_admin,
+    is_cashier,
+)
 
 
 def app_shell(request):
@@ -22,10 +29,14 @@ def app_shell(request):
                 .first()
             )
 
+    user = getattr(request, "user", None)
     return {
-        "is_admin_user": is_admin(getattr(request, "user", None)),
-        "is_cashier_user": is_cashier(getattr(request, "user", None)),
-        "user_role_label": get_user_role_label(getattr(request, "user", None)),
+        "is_admin_user": is_admin(user),
+        "is_cashier_user": is_cashier(user),
+        "user_role_label": get_user_role_label(user),
+        "user_role_summary": get_user_role_summary(user),
+        "nav_access": get_navigation_access(user),
+        "manage_access": get_navigation_manage_access(user),
         "active_user_session": active_session,
         "active_company": active_company,
         "system_settings": system_settings,

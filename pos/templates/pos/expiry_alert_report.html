@@ -1,0 +1,96 @@
+﻿{% extends "pos/base.html" %}
+{% block title %}Expiry Alerts{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon warning"><i class="bi bi-hourglass-split"></i></span>
+        <div>
+            <h1 class="page-title">Expiry Alerts</h1>
+            <p class="page-subtitle">See products that are near expiry or already expired before they become a margin loss.</p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <a href="{% url 'reports_home' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Reports Centre</a>
+    </div>
+</div>
+
+{% if not expiry_tracking_enabled %}
+<div class="alert alert-light border">Expiry tracking is currently off in Settings. Products can still store expiry dates, but alerts will stay hidden until the feature is enabled.</div>
+{% endif %}
+
+<div class="row g-3 mb-4">
+    <div class="col-md-4">
+        <div class="metric-card warning"><div class="metric-label">Near Expiry</div><div class="metric-value">{{ near_expiry_products|length }}</div><div class="metric-meta">Within {{ expiry_alert_days }} days.</div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="metric-card danger"><div class="metric-label">Expired</div><div class="metric-value">{{ expired_products|length }}</div><div class="metric-meta">Already past expiry date.</div></div>
+    </div>
+    <div class="col-md-4">
+        <div class="metric-card slate"><div class="metric-label">Today</div><div class="metric-value">{{ today|date:"d M Y" }}</div><div class="metric-meta">Alert window measured from today.</div></div>
+    </div>
+</div>
+
+<div class="row g-4">
+    <div class="col-xl-6">
+        <div class="page-card p-4 h-100">
+            <div class="section-heading mb-3">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-warning"><i class="bi bi-clock-history"></i></span>
+                    <div>
+                        <h2 class="section-title">Near Expiry Products</h2>
+                        <p class="section-copy">Move, discount, or return these items while they are still saleable.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Product</th><th>Location</th><th>Expiry</th><th class="text-end">Days Left</th></tr></thead>
+                    <tbody>
+                        {% for product in near_expiry_products %}
+                        <tr>
+                            <td><a href="{% url 'product_view' product.id %}" class="fw-semibold text-decoration-none">{{ product.name }}</a><div class="small text-muted">SKU {{ product.sku }}</div></td>
+                            <td>{{ product.location|default:"-" }}</td>
+                            <td>{{ product.expiry_date|date:"d M Y" }}</td>
+                            <td class="text-end text-warning fw-semibold">{{ product.days_to_expiry }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted py-4">No products are close to expiry.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-6">
+        <div class="page-card p-4 h-100">
+            <div class="section-heading mb-3">
+                <div class="section-heading-copy">
+                    <span class="section-title-icon section-icon-danger"><i class="bi bi-exclamation-octagon"></i></span>
+                    <div>
+                        <h2 class="section-title">Expired Products</h2>
+                        <p class="section-copy">These items need immediate stock action, write-off, or supplier return.</p>
+                    </div>
+                </div>
+            </div>
+            <div class="table-responsive">
+                <table class="table table-sm align-middle mb-0">
+                    <thead><tr><th>Product</th><th>Location</th><th>Expiry</th><th class="text-end">Days Over</th></tr></thead>
+                    <tbody>
+                        {% for product in expired_products %}
+                        <tr>
+                            <td><a href="{% url 'product_view' product.id %}" class="fw-semibold text-decoration-none">{{ product.name }}</a><div class="small text-muted">SKU {{ product.sku }}</div></td>
+                            <td>{{ product.location|default:"-" }}</td>
+                            <td>{{ product.expiry_date|date:"d M Y" }}</td>
+                            <td class="text-end text-danger fw-semibold">{{ product.days_overdue }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="4" class="text-center text-muted py-4">No expired products right now.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

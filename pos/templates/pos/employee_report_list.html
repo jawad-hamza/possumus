@@ -1,0 +1,53 @@
+﻿{% extends "pos/base.html" %}
+{% block title %}Employee Reports{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon slate"><i class="bi bi-people-fill"></i></span>
+        <div>
+            <h1 class="page-title">Employee Reports</h1>
+            <p class="page-subtitle">Session time, sales, profit, and wages linked to each login.</p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <a href="{% url 'reports_home' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Reports Centre</a>
+    </div>
+</div>
+
+<div class="page-card p-4">
+    <div class="table-responsive">
+        <table class="table align-middle mb-0">
+            <thead>
+                <tr>
+                    <th>User</th>
+                    <th>Role</th>
+                    <th class="text-end">Net Sales</th>
+                    <th class="text-end">Gross Profit</th>
+                    <th class="text-end">Wages Paid</th>
+                    <th class="text-end">Total Time</th>
+                    <th class="text-end">Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in employee_rows %}
+                <tr>
+                    <td>
+                        <div class="fw-semibold">{{ row.user.get_full_name|default:row.user.username }}</div>
+                        <div class="small text-muted">{{ row.user.username }} | {{ row.sales_count }} sales</div>
+                    </td>
+                    <td>{{ row.role_label }}</td>
+                    <td class="text-end">Rs {{ row.sales_totals.net_sales|floatformat:2 }}</td>
+                    <td class="text-end">Rs {{ row.sales_totals.gross_profit|floatformat:2 }}</td>
+                    <td class="text-end">Rs {{ row.wages_paid|floatformat:2 }}</td>
+                    <td class="text-end">{{ row.total_time_display }}</td>
+                    <td class="text-end"><a href="{% url 'employee_report_detail' row.user.id %}" class="btn btn-sm btn-outline-dark">Open</a></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="text-center text-muted py-4">No active users found.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

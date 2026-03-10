@@ -1,4 +1,4 @@
-from decimal import Decimal
+﻿from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
@@ -90,7 +90,7 @@ def create_sale_return(*, sale, quantities, refund_method, reason, notes="", ban
         if sale_obj.tax_mode == Sale.TAX_MODE_MANUAL:
             tax_amount = quantize_money(net_amount * (Decimal(sale_obj.tax_rate or 0) / Decimal("100")))
         else:
-            rate = Decimal(item.product.category.effective_gst_rate if item.product.category else 0)
+            rate = Decimal(item.tax_rate_for_payment_method(sale_obj.payment_method))
             tax_amount = quantize_money(net_amount * (rate / Decimal("100")))
         cost_amount = quantize_money(Decimal(item.cost_price or 0) * Decimal(quantity))
 
@@ -249,3 +249,4 @@ def create_purchase_return(*, purchase, quantities, settlement_method, reason, n
         metadata={"total_amount": str(purchase_return.total_amount)},
     )
     return purchase_return
+

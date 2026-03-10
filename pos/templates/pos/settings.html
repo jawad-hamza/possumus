@@ -114,9 +114,52 @@
         font-weight: 700;
     }
 
+    .settings-tabs-shell {
+        padding: 0.4rem;
+        border-radius: 20px;
+    }
+
+    .settings-tabs {
+        gap: 0.75rem;
+    }
+
+    .settings-tabs .nav-link {
+        border: 1px solid transparent;
+        border-radius: 14px;
+        color: var(--text-soft);
+        font-weight: 700;
+        padding: 0.85rem 1rem;
+        background: transparent;
+        display: flex;
+        align-items: center;
+        gap: 0.55rem;
+    }
+
+    .settings-tabs .nav-link:hover {
+        border-color: var(--card-border);
+        color: var(--text-main);
+        background: #fff;
+    }
+
+    .settings-tabs .nav-link.active {
+        color: #fff;
+        border-color: transparent;
+        background: linear-gradient(135deg, #14213d, #1d4ed8);
+        box-shadow: 0 18px 28px rgba(20, 33, 61, 0.16);
+    }
+
+    .settings-tab-pane {
+        padding-top: 1rem;
+    }
+
     @media (max-width: 991px) {
         .settings-form-grid {
             grid-template-columns: 1fr;
+        }
+
+        .settings-tabs .nav-link {
+            width: 100%;
+            justify-content: center;
         }
     }
 </style>
@@ -198,6 +241,38 @@
     </div>
 </div>
 
+<div class="page-card settings-tabs-shell mb-4">
+    <ul class="nav nav-pills settings-tabs" id="settingsTabNav" role="tablist">
+        <li class="nav-item" role="presentation">
+            <button class="nav-link active" id="settings-business-tab" data-bs-toggle="pill" data-bs-target="#settings-business-pane" type="button" role="tab" aria-controls="settings-business-pane" aria-selected="true" data-settings-tab="business">
+                <i class="bi bi-shop"></i>Business
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="settings-banking-tab" data-bs-toggle="pill" data-bs-target="#settings-banking-pane" type="button" role="tab" aria-controls="settings-banking-pane" aria-selected="false" data-settings-tab="banking">
+                <i class="bi bi-bank"></i>Banking
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="settings-backups-tab" data-bs-toggle="pill" data-bs-target="#settings-backups-pane" type="button" role="tab" aria-controls="settings-backups-pane" aria-selected="false" data-settings-tab="backups">
+                <i class="bi bi-safe2"></i>Backups
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="settings-audit-tab" data-bs-toggle="pill" data-bs-target="#settings-audit-pane" type="button" role="tab" aria-controls="settings-audit-pane" aria-selected="false" data-settings-tab="audit">
+                <i class="bi bi-journal-text"></i>Audit
+            </button>
+        </li>
+        <li class="nav-item" role="presentation">
+            <button class="nav-link" id="settings-team-tab" data-bs-toggle="pill" data-bs-target="#settings-team-pane" type="button" role="tab" aria-controls="settings-team-pane" aria-selected="false" data-settings-tab="team">
+                <i class="bi bi-people"></i>Team
+            </button>
+        </li>
+    </ul>
+</div>
+
+<div class="tab-content">
+<div class="tab-pane fade show active settings-tab-pane" id="settings-business-pane" role="tabpanel" aria-labelledby="settings-business-tab" tabindex="0">
 <div class="row g-4 mb-4">
     <div class="col-xl-6">
         <div class="page-card p-4 h-100">
@@ -291,6 +366,21 @@
                         {{ system_form.thermal_printer_width_mm }}
                         <div class="form-text">{{ system_form.thermal_printer_width_mm.help_text }}</div>
                     </div>
+                    <div>
+                        <label class="form-label fw-semibold" for="{{ system_form.cash_gst_rate.id_for_label }}">{{ system_form.cash_gst_rate.label }}</label>
+                        {{ system_form.cash_gst_rate }}
+                        <div class="form-text">{{ system_form.cash_gst_rate.help_text }}</div>
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold" for="{{ system_form.bank_gst_rate.id_for_label }}">{{ system_form.bank_gst_rate.label }}</label>
+                        {{ system_form.bank_gst_rate }}
+                        <div class="form-text">{{ system_form.bank_gst_rate.help_text }}</div>
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold" for="{{ system_form.expiry_alert_days.id_for_label }}">{{ system_form.expiry_alert_days.label }}</label>
+                        {{ system_form.expiry_alert_days }}
+                        <div class="form-text">{{ system_form.expiry_alert_days.help_text }}</div>
+                    </div>
                 </div>
 
                 <div class="settings-switches mt-3">
@@ -300,6 +390,20 @@
                             <p>Turns tax calculation on for sales and reports.</p>
                         </div>
                         <div class="form-check form-switch m-0">{{ system_form.gst_enabled }}</div>
+                    </div>
+                    <div class="settings-switch">
+                        <div class="copy">
+                            <h3>Use Payment Method GST</h3>
+                            <p>Cash and bank sales will automatically use their own GST rates and the POS cart tax box will lock.</p>
+                        </div>
+                        <div class="form-check form-switch m-0">{{ system_form.use_payment_method_gst }}</div>
+                    </div>
+                    <div class="settings-switch">
+                        <div class="copy">
+                            <h3>Enable Product Expiry Tracking</h3>
+                            <p>Shows expiry date on product and purchase screens and turns on dashboard expiry alerts.</p>
+                        </div>
+                        <div class="form-check form-switch m-0">{{ system_form.enable_product_expiry }}</div>
                     </div>
                     <div class="settings-switch">
                         <div class="copy">
@@ -325,8 +429,8 @@
                 </div>
 
                 <div class="settings-note mt-3">
-                    <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>How tax mode works</div>
-                    <div class="small">If you switch to <strong>Category GST</strong>, the POS cart tax box is disabled and each product line uses its category GST status and rate instead.</div>
+                    <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>How automatic tax works</div>
+                    <div class="small">If you switch to <strong>Category GST</strong>, each product line uses the category GST matrix, including category-specific cash and bank GST when those rates differ. If you keep <strong>Manual Cart Tax</strong> but enable <strong>Payment Method GST</strong>, cash and bank will instead use the business-level GST rates from this page and the receipt will show both totals.</div>
                 </div>
 
                 <button class="btn btn-dark mt-3">Save GST & POS Rules</button>
@@ -341,7 +445,7 @@
             <span class="section-title-icon"><i class="bi bi-tags"></i></span>
             <div>
                 <h2 class="h4 mb-1">Category GST Matrix</h2>
-                <p class="text-muted mb-0">Review taxable, zero-rated, and exempt product categories.</p>
+                <p class="text-muted mb-0">Review taxable, zero-rated, exempt, and cash-vs-bank GST rates for product categories.</p>
             </div>
         </div>
         <a href="{% url 'category_add' %}" class="btn btn-dark"><i class="bi bi-plus-circle me-2"></i>Add Category</a>
@@ -352,7 +456,9 @@
                 <tr>
                     <th>Category</th>
                     <th>GST Status</th>
-                    <th>Rate</th>
+                    <th>Default</th>
+                    <th>Cash</th>
+                    <th>Bank</th>
                     <th>Status</th>
                     <th class="text-end">Action</th>
                 </tr>
@@ -371,6 +477,8 @@
                         {% endif %}
                     </td>
                     <td class="category-rate">{{ category.gst_rate|floatformat:2 }}%</td>
+                    <td class="category-rate">{{ category.cash_gst_rate|floatformat:2 }}%</td>
+                    <td class="category-rate">{{ category.bank_gst_rate|floatformat:2 }}%</td>
                     <td>
                         {% if category.is_active %}
                         <span class="status-chip healthy">Active</span>
@@ -381,13 +489,15 @@
                     <td class="text-end"><a href="{% url 'category_edit' category.id %}" class="btn btn-sm btn-outline-dark">Edit</a></td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="5" class="text-center text-muted py-4">No categories created yet.</td></tr>
+                <tr><td colspan="7" class="text-center text-muted py-4">No categories created yet.</td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade settings-tab-pane" id="settings-banking-pane" role="tabpanel" aria-labelledby="settings-banking-tab" tabindex="0">
 <div class="row g-4 mb-4">
     <div class="col-xl-5">
         <div class="page-card p-4 h-100">
@@ -473,7 +583,9 @@
         </div>
     </div>
 </div>
+</div>
 
+<div class="tab-pane fade settings-tab-pane" id="settings-backups-pane" role="tabpanel" aria-labelledby="settings-backups-tab" tabindex="0">
 <div class="row g-4 mb-4">
     <div class="col-xl-5">
         <div class="page-card p-4 h-100">
@@ -481,7 +593,7 @@
                 <span class="section-title-icon"><i class="bi bi-safe2"></i></span>
                 <div>
                     <h2 class="h4 mb-1">Backups</h2>
-                    <p class="text-muted mb-0">Take a database snapshot before major data changes, and restore one when recovery is needed.</p>
+                    <p class="text-muted mb-0">Take a database snapshot before major data changes, upload an existing one, and restore only when recovery is needed.</p>
                 </div>
             </div>
             <form method="post" novalidate>
@@ -497,9 +609,30 @@
                 </div>
                 <div class="settings-note mb-3">
                     <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Current backup scope</div>
-                    <div class="small">This creates a database snapshot of the current business data. Take a fresh backup before restore operations.</div>
+                    <div class="small">Live database: <span class="fw-semibold">{{ backup_runtime.vendor_label }}</span> ({{ backup_runtime.database_name }}).</div>
+                    <div class="small mt-1">This page can create snapshots for the active database engine and download any saved snapshot from the history table.</div>
+                    <div class="small mt-1">Accepted uploads: {{ backup_runtime.allowed_upload_extensions|join:', ' }}</div>
                 </div>
                 <button class="btn btn-dark w-100"><i class="bi bi-download me-2"></i>Create Backup Snapshot</button>
+            </form>
+
+            <form method="post" enctype="multipart/form-data" novalidate class="mt-4 pt-4 border-top">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="upload_backup">
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="backup_upload_file">Upload Snapshot File</label>
+                    <input id="backup_upload_file" type="file" name="backup_upload_file" class="form-control" accept="{{ backup_runtime.allowed_upload_extensions|join:',' }}" required>
+                    <div class="form-text">Use a saved `.sqlite3`, `.dump`, or `.sql` snapshot file.</div>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="upload_backup_label">Snapshot Label</label>
+                    <input id="upload_backup_label" name="upload_backup_label" class="form-control" placeholder="Imported from staging, accountant archive, cloud restore point">
+                </div>
+                <div class="mb-3">
+                    <label class="form-label fw-semibold" for="upload_backup_notes">Upload Notes</label>
+                    <textarea id="upload_backup_notes" name="upload_backup_notes" class="form-control" rows="3" placeholder="Optional note about where this snapshot came from"></textarea>
+                </div>
+                <button class="btn btn-outline-dark w-100"><i class="bi bi-upload me-2"></i>Upload Backup Snapshot</button>
             </form>
         </div>
     </div>
@@ -511,7 +644,7 @@
                     <span class="section-title-icon"><i class="bi bi-clock-history"></i></span>
                     <div>
                         <h2 class="h4 mb-1">Backup History</h2>
-                        <p class="text-muted mb-0">Recent snapshots with file size, creator, and restore status.</p>
+                        <p class="text-muted mb-0">Recent snapshots with file size, creator, download access, and restore status.</p>
                     </div>
                 </div>
                 <span class="status-chip clear">{{ backup_count }} total snapshots</span>
@@ -533,17 +666,23 @@
                             <td>
                                 <div class="fw-semibold">{{ snapshot.label }}</div>
                                 <div class="small text-muted">{{ snapshot.notes|default:snapshot.file_name }}</div>
+                                <div class="small text-muted mt-1">{{ snapshot.vendor_label }} snapshot{% if not snapshot.can_restore_here %} - restore disabled for {{ backup_runtime.vendor_label }}{% endif %}</div>
                             </td>
                             <td>{{ snapshot.created_at|date:"d M Y H:i" }}{% if snapshot.created_by %}<div class="small text-muted">by {{ snapshot.created_by.username }}</div>{% endif %}</td>
                             <td>{{ snapshot.size_kb }} KB</td>
                             <td>{{ snapshot.restored_at|date:"d M Y H:i"|default:"Never" }}</td>
                             <td class="text-end">
+                                <a href="{% url 'download_backup_snapshot' snapshot.id %}" class="btn btn-sm btn-outline-dark me-2">Download</a>
+                                {% if snapshot.can_restore_here %}
                                 <form method="post" class="d-inline" onsubmit="return confirm('Restore this backup? The current live database will be replaced.');">
                                     {% csrf_token %}
                                     <input type="hidden" name="action" value="restore_backup">
                                     <input type="hidden" name="snapshot_id" value="{{ snapshot.id }}">
                                     <button class="btn btn-sm btn-outline-warning">Restore</button>
                                 </form>
+                                {% else %}
+                                <button class="btn btn-sm btn-outline-secondary" type="button" disabled>Restore</button>
+                                {% endif %}
                             </td>
                         </tr>
                         {% empty %}
@@ -555,8 +694,10 @@
         </div>
     </div>
 </div>
+</div>
 
-<div class="page-card p-4 mb-4">
+<div class="tab-pane fade settings-tab-pane" id="settings-audit-pane" role="tabpanel" aria-labelledby="settings-audit-tab" tabindex="0">
+<div class="page-card p-4 mb-4" id="audit-trail">
     <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
         <div class="section-title d-flex align-items-center gap-2 mb-0">
             <span class="section-title-icon"><i class="bi bi-journal-text"></i></span>
@@ -566,6 +707,30 @@
             </div>
         </div>
         <span class="status-chip clear">{{ audit_event_count }} recorded events</span>
+    </div>
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
+        <div class="small text-muted">
+            {% if audit_mode == "all" %}
+            Showing all {{ audit_event_count }} recorded events.
+            {% elif audit_page_obj %}
+            Showing {{ audit_page_obj.start_index }}-{{ audit_page_obj.end_index }} of {{ audit_event_count }} recorded events.
+            {% else %}
+            Showing up to {{ audit_page_size }} recorded events.
+            {% endif %}
+        </div>
+        <div class="d-flex flex-wrap gap-2">
+            {% if audit_mode == "all" %}
+            <a href="{% url 'settings_page' %}#audit-trail" class="btn btn-sm btn-outline-dark">Back to Top 10</a>
+            {% else %}
+            <a href="{% url 'settings_page' %}?audit_mode=all#audit-trail" class="btn btn-sm btn-outline-dark">Show All</a>
+            {% if audit_page_obj and audit_page_obj.has_previous %}
+            <a href="{% url 'settings_page' %}?audit_page={{ audit_page_obj.previous_page_number }}#audit-trail" class="btn btn-sm btn-outline-secondary">Previous</a>
+            {% endif %}
+            {% if audit_page_obj and audit_page_obj.has_next %}
+            <a href="{% url 'settings_page' %}?audit_page={{ audit_page_obj.next_page_number }}#audit-trail" class="btn btn-sm btn-outline-secondary">Next</a>
+            {% endif %}
+            {% endif %}
+        </div>
     </div>
     <div class="table-responsive">
         <table class="table align-middle mb-0">
@@ -594,6 +759,106 @@
         </table>
     </div>
 </div>
+</div>
+
+<div class="tab-pane fade settings-tab-pane" id="settings-team-pane" role="tabpanel" aria-labelledby="settings-team-tab" tabindex="0">
+<div class="row g-4 mb-4">
+    <div class="col-xl-5">
+        <div class="page-card p-4 h-100">
+            <div class="section-title d-flex align-items-center gap-2 mb-3">
+                <span class="section-title-icon"><i class="bi bi-diagram-3"></i></span>
+                <div>
+                    <h2 class="h4 mb-1">Create Custom Role</h2>
+                    <p class="text-muted mb-0">Build roles like Manager, Accountant, or Supervisor with page-by-page access and view/manage control.</p>
+                </div>
+            </div>
+            {% if role_form.non_field_errors %}
+            <div class="alert alert-warning py-2">{{ role_form.non_field_errors|striptags }}</div>
+            {% endif %}
+            <form method="post" novalidate>
+                {% csrf_token %}
+                <input type="hidden" name="action" value="create_role">
+                <div class="settings-form-grid">
+                    <div>
+                        <label class="form-label fw-semibold" for="{{ role_form.name.id_for_label }}">{{ role_form.name.label }}</label>
+                        {{ role_form.name }}
+                        {% if role_form.name.help_text %}<div class="form-text">{{ role_form.name.help_text }}</div>{% endif %}
+                        {% if role_form.name.errors %}<div class="text-danger small mt-1">{{ role_form.name.errors|striptags }}</div>{% endif %}
+                    </div>
+                    <div>
+                        <label class="form-label fw-semibold" for="{{ role_form.description.id_for_label }}">{{ role_form.description.label }}</label>
+                        {{ role_form.description }}
+                        {% if role_form.description.help_text %}<div class="form-text">{{ role_form.description.help_text }}</div>{% endif %}
+                        {% if role_form.description.errors %}<div class="text-danger small mt-1">{{ role_form.description.errors|striptags }}</div>{% endif %}
+                    </div>
+                </div>
+                <div class="permission-grid mt-3">
+                    {% for field in role_form %}
+                    {% if field.name != 'name' and field.name != 'description' %}
+                    <div class="role-permission-card">
+                        <h3>{{ field.label }}</h3>
+                        <p>{{ field.help_text }}</p>
+                        {{ field }}
+                        {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors|striptags }}</div>{% endif %}
+                    </div>
+                    {% endif %}
+                    {% endfor %}
+                </div>
+                <button class="btn btn-dark w-100 mt-3"><i class="bi bi-plus-circle me-2"></i>Create Custom Role</button>
+            </form>
+        </div>
+    </div>
+
+    <div class="col-xl-7">
+        <div class="page-card p-4 h-100">
+            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+                <div class="section-title d-flex align-items-center gap-2 mb-0">
+                    <span class="section-title-icon"><i class="bi bi-shield-check"></i></span>
+                    <div>
+                        <h2 class="h4 mb-1">Custom Role Library</h2>
+                        <p class="text-muted mb-0">Every custom role is reusable in the team-user form and in the access reassignment table below.</p>
+                    </div>
+                </div>
+                <span class="status-chip clear">{{ custom_role_count }} custom role{{ custom_role_count|pluralize }}</span>
+            </div>
+            <div class="table-responsive">
+                <table class="table align-middle mb-0">
+                    <thead>
+                        <tr>
+                            <th>Role</th>
+                            <th>Permissions</th>
+                            <th>Assigned Users</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in custom_roles %}
+                        <tr>
+                            <td>
+                                <div class="fw-semibold">{{ entry.role.name }}</div>
+                                <div class="small text-muted">{{ entry.role.description|default:"No description" }}</div>
+                            </td>
+                            <td>
+                                <div class="permission-badge-wrap mb-2">
+                                    {% for permission in entry.permission_items %}
+                                    <span class="permission-badge {% if permission.level == 'Manage' %}manage{% else %}view{% endif %}">
+                                        <i class="bi {% if permission.level == 'Manage' %}bi-pencil-square{% else %}bi-eye{% endif %}"></i>
+                                        {{ permission.label }}
+                                    </span>
+                                    {% endfor %}
+                                </div>
+                                <div class="access-summary">{{ entry.permissions_summary }}</div>
+                            </td>
+                            <td class="fw-semibold">{{ entry.member_count }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="text-center text-muted py-4">No custom roles created yet. Built-in Admin and Cashier roles are still available.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
 
 <div class="row g-4">
     <div class="col-xl-5">
@@ -602,7 +867,7 @@
                 <span class="section-title-icon"><i class="bi bi-person-plus"></i></span>
                 <div>
                     <h2 class="h4 mb-1">Add Team Member</h2>
-                    <p class="text-muted mb-0">Create a new admin or cashier login without leaving the system.</p>
+                    <p class="text-muted mb-0">Create a new admin, cashier, or custom-role login without leaving the system.</p>
                 </div>
             </div>
             <form method="post" novalidate>
@@ -627,7 +892,7 @@
                 <span class="section-title-icon"><i class="bi bi-shield-lock"></i></span>
                 <div>
                     <h2 class="h4 mb-1">Access Rules</h2>
-                    <p class="text-muted mb-0">Admins can access the full system. Cashiers are restricted to POS and their own receipts.</p>
+                    <p class="text-muted mb-0">Admins have the full system, cashiers stay POS-only, and custom roles follow the permissions configured above.</p>
                 </div>
             </div>
             <div class="table-responsive">
@@ -637,6 +902,7 @@
                             <th>Login ID</th>
                             <th>Name</th>
                             <th>Role</th>
+                            <th>Access</th>
                             <th>Sales</th>
                             <th>Last Login</th>
                             <th>Status</th>
@@ -649,11 +915,12 @@
                             <td class="fw-semibold">{{ row.user.username }}</td>
                             <td>{{ row.user.get_full_name|default:"-" }}</td>
                             <td>
-                                <span class="role-pill {% if row.role_label == 'Cashier' %}cashier{% endif %}">
-                                    <i class="bi {% if row.role_label == 'Cashier' %}bi-cart4{% else %}bi-shield-check{% endif %}"></i>
+                                <span class="role-pill {% if row.role_variant == 'cashier' %}cashier{% elif row.role_variant == 'custom' %}custom{% endif %}">
+                                    <i class="bi {% if row.role_variant == 'cashier' %}bi-cart4{% elif row.role_variant == 'custom' %}bi-diagram-3{% else %}bi-shield-check{% endif %}"></i>
                                     {{ row.role_label }}
                                 </span>
                             </td>
+                            <td><div class="access-summary">{{ row.access_summary }}</div></td>
                             <td>
                                 <div class="fw-semibold">{{ row.sales_count }}</div>
                                 <div class="small text-muted">Rs {{ row.sales_value|floatformat:2 }}</div>
@@ -670,6 +937,17 @@
                                 {% if row.user.id == request.user.id %}
                                 <span class="text-muted small">Current account</span>
                                 {% else %}
+                                <form method="post" class="d-flex flex-wrap justify-content-end gap-2 mb-2">
+                                    {% csrf_token %}
+                                    <input type="hidden" name="action" value="change_user_role">
+                                    <input type="hidden" name="user_id" value="{{ row.user.id }}">
+                                    <select name="role" class="form-select form-select-sm" style="min-width: 180px;">
+                                        {% for value, label in role_choices %}
+                                        <option value="{{ value }}" {% if value == row.role_value %}selected{% endif %}>{{ label }}</option>
+                                        {% endfor %}
+                                    </select>
+                                    <button class="btn btn-sm btn-outline-dark">Save Role</button>
+                                </form>
                                 <form method="post" class="d-inline">
                                     {% csrf_token %}
                                     <input type="hidden" name="action" value="toggle_user">
@@ -682,7 +960,7 @@
                             </td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="7" class="text-center text-muted py-4">No team members have been created yet.</td></tr>
+                        <tr><td colspan="8" class="text-center text-muted py-4">No team members have been created yet.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
@@ -690,7 +968,6 @@
         </div>
     </div>
 </div>
-
 <div class="page-card p-4 mt-4">
     <div class="section-title d-flex align-items-center gap-2 mb-3">
         <span class="section-title-icon"><i class="bi bi-clock-history"></i></span>
@@ -734,5 +1011,133 @@
         </table>
     </div>
 </div>
+</div>
+</div>
 {% endblock %}
+
+{% block extra_js %}
+<script>
+    (function () {
+        const tabStorageKey = 'settingsActiveTab';
+        const tabButtons = Array.from(document.querySelectorAll('[data-settings-tab]'));
+
+        function findTabButtonByName(tabName) {
+            return tabButtons.find(function (button) {
+                return button.dataset.settingsTab === tabName;
+            });
+        }
+
+        function showSettingsTab(button) {
+            if (!button || typeof bootstrap === 'undefined') {
+                return;
+            }
+            bootstrap.Tab.getOrCreateInstance(button).show();
+        }
+
+        function tabNameFromHash() {
+            if (!window.location.hash) {
+                return '';
+            }
+            if (window.location.hash === '#audit-trail') {
+                return 'audit';
+            }
+            const target = document.querySelector(window.location.hash);
+            if (!target) {
+                return '';
+            }
+            const pane = target.closest('.tab-pane');
+            if (!pane) {
+                return '';
+            }
+            const button = tabButtons.find(function (candidate) {
+                return candidate.getAttribute('data-bs-target') === '#' + pane.id;
+            });
+            return button ? button.dataset.settingsTab : '';
+        }
+
+        function syncTabQuery(tabName) {
+            const currentUrl = new URL(window.location.href);
+            if (tabName === 'business') {
+                currentUrl.searchParams.delete('tab');
+            } else {
+                currentUrl.searchParams.set('tab', tabName);
+            }
+            window.history.replaceState({}, '', currentUrl);
+        }
+
+        tabButtons.forEach(function (button) {
+            button.addEventListener('shown.bs.tab', function (event) {
+                const tabName = event.target.dataset.settingsTab || 'business';
+                localStorage.setItem(tabStorageKey, tabName);
+                syncTabQuery(tabName);
+
+                if (window.location.hash) {
+                    const target = document.querySelector(window.location.hash);
+                    if (target) {
+                        window.requestAnimationFrame(function () {
+                            target.scrollIntoView({ block: 'start' });
+                        });
+                    }
+                }
+            });
+        });
+
+        window.addEventListener('DOMContentLoaded', function () {
+            const requestedTab = new URLSearchParams(window.location.search).get('tab');
+            const hashTab = tabNameFromHash();
+            const savedTab = localStorage.getItem(tabStorageKey);
+            const initialTab = hashTab || requestedTab || savedTab || 'business';
+            showSettingsTab(findTabButtonByName(initialTab) || findTabButtonByName('business'));
+        });
+
+        function shouldResetSettingsScroll() {
+            if (window.location.hash) {
+                return false;
+            }
+            return !document.querySelector('.text-danger, .alert-warning, .alert-danger');
+        }
+
+        function resetSettingsScroll() {
+            if (!shouldResetSettingsScroll()) {
+                return;
+            }
+            window.scrollTo(0, 0);
+            document.documentElement.scrollTop = 0;
+            document.body.scrollTop = 0;
+            const content = document.getElementById('content');
+            if (content) {
+                content.scrollTop = 0;
+            }
+        }
+
+        if ('scrollRestoration' in window.history) {
+            window.history.scrollRestoration = 'manual';
+        }
+
+        window.addEventListener('DOMContentLoaded', function () {
+            window.requestAnimationFrame(resetSettingsScroll);
+        });
+
+        window.addEventListener('pageshow', function () {
+            window.requestAnimationFrame(resetSettingsScroll);
+        });
+    })();
+</script>
+{% endblock %}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 

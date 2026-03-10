@@ -750,46 +750,62 @@
             </button>
         </div>
 
-        <nav class="sidebar-nav">
-            {% if is_admin_user %}
+                <nav class="sidebar-nav">
+            {% if nav_access.dashboard %}
             <a href="{% url 'dashboard' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
                 <i class="bi bi-speedometer2"></i>
                 <span class="nav-copy">Dashboard</span>
             </a>
             {% endif %}
+            {% if nav_access.pos %}
             <a href="{% url 'pos_screen' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'pos_screen' or request.resolver_match.url_name == 'invoice' or request.resolver_match.url_name == 'sale_return' or request.resolver_match.url_name == 'invoice_pdf' or request.resolver_match.url_name == 'add_customer_from_pos' or request.resolver_match.url_name == 'customer_add' %}active{% endif %}">
                 <i class="bi bi-cart4"></i>
                 <span class="nav-copy">POS</span>
             </a>
-            {% if is_admin_user %}
+            {% endif %}
+            {% if nav_access.products %}
             <a href="{% url 'product_list' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'product_list' or request.resolver_match.url_name == 'product_add' or request.resolver_match.url_name == 'product_view' or request.resolver_match.url_name == 'product_edit' %}active{% endif %}">
                 <i class="bi bi-box-seam"></i>
                 <span class="nav-copy">Products</span>
             </a>
+            {% endif %}
+            {% if nav_access.stock_control %}
             <a href="{% url 'stock_adjustments' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'stock_adjustments' %}active{% endif %}">
                 <i class="bi bi-boxes"></i>
                 <span class="nav-copy">Stock Control</span>
             </a>
+            {% endif %}
+            {% if nav_access.purchases %}
             <a href="{% url 'purchase_list' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'purchase_list' or request.resolver_match.url_name == 'purchase_add' or request.resolver_match.url_name == 'purchase_detail' or request.resolver_match.url_name == 'purchase_return' or request.resolver_match.url_name == 'purchase_edit' %}active{% endif %}">
                 <i class="bi bi-truck"></i>
                 <span class="nav-copy">Purchases</span>
             </a>
+            {% endif %}
+            {% if nav_access.expenses %}
             <a href="{% url 'expense_list' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'expense_list' or request.resolver_match.url_name == 'money_desk' %}active{% endif %}">
                 <i class="bi bi-receipt-cutoff"></i>
                 <span class="nav-copy">Expenses</span>
             </a>
+            {% endif %}
+            {% if nav_access.parties %}
             <a href="{% url 'parties_home' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'parties_home' or request.resolver_match.url_name == 'customer_list' or request.resolver_match.url_name == 'customer_add' or request.resolver_match.url_name == 'customer_detail' or request.resolver_match.url_name == 'supplier_list' or request.resolver_match.url_name == 'supplier_add' or request.resolver_match.url_name == 'supplier_detail' or request.resolver_match.url_name == 'party_statement_page' %}active{% endif %}">
                 <i class="bi bi-people"></i>
                 <span class="nav-copy">Parties</span>
             </a>
+            {% endif %}
+            {% if nav_access.accounts %}
             <a href="{% url 'accounts_home' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'accounts_home' or request.resolver_match.url_name == 'money_breakdown' or request.resolver_match.url_name == 'trial_balance' or request.resolver_match.url_name == 'profit_loss' or request.resolver_match.url_name == 'balance_sheet' or request.resolver_match.url_name == 'account_ledger' or request.resolver_match.url_name == 'party_statement' %}active{% endif %}">
                 <i class="bi bi-journal-text"></i>
                 <span class="nav-copy">Accounts</span>
             </a>
+            {% endif %}
+            {% if nav_access.reports %}
             <a href="{% url 'reports_home' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'reports_home' or request.resolver_match.url_name == 'daily_sales_report' or request.resolver_match.url_name == 'low_stock_list' %}active{% endif %}">
                 <i class="bi bi-graph-up-arrow"></i>
                 <span class="nav-copy">Reports</span>
             </a>
+            {% endif %}
+            {% if nav_access.settings %}
             <a href="{% url 'settings_page' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'settings_page' %}active{% endif %}">
                 <i class="bi bi-gear"></i>
                 <span class="nav-copy">Settings</span>
@@ -809,6 +825,8 @@
             </div>
             {% if is_cashier_user %}
             <div class="sidebar-hint sidebar-copy">Cashier access is limited to POS checkout and your own receipts.</div>
+            {% elif user_role_summary and user_role_summary != "Full system access" %}
+            <div class="sidebar-hint sidebar-copy">{{ user_role_summary }}</div>
             {% endif %}
             <form method="post" action="{% url 'logout' %}" class="logout-form">
                 {% csrf_token %}
@@ -865,6 +883,12 @@
 {% block extra_js %}{% endblock %}
 </body>
 </html>
+
+
+
+
+
+
 
 
 

@@ -17,7 +17,7 @@ It combines day-to-day selling with stock movement, supplier and customer balanc
 - Owner capital, money transfer, and money breakdown views
 - Accounting dashboard, trial balance, profit and loss, and balance sheet
 - Backup snapshots and audit logging
-- Admin and cashier role-based access
+- Admin, cashier, and custom role-based access
 
 ## Main apps
 
@@ -146,12 +146,27 @@ Typical local commands:
 .\.venv\Scripts\python.exe manage.py runserver
 ```
 
+## Production readiness status
+
+Current status: suitable for localhost demos, internal UAT, and supervised pilot use, but not ready to hand to a client VPS as-is.
+
+Current deployment blockers:
+
+- `possumus/settings.py` is still hardcoded for development: `DEBUG=True`, fixed `SECRET_KEY`, empty `ALLOWED_HOSTS`, and no HTTPS/cookie/HSTS production settings.
+- Static files are not production-configured yet. `STATIC_ROOT` and a real collectstatic serving strategy are missing.
+- The app is still configured for SQLite by default. That is not a good default for a concurrent commercial VPS deployment.
+- Backup/restore is SQLite-only today, so it will not cover a PostgreSQL production setup without further work.
+- `requirements.txt` is not a clean server runtime file yet. It looks like a workstation dump and is missing clear application runtime pins such as Django/DRF/report generation dependencies.
+
+Before any client VPS rollout, use the deployment checklist in [docs/DEPLOYMENT.md](/C:/Users/Jawad%20Hamza/Desktop/codex/possumus/docs/DEPLOYMENT.md).
+
 ## Documentation files created in this repository
 
 - `README.md` - project overview and quick start
 - `docs/HOW_TO_USE.md` - operator-facing usage guide
 - `docs/FULL_DOCUMENTATION.md` - full introduction and technical/business documentation
 - `docs/TUTORIAL.md` - step-by-step training guide with workflow screenshots
+- `docs/DEPLOYMENT.md` - deployment readiness status and VPS checklist
 - `docs/How_to_Use_POS_IMS.pdf` - PDF user guide
 - `docs/POS_IMS_Full_Documentation.pdf` - PDF introduction and documentation
 - `docs/POS_IMS_Source_Code.pdf` - PDF export of source files
@@ -169,7 +184,3 @@ After updating the Markdown docs or source files, regenerate the PDFs with:
 .\.venv\Scripts\python.exe docs\capture_snapshots.py
 .\.venv\Scripts\python.exe docs\generate_pdfs.py
 ```
-
-## Current deployment note
-
-The application is documented here for local and operational use. Before production deployment, review the Django deployment settings separately, especially secret management, hosts, HTTPS, and secure cookie settings.

@@ -1,4 +1,4 @@
-from django.conf import settings
+﻿from django.conf import settings
 from django.utils import timezone
 from django.db import models
 from django.core.exceptions import ValidationError
@@ -125,7 +125,7 @@ class Voucher(models.Model):
     voucher_type = models.CharField(max_length=20, choices=VOUCHER_TYPE_CHOICES)
     narration = models.CharField(max_length=255, blank=True)
 
-    # Optional references (we’ll use later when integrating with POS)
+    # Optional references (weâ€™ll use later when integrating with POS)
     ref_model = models.CharField(max_length=50, blank=True, null=True)  # e.g. "Sale"
     ref_id = models.PositiveIntegerField(null=True, blank=True)  # e.g. sale.id
 
@@ -183,7 +183,7 @@ class Loans(models.Model):
         (GIVEN, "Given"),
     )
 
-    # 🔗 Link to POS parties (Customer / Supplier)
+    # ðŸ”— Link to POS parties (Customer / Supplier)
     content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
     object_id = models.PositiveIntegerField()
     party = GenericForeignKey("content_type", "object_id")
@@ -230,7 +230,7 @@ class LoanTransactions(models.Model):
     )
 
     loan = models.ForeignKey(Loans, related_name="transactions", on_delete=models.CASCADE)
-    date = models.DateField(default=timezone.now)  # ✅ FIXED
+    date = models.DateField(default=timezone.now)  # âœ… FIXED
     tx_type = models.CharField(max_length=10, choices=TX_TYPE_CHOICES)
     payment_method = models.CharField(
         max_length=10,
@@ -380,6 +380,15 @@ def _expense_account_title(name):
 
 
 class ExpenseCategory(models.Model):
+    MONTHLY_FIXED = "monthly_fixed"
+    MONTHLY_VARIABLE = "monthly_variable"
+    CUSTOM = "custom"
+    EXPENSE_PATTERN_CHOICES = (
+        (MONTHLY_FIXED, "Monthly fixed"),
+        (MONTHLY_VARIABLE, "Monthly variable"),
+        (CUSTOM, "Custom / one-off"),
+    )
+
     name = models.CharField(max_length=120, unique=True)
     account = models.OneToOneField(
         "Account",
@@ -388,6 +397,14 @@ class ExpenseCategory(models.Model):
         on_delete=models.PROTECT,
         related_name="expense_category",
     )
+    expense_pattern = models.CharField(
+        max_length=20,
+        choices=EXPENSE_PATTERN_CHOICES,
+        default=CUSTOM,
+    )
+    default_due_day = models.PositiveSmallIntegerField(null=True, blank=True)
+    default_amount = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    alert_days_before = models.PositiveSmallIntegerField(default=7)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
 
@@ -395,8 +412,19 @@ class ExpenseCategory(models.Model):
         ordering = ["name"]
 
     def clean(self):
+        errors = {}
         if self.account and self.account.type != Account.EXPENSE:
-            raise ValidationError({"account": "Expense type must be linked to an expense account."})
+            errors["account"] = "Expense type must be linked to an expense account."
+        if self.default_due_day is not None and not 1 <= int(self.default_due_day) <= 31:
+            errors["default_due_day"] = "Due day must be between 1 and 31."
+        if self.default_amount is not None and self.default_amount < 0:
+            errors["default_amount"] = "Default amount cannot be negative."
+        if self.alert_days_before is None:
+            self.alert_days_before = 7
+        elif int(self.alert_days_before) < 0:
+            errors["alert_days_before"] = "Alert days cannot be negative."
+        if errors:
+            raise ValidationError(errors)
 
     def save(self, *args, **kwargs):
         desired_title = _expense_account_title(self.name)
@@ -418,6 +446,14 @@ class ExpenseCategory(models.Model):
     def __str__(self):
         return self.name
 
+    @property
+    def is_recurring(self):
+        return self.expense_pattern in {self.MONTHLY_FIXED, self.MONTHLY_VARIABLE}
+
+    @property
+    def pattern_label(self):
+        return dict(self.EXPENSE_PATTERN_CHOICES).get(self.expense_pattern, self.get_expense_pattern_display())
+
 
 class Expense(models.Model):
     CASH = "cash"
@@ -430,6 +466,13 @@ class Expense(models.Model):
     category = models.ForeignKey(ExpenseCategory, on_delete=models.PROTECT, related_name="expenses")
     title = models.CharField(max_length=150, blank=True)
     vendor = models.CharField(max_length=150, blank=True)
+    employee = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="expense_records",
+    )
     date = models.DateField(default=timezone.now)
     due_date = models.DateField(null=True, blank=True)
     amount = models.DecimalField(max_digits=12, decimal_places=2)
@@ -736,5 +779,8 @@ class BackupSnapshot(models.Model):
 
     def __str__(self):
         return self.label or self.file_name
+
+
+
 
 
