@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Email | Vendora</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            min-height: 100vh;
+            background: linear-gradient(150deg, #10203a 0%, #1d3557 45%, #eef4fb 45%, #f8fbff 100%);
+            display: grid;
+            place-items: center;
+            padding: 24px;
+            color: #10203a;
+        }
+
+        .card-shell {
+            width: min(100%, 760px);
+            border-radius: 28px;
+            overflow: hidden;
+            background: #ffffff;
+            box-shadow: 0 32px 70px rgba(15, 23, 42, 0.24);
+            display: grid;
+            grid-template-columns: minmax(0, 1fr) minmax(280px, 320px);
+        }
+
+        .copy-pane {
+            padding: clamp(28px, 5vw, 46px);
+        }
+
+        .brand-mark {
+            width: 64px;
+            height: 64px;
+            border-radius: 20px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #f59e0b, #ffd27a);
+            color: #10203a;
+            font-size: 1.4rem;
+            font-weight: 800;
+            margin-bottom: 18px;
+        }
+
+        .side-pane {
+            padding: 28px;
+            background: linear-gradient(180deg, #10203a, #173053);
+            color: #ffffff;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+        }
+
+        .debug-link {
+            word-break: break-word;
+        }
+
+        @media (max-width: 900px) {
+            .card-shell {
+                grid-template-columns: 1fr;
+            }
+        }
+    </style>
+</head>
+<body>
+<div class="card-shell">
+    <section class="copy-pane">
+        <div class="brand-mark">VD</div>
+        <h1 class="display-6 fw-bold mb-3">Check your email</h1>
+        <p class="text-muted mb-4">We sent a verification link to <strong>{{ email }}</strong>. Open that link to unlock your 3 free days on {{ plan.name }} and continue into business setup.</p>
+
+        {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{{ message.tags|default:'info' }} py-2">{{ message }}</div>
+        {% endfor %}
+        {% endif %}
+
+        <div class="rounded-4 border p-4 mb-4" style="border-color: #d7e0ec !important; background: #f9fbff;">
+            <div class="small text-uppercase text-muted mb-2">What happens next</div>
+            <div class="d-grid gap-2 text-muted">
+                <div><i class="bi bi-1-circle me-2"></i>Verify the owner email.</div>
+                <div><i class="bi bi-2-circle me-2"></i>Sign in or continue from the email link.</div>
+                <div><i class="bi bi-3-circle me-2"></i>Create the business workspace and become the admin.</div>
+            </div>
+        </div>
+
+        {% if debug_verification_url %}
+        <div class="alert alert-warning">
+            <div class="fw-semibold mb-1">Debug verification link</div>
+            <div class="small debug-link"><a href="{{ debug_verification_url }}">{{ debug_verification_url }}</a></div>
+        </div>
+        {% endif %}
+
+        <div class="d-flex flex-wrap gap-2">
+            <a class="btn btn-dark" href="{{ login_url }}">Go to Sign In</a>
+            <form method="post" action="{% url 'resend_verification_email' %}">
+                {% csrf_token %}
+                <input type="hidden" name="email" value="{{ resend_email }}">
+                <button class="btn btn-outline-dark">Resend Verification</button>
+            </form>
+        </div>
+    </section>
+
+    <aside class="side-pane">
+        <div class="small text-uppercase opacity-75 mb-2">Selected package</div>
+        <h2 class="h3 fw-bold">{{ plan.name }}</h2>
+        <div class="fs-2 fw-bold mt-2">${{ plan.price }}</div>
+        <div class="text-white-50 mb-3">3 free days before you choose or upgrade a paid package</div>
+        <div class="d-grid gap-2 text-white-50 small">
+            {% for feature in plan.features %}
+            <div><i class="bi bi-check2-circle me-2 text-warning"></i>{{ feature }}</div>
+            {% endfor %}
+        </div>
+    </aside>
+</div>
+</body>
+</html>

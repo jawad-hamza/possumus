@@ -1,4 +1,4 @@
-﻿from decimal import Decimal
+from decimal import Decimal
 
 from django.contrib import messages
 from django.contrib.contenttypes.models import ContentType
@@ -189,6 +189,7 @@ def accounts_home(request):
 
     ar_balance = _sum_account("Accounts Receivable")
     ap_balance = _sum_account("Accounts Payable")
+    tax_collected = _sum_account("Sales Tax Payable")
     inventory_balance = _sum_account("Inventory")
     net_profit = pl["net_profit"]
     net_worth = bs["total_assets"] - bs["total_liabilities"]
@@ -204,6 +205,7 @@ def accounts_home(request):
         "ar_balance": ar_balance,
         "ap_balance": ap_balance,
         "expense_payable_balance": money["expense_payable_balance"],
+        "tax_collected": tax_collected,
         "inventory_balance": inventory_balance,
         "available_money": money["available_money"],
         "net_profit": net_profit,
@@ -264,6 +266,7 @@ def accounts_home(request):
             {"term": "Customers owe you", "detail": "Open credit sales still waiting to be collected.", "icon": "bi-people"},
             {"term": "You owe suppliers", "detail": "Unpaid purchase balances still to be settled.", "icon": "bi-truck"},
             {"term": "Operating bills due", "detail": "Rent, utilities, and other running costs not paid yet.", "icon": "bi-lightning-charge"},
+            {"term": "Tax collected", "detail": "GST already collected from sales and currently sitting in Sales Tax Payable.", "icon": "bi-receipt"},
             {"term": "Stock value", "detail": "Inventory valued at current cost price, not sale price.", "icon": "bi-box-seam"},
         ],
     }

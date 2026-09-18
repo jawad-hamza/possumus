@@ -1,3 +1,4 @@
+from datetime import timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 
 from django.conf import settings
@@ -729,6 +730,268 @@ class CustomRole(models.Model):
             self.slug = self._build_unique_slug()
         super().save(*args, **kwargs)
         self.ensure_group()
+
+
+
+
+class UserPreference(models.Model):
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="preference")
+    time_zone = models.CharField(max_length=64, blank=True, default="")
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "User Preference"
+        verbose_name_plural = "User Preferences"
+
+    def __str__(self):
+        return f"Preferences for {self.user.get_username()}"
+
+    @property
+    def uses_system_detected_time_zone(self):
+        return not bool((self.time_zone or "").strip())
+class OwnerOnboarding(models.Model):
+    PLAN_STARTER = "starter"
+    PLAN_GROWTH = "growth"
+    PLAN_SCALE = "scale"
+    PLAN_CHOICES = (
+        (PLAN_STARTER, "Starter"),
+        (PLAN_GROWTH, "Growth"),
+        (PLAN_SCALE, "Scale"),
+    )
+
+    BILLING_TRIAL = "trial"
+    BILLING_PENDING = "pending"
+    BILLING_ACTIVE = "active"
+    BILLING_CHOICES = (
+        (BILLING_TRIAL, "Trial"),
+        (BILLING_PENDING, "Pending Checkout"),
+        (BILLING_ACTIVE, "Active Subscription"),
+    )
+
+    user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="owner_onboarding")
+    selected_plan = models.CharField(max_length=20, choices=PLAN_CHOICES, default=PLAN_STARTER)
+    billing_state = models.CharField(max_length=20, choices=BILLING_CHOICES, default=BILLING_TRIAL)
+    email_verified = models.BooleanField(default=False)
+    email_verified_at = models.DateTimeField(null=True, blank=True)
+    verification_sent_at = models.DateTimeField(null=True, blank=True)
+    trial_started_at = models.DateTimeField(null=True, blank=True)
+    trial_ends_at = models.DateTimeField(null=True, blank=True)
+    business_created_at = models.DateTimeField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self):
+        return f"Owner onboarding for {self.user.email or self.user.get_username()}"
+
+    @property
+    def plan_label(self):
+        return self.get_selected_plan_display()
+
+    @property
+    def current_subscription(self):
+        return getattr(self, "billing_subscription", None)
+
+    @property
+    def trial_is_active(self):
+        if not self.trial_started_at or not self.trial_ends_at:
+            return False
+        return timezone.now() <= self.trial_ends_at
+
+    @property
+    def trial_days_remaining(self):
+        if not self.trial_ends_at:
+            return 0
+        remaining = self.trial_ends_at - timezone.now()
+        if remaining.total_seconds() <= 0:
+            return 0
+        return remaining.days + (1 if remaining.seconds else 0)
+
+    @property
+    def subscription_is_active(self):
+        subscription = self.current_subscription
+        return bool(subscription and subscription.grants_access)
+
+    @property
+    def billing_is_active(self):
+        return self.trial_is_active or self.subscription_is_active
+
+    @property
+    def requires_payment_setup(self):
+        return bool(self.email_verified and self.business_created_at and not self.billing_is_active)
+
+    @property
+    def billing_status_label(self):
+        subscription = self.current_subscription
+        if self.trial_is_active:
+            days = self.trial_days_remaining
+            return f"3 free days active ({days} day{'s' if days != 1 else ''} left)"
+        if subscription is not None:
+            return subscription.status_label
+        if self.email_verified and self.business_created_at:
+            return "Payment required"
+        return "Setup in progress"
+
+    def mark_verification_sent(self, now=None):
+        self.verification_sent_at = now or timezone.now()
+        self.save(update_fields=["verification_sent_at"])
+
+    def mark_email_verified(self, now=None):
+        now = now or timezone.now()
+        self.email_verified = True
+        self.email_verified_at = now
+        self.save(update_fields=["email_verified", "email_verified_at"])
+
+    def start_trial(self, now=None):
+        now = now or timezone.now()
+        update_fields = []
+        if self.trial_started_at is None:
+            self.trial_started_at = now
+            update_fields.append("trial_started_at")
+        if self.trial_ends_at is None:
+            self.trial_ends_at = now + timedelta(days=3)
+            update_fields.append("trial_ends_at")
+        if self.billing_state == self.BILLING_PENDING:
+            self.billing_state = self.BILLING_TRIAL
+            update_fields.append("billing_state")
+        if update_fields:
+            self.save(update_fields=update_fields)
+
+    def mark_checkout_started(self, plan_code="", now=None):
+        now = now or timezone.now()
+        update_fields = []
+        normalized_plan = (plan_code or self.selected_plan or self.PLAN_STARTER).strip().lower()
+        allowed_plans = {choice for choice, _ in self.PLAN_CHOICES}
+        if normalized_plan in allowed_plans and normalized_plan != self.selected_plan:
+            self.selected_plan = normalized_plan
+            update_fields.append("selected_plan")
+        if not self.billing_is_active and self.billing_state != self.BILLING_PENDING:
+            self.billing_state = self.BILLING_PENDING
+            update_fields.append("billing_state")
+        if update_fields:
+            self.save(update_fields=update_fields)
+        return now
+
+    def sync_billing_state(self):
+        subscription = self.current_subscription
+        target_state = self.BILLING_PENDING
+        if subscription and subscription.grants_access:
+            target_state = self.BILLING_ACTIVE
+        elif self.trial_is_active:
+            target_state = self.BILLING_TRIAL
+        if self.billing_state != target_state:
+            self.billing_state = target_state
+            self.save(update_fields=["billing_state"])
+        return target_state
+
+    def mark_business_created(self, now=None):
+        self.business_created_at = now or timezone.now()
+        self.save(update_fields=["business_created_at"])
+        self.sync_billing_state()
+
+
+class BillingSubscription(models.Model):
+    PROVIDER_LEMON_SQUEEZY = "lemonsqueezy"
+    PROVIDER_CHOICES = (
+        (PROVIDER_LEMON_SQUEEZY, "Lemon Squeezy"),
+    )
+
+    STATUS_PENDING = "pending"
+    STATUS_ON_TRIAL = "on_trial"
+    STATUS_ACTIVE = "active"
+    STATUS_PAST_DUE = "past_due"
+    STATUS_CANCELLED = "cancelled"
+    STATUS_PAUSED = "paused"
+    STATUS_EXPIRED = "expired"
+    STATUS_UNPAID = "unpaid"
+    STATUS_REFUNDED = "refunded"
+    STATUS_CHOICES = (
+        (STATUS_PENDING, "Pending Checkout"),
+        (STATUS_ON_TRIAL, "Provider Trial"),
+        (STATUS_ACTIVE, "Active"),
+        (STATUS_PAST_DUE, "Past Due"),
+        (STATUS_CANCELLED, "Cancelled"),
+        (STATUS_PAUSED, "Paused"),
+        (STATUS_EXPIRED, "Expired"),
+        (STATUS_UNPAID, "Unpaid"),
+        (STATUS_REFUNDED, "Refunded"),
+    )
+
+    owner_onboarding = models.OneToOneField(OwnerOnboarding, on_delete=models.CASCADE, related_name="billing_subscription")
+    provider = models.CharField(max_length=20, choices=PROVIDER_CHOICES, default=PROVIDER_LEMON_SQUEEZY)
+    plan_code = models.CharField(max_length=20, choices=OwnerOnboarding.PLAN_CHOICES, default=OwnerOnboarding.PLAN_STARTER)
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default=STATUS_PENDING)
+    checkout_url = models.URLField(blank=True)
+    customer_portal_url = models.URLField(blank=True)
+    provider_customer_id = models.CharField(max_length=80, blank=True)
+    provider_order_id = models.CharField(max_length=80, blank=True)
+    provider_subscription_id = models.CharField(max_length=80, blank=True, db_index=True)
+    provider_product_id = models.CharField(max_length=80, blank=True)
+    provider_variant_id = models.CharField(max_length=80, blank=True)
+    product_name = models.CharField(max_length=120, blank=True)
+    variant_name = models.CharField(max_length=120, blank=True)
+    checkout_started_at = models.DateTimeField(null=True, blank=True)
+    activated_at = models.DateTimeField(null=True, blank=True)
+    renews_at = models.DateTimeField(null=True, blank=True)
+    ends_at = models.DateTimeField(null=True, blank=True)
+    paused_at = models.DateTimeField(null=True, blank=True)
+    cancelled_at = models.DateTimeField(null=True, blank=True)
+    last_event_name = models.CharField(max_length=120, blank=True)
+    last_event_at = models.DateTimeField(null=True, blank=True)
+    metadata = models.JSONField(default=dict, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        ordering = ["-updated_at", "-created_at"]
+
+    def __str__(self):
+        return f"{self.get_provider_display()} subscription for {self.owner_onboarding.user.get_username()}"
+
+    @property
+    def plan_label(self):
+        labels = dict(OwnerOnboarding.PLAN_CHOICES)
+        return labels.get(self.plan_code, self.plan_code.replace("_", " ").title())
+
+    @property
+    def status_label(self):
+        labels = dict(self.STATUS_CHOICES)
+        return labels.get(self.status, self.status.replace("_", " ").title())
+
+    @property
+    def status_tone(self):
+        if self.grants_access:
+            return "healthy"
+        if self.status in {self.STATUS_PENDING, self.STATUS_CANCELLED, self.STATUS_PAST_DUE}:
+            return "advance"
+        return "payable"
+
+    @property
+    def grants_access(self):
+        now = timezone.now()
+        if self.status in {self.STATUS_ACTIVE, self.STATUS_ON_TRIAL, self.STATUS_PAST_DUE}:
+            return True
+        if self.status == self.STATUS_CANCELLED:
+            return self.ends_at is None or now <= self.ends_at
+        return False
+
+
+class BillingWebhookEvent(models.Model):
+    provider = models.CharField(max_length=20, choices=BillingSubscription.PROVIDER_CHOICES, default=BillingSubscription.PROVIDER_LEMON_SQUEEZY)
+    provider_event_id = models.CharField(max_length=120, blank=True, db_index=True)
+    event_name = models.CharField(max_length=120, blank=True)
+    event_hash = models.CharField(max_length=64, unique=True)
+    signature = models.CharField(max_length=255, blank=True)
+    payload = models.JSONField(default=dict, blank=True)
+    processed_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-processed_at"]
+
+    def __str__(self):
+        return f"{self.get_provider_display()} {self.event_name or 'webhook'}"
 
 
 class CompanyProfile(models.Model):

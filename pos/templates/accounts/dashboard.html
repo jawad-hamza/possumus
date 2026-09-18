@@ -1,4 +1,4 @@
-﻿{% extends "pos/base.html" %}
+{% extends "pos/base.html" %}
 {% load accounting_tags %}
 
 {% block title %}Accounts Overview{% endblock %}
@@ -124,6 +124,18 @@
                     <div class="metric-meta">Rent, utilities, internet, and other unpaid running costs.{% if expense_alert_count %} {{ expense_alert_count }} recurring bills also need recording.{% endif %}</div>
                 </div>
                 <span class="metric-icon"><i class="bi bi-lightning-charge"></i></span>
+            </div>
+        </div>
+    </div>
+    <div class="col-sm-6 col-xl">
+        <div class="metric-card info">
+            <div class="d-flex justify-content-between align-items-start gap-3">
+                <div>
+                    <div class="metric-label">Tax Collected</div>
+                    <div class="metric-value">{{ tax_collected|money }}</div>
+                    <div class="metric-meta">GST collected from sales and currently sitting in Sales Tax Payable.</div>
+                </div>
+                <span class="metric-icon"><i class="bi bi-receipt"></i></span>
             </div>
         </div>
     </div>

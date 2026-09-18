@@ -1,0 +1,272 @@
+{% extends "pos/base.html" %}
+{% block title %}Billing{% endblock %}
+
+{% block extra_css %}
+<style>
+    .billing-summary-card {
+        padding: 1.25rem;
+        border: 1px solid #dce3ee;
+        border-radius: 18px;
+        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
+        height: 100%;
+    }
+
+    .billing-summary-card.primary {
+        background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+    }
+
+    .billing-summary-card.warning {
+        background: linear-gradient(180deg, #fffaf1 0%, #fff4dd 100%);
+    }
+
+    .billing-summary-card.success {
+        background: linear-gradient(180deg, #f5fcf7 0%, #ecfdf3 100%);
+    }
+
+    .billing-metric {
+        font-size: 1.75rem;
+        font-weight: 800;
+        margin-top: 8px;
+    }
+
+    .billing-note {
+        border-radius: 16px;
+        padding: 16px;
+        background: #fff8e8;
+        border: 1px solid #f5d7a3;
+        color: #8a5700;
+    }
+
+    .billing-plan-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+        gap: 16px;
+    }
+
+    .billing-plan-card {
+        border: 1px solid #dce3ee;
+        border-radius: 20px;
+        padding: 22px;
+        background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+        box-shadow: 0 12px 30px rgba(20, 33, 61, 0.06);
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+    }
+
+    .billing-plan-card.current {
+        border-color: rgba(37, 99, 235, 0.35);
+        background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
+    }
+
+    .billing-plan-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        padding: 8px 12px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.08em;
+        background: #fff4d6;
+        color: #9a6700;
+    }
+
+    .billing-plan-card.current .billing-plan-badge {
+        background: #dbeafe;
+        color: #1d4ed8;
+    }
+
+    .billing-price {
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+    }
+
+    .billing-price strong {
+        font-size: 2.2rem;
+        line-height: 1;
+    }
+
+    .billing-feature-list {
+        list-style: none;
+        padding: 0;
+        margin: 0;
+        display: grid;
+        gap: 10px;
+        color: var(--text-soft);
+    }
+
+    .billing-feature-list li {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+    }
+
+    .billing-feature-list i {
+        color: #15803d;
+        margin-top: 3px;
+    }
+
+    .billing-lock-card {
+        border: 1px dashed #f5b450;
+        background: linear-gradient(180deg, #fff9ef 0%, #fff4dd 100%);
+        border-radius: 18px;
+        padding: 18px;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="page-header">
+    <div class="page-header-copy">
+        <span class="page-title-icon warning"><i class="bi bi-credit-card-2-front"></i></span>
+        <div>
+            <h1 class="page-title">Billing</h1>
+            <p class="page-subtitle">Manage the workspace package, your 3 free days, and the subscription status that controls access.</p>
+        </div>
+    </div>
+    <div class="page-actions">
+        <span class="status-chip {{ billing_status_tone }}">{{ billing_status_label }}</span>
+        {% if billing_can_manage %}
+        <a href="{% url 'settings_page' %}" class="btn btn-outline-secondary"><i class="bi bi-sliders"></i> Settings</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if billing_onboarding and billing_requires_action %}
+<div class="billing-lock-card mb-4">
+    <div class="fw-semibold mb-1"><i class="bi bi-exclamation-triangle me-1"></i>Workspace access is waiting on payment</div>
+    <div class="small">The 3 free days have ended for {{ brand_name }}. Choose a package below to reopen the workspace. Team users stay locked until an owner or admin completes checkout.</div>
+</div>
+{% endif %}
+
+<div class="row g-4 mb-4">
+    <div class="col-xl-8">
+        <div class="row g-3 h-100">
+            <div class="col-md-4">
+                <div class="billing-summary-card primary">
+                    <div class="small text-uppercase text-muted">Current Package</div>
+                    <div class="billing-metric">{{ billing_current_plan.name|default:"Starter" }}</div>
+                    <div class="text-muted small">{{ billing_current_plan.description|default:"Choose the package that fits your retail operation." }}</div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="billing-summary-card {% if billing_onboarding and billing_onboarding.billing_is_active %}success{% else %}warning{% endif %}">
+                    <div class="small text-uppercase text-muted">Access Window</div>
+                    <div class="billing-metric">
+                        {% if billing_onboarding and billing_onboarding.trial_is_active %}
+                        {{ billing_trial_days_remaining }} day{{ billing_trial_days_remaining|pluralize }}
+                        {% elif billing_subscription and billing_subscription.renews_at %}
+                        {{ billing_subscription.renews_at|date:"d M" }}
+                        {% elif billing_subscription and billing_subscription.ends_at %}
+                        {{ billing_subscription.ends_at|date:"d M" }}
+                        {% else %}
+                        Active
+                        {% endif %}
+                    </div>
+                    <div class="text-muted small">
+                        {% if billing_onboarding and billing_onboarding.trial_is_active %}
+                        Remaining in the automatic free access period.
+                        {% elif billing_subscription and billing_subscription.renews_at %}
+                        Next renewal date from {{ billing_provider_name }}.
+                        {% elif billing_subscription and billing_subscription.ends_at %}
+                        Subscription access currently runs until this date.
+                        {% else %}
+                        Billing state will update here after checkout or a webhook sync.
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+            <div class="col-md-4">
+                <div class="billing-summary-card">
+                    <div class="small text-uppercase text-muted">Managed By</div>
+                    <div class="billing-metric">{{ billing_provider_name }}</div>
+                    <div class="text-muted small">
+                        {% if billing_portal_url %}
+                        Customer portal is available for subscription updates.
+                        {% else %}
+                        Hosted checkout is ready. Portal link can be connected later if needed.
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    <div class="col-xl-4">
+        <div class="page-card p-4 h-100">
+            <div class="section-title d-flex align-items-center gap-2 mb-3">
+                <span class="section-title-icon"><i class="bi bi-shield-check"></i></span>
+                <div>
+                    <h2 class="h4 mb-1">Workspace Billing Access</h2>
+                    <p class="text-muted mb-0">Only the owner or an admin can change the package or open the provider portal.</p>
+                </div>
+            </div>
+            {% if billing_onboarding %}
+            <div class="small text-muted mb-3">Owner account: <strong>{{ billing_onboarding.user.email|default:billing_onboarding.user.username }}</strong></div>
+            {% else %}
+            <div class="small text-muted mb-3">Billing will appear here after owner signup and business setup are completed.</div>
+            {% endif %}
+
+            {% if billing_can_manage %}
+            <div class="d-grid gap-2">
+                <a href="#plans" class="btn btn-dark"><i class="bi bi-stars me-1"></i>Choose Package</a>
+                {% if billing_portal_url %}
+                <a href="{% url 'billing_portal_redirect' %}" class="btn btn-outline-secondary"><i class="bi bi-box-arrow-up-right me-1"></i>Open Customer Portal</a>
+                {% endif %}
+            </div>
+            {% else %}
+            <div class="billing-note">
+                Ask the workspace owner or an admin to complete billing. Team accounts can view this page, but they cannot change the subscription.
+            </div>
+            {% endif %}
+
+            {% if not billing_checkout_enabled %}
+            <div class="alert alert-secondary mt-3 mb-0">Checkout links are not configured yet. Add the Lemon Squeezy plan URLs to turn package buttons live.</div>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<div class="page-card p-4" id="plans">
+    <div class="section-title d-flex align-items-center gap-2 mb-3">
+        <span class="section-title-icon"><i class="bi bi-tags"></i></span>
+        <div>
+            <h2 class="h4 mb-1">Packages</h2>
+            <p class="text-muted mb-0">The workspace keeps its same data. Only the package capabilities and billing state change.</p>
+        </div>
+    </div>
+
+    <div class="billing-plan-grid">
+        {% for plan in billing_plan_cards %}
+        <article class="billing-plan-card {% if plan.is_current %}current{% endif %}">
+            <span class="billing-plan-badge">{% if plan.is_current %}<i class="bi bi-check2-circle"></i>{% elif plan.featured %}<i class="bi bi-lightning-charge-fill"></i>{% endif %}{{ plan.badge }}</span>
+            <div>
+                <h3 class="h4 mb-2">{{ plan.name }}</h3>
+                <p class="text-muted mb-0">{{ plan.description }}</p>
+            </div>
+            <div class="billing-price">
+                <strong>${{ plan.price }}</strong>
+                <span class="text-muted">/ month</span>
+            </div>
+            <div class="small text-muted">Includes 3 free days first. Plans can be upgraded later.</div>
+            <ul class="billing-feature-list">
+                {% for feature in plan.features %}
+                <li><i class="bi bi-check2-circle"></i><span>{{ feature }}</span></li>
+                {% endfor %}
+            </ul>
+            <div class="mt-auto">
+                {% if billing_can_manage and plan.checkout_configured %}
+                <a class="btn {% if plan.is_current %}btn-outline-secondary{% else %}btn-dark{% endif %} w-100" href="{{ plan.cta_url }}">{{ plan.cta_label }}</a>
+                {% elif billing_can_manage %}
+                <button class="btn btn-outline-secondary w-100" type="button" disabled>Checkout Link Needed</button>
+                {% else %}
+                <button class="btn btn-outline-secondary w-100" type="button" disabled>Owner Action Required</button>
+                {% endif %}
+            </div>
+        </article>
+        {% endfor %}
+    </div>
+</div>
+{% endblock %}

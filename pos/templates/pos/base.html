@@ -721,7 +721,7 @@
     </style>
     {% block extra_css %}{% endblock %}
 </head>
-<body>
+<body data-time-zone-sync-url="{% url 'set_client_time_zone' %}" data-session-time-zone="{{ session_time_zone }}" data-effective-time-zone="{{ effective_time_zone }}" data-preferred-time-zone="{{ preferred_time_zone }}">
 <div class="layout-shell">
     <div class="mobile-overlay" id="mobileOverlay" onclick="toggleSidebarMobile()"></div>
 
@@ -860,6 +860,104 @@
 <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
+    function getCookie(name) {
+        const cookieValue = document.cookie
+            .split(';')
+            .map(function (entry) { return entry.trim(); })
+            .find(function (entry) { return entry.startsWith(name + '='); });
+        return cookieValue ? decodeURIComponent(cookieValue.split('=').slice(1).join('=')) : '';
+    }
+
+    function getCsrfToken() {
+        const hiddenToken = document.querySelector('input[name="csrfmiddlewaretoken"]');
+        return getCookie('csrftoken') || (hiddenToken ? hiddenToken.value : '');
+    }
+
+    function getBrowserTimeZone() {
+        try {
+            return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+        } catch (error) {
+            return '';
+        }
+    }
+
+    function updateBrowserTimeZoneLabels(browserTimeZone) {
+        const body = document.body;
+        if (!body) {
+            return;
+        }
+
+        const preferredTimeZone = body.dataset.preferredTimeZone || '';
+        const effectiveTimeZone = preferredTimeZone || browserTimeZone || body.dataset.effectiveTimeZone || '';
+        const detectedLabel = browserTimeZone || 'Unavailable on this device';
+        const effectiveLabel = effectiveTimeZone || 'Unavailable';
+
+        document.querySelectorAll('[data-browser-time-zone-label]').forEach(function (element) {
+            element.textContent = detectedLabel;
+        });
+
+        document.querySelectorAll('[data-effective-time-zone-label]').forEach(function (element) {
+            element.textContent = effectiveLabel;
+        });
+
+        document.querySelectorAll('[data-browser-time-zone-input]').forEach(function (input) {
+            input.value = browserTimeZone || '';
+        });
+    }
+
+    function syncBrowserTimeZone(browserTimeZone) {
+        const body = document.body;
+        if (!body || !browserTimeZone) {
+            return;
+        }
+
+        const syncUrl = body.dataset.timeZoneSyncUrl || '';
+        const sessionTimeZone = body.dataset.sessionTimeZone || '';
+        const preferredTimeZone = body.dataset.preferredTimeZone || '';
+        if (!syncUrl || sessionTimeZone === browserTimeZone) {
+            if (!preferredTimeZone) {
+                body.dataset.effectiveTimeZone = browserTimeZone;
+            }
+            updateBrowserTimeZoneLabels(browserTimeZone);
+            return;
+        }
+
+        const csrfToken = getCsrfToken();
+        if (!csrfToken) {
+            updateBrowserTimeZoneLabels(browserTimeZone);
+            return;
+        }
+
+        fetch(syncUrl, {
+            method: 'POST',
+            credentials: 'same-origin',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
+                'X-CSRFToken': csrfToken,
+                'X-Requested-With': 'XMLHttpRequest',
+            },
+            body: new URLSearchParams({ time_zone: browserTimeZone }).toString(),
+        })
+            .then(function (response) {
+                if (!response.ok) {
+                    throw new Error('Unable to sync browser time zone.');
+                }
+                return response.json();
+            })
+            .then(function (payload) {
+                if (payload && payload.time_zone) {
+                    body.dataset.sessionTimeZone = payload.time_zone;
+                }
+                if (!preferredTimeZone) {
+                    body.dataset.effectiveTimeZone = browserTimeZone;
+                }
+                updateBrowserTimeZoneLabels(browserTimeZone);
+            })
+            .catch(function () {
+                updateBrowserTimeZoneLabels(browserTimeZone);
+            });
+    }
+
     function toggleSidebar() {
         const sidebar = document.getElementById('sidebar');
         const content = document.getElementById('content');
@@ -878,6 +976,10 @@
             document.getElementById('sidebar').classList.add('collapsed');
             document.getElementById('content').classList.add('expanded');
         }
+
+        const browserTimeZone = getBrowserTimeZone();
+        updateBrowserTimeZoneLabels(browserTimeZone);
+        syncBrowserTimeZone(browserTimeZone);
     });
 </script>
 {% block extra_js %}{% endblock %}

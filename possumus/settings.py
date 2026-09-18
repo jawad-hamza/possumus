@@ -1,4 +1,4 @@
-﻿import importlib.util
+import importlib.util
 import os
 import sys
 from pathlib import Path
@@ -212,6 +212,7 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    "pos.middleware.UserTimeZoneMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
@@ -318,8 +319,47 @@ SECURE_REFERRER_POLICY = env("DJANGO_SECURE_REFERRER_POLICY", "same-origin")
 X_FRAME_OPTIONS = env("DJANGO_X_FRAME_OPTIONS", "DENY")
 
 
-EMAIL_SUBJECT_PREFIX = env("DJANGO_EMAIL_SUBJECT_PREFIX", "[Possumus] ")
+EMAIL_SUBJECT_PREFIX = env("DJANGO_EMAIL_SUBJECT_PREFIX", "[Vendora] ")
 SERVER_EMAIL = env("DJANGO_SERVER_EMAIL", "server@localhost")
+DEFAULT_FROM_EMAIL = env("DJANGO_DEFAULT_FROM_EMAIL", "hello@vendora.app")
+EMAIL_BACKEND = env(
+    "DJANGO_EMAIL_BACKEND",
+    "django.core.mail.backends.locmem.EmailBackend"
+    if RUNNING_TESTS
+    else ("django.core.mail.backends.console.EmailBackend" if DEBUG else "django.core.mail.backends.smtp.EmailBackend"),
+)
+EMAIL_HOST = env("DJANGO_EMAIL_HOST", "")
+EMAIL_PORT = env_int("DJANGO_EMAIL_PORT", 587)
+EMAIL_HOST_USER = env("DJANGO_EMAIL_HOST_USER", "")
+EMAIL_HOST_PASSWORD = env("DJANGO_EMAIL_HOST_PASSWORD", "")
+EMAIL_USE_TLS = env_bool("DJANGO_EMAIL_USE_TLS", not DEBUG)
+EMAIL_USE_SSL = env_bool("DJANGO_EMAIL_USE_SSL", False)
+EMAIL_TIMEOUT = env_int("DJANGO_EMAIL_TIMEOUT", 10)
+PUBLIC_BRAND_NAME = env("PUBLIC_BRAND_NAME", "Vendora")
+PUBLIC_APP_DOMAIN = env("PUBLIC_APP_DOMAIN", "https://vendora.app")
+LEMON_SQUEEZY_PROVIDER_NAME = "Lemon Squeezy"
+LEMON_SQUEEZY_STARTER_URL = env("LEMON_SQUEEZY_STARTER_URL", "https://vendora.lemonsqueezy.com/buy/starter-demo").strip()
+LEMON_SQUEEZY_GROWTH_URL = env("LEMON_SQUEEZY_GROWTH_URL", "https://vendora.lemonsqueezy.com/buy/growth-demo").strip()
+LEMON_SQUEEZY_SCALE_URL = env("LEMON_SQUEEZY_SCALE_URL", "https://vendora.lemonsqueezy.com/buy/scale-demo").strip()
+LEMON_SQUEEZY_WEBHOOK_SECRET = env("LEMON_SQUEEZY_WEBHOOK_SECRET", "").strip()
+LEMON_SQUEEZY_SUCCESS_URL = env("LEMON_SQUEEZY_SUCCESS_URL", "").strip()
+LEMON_SQUEEZY_CANCEL_URL = env("LEMON_SQUEEZY_CANCEL_URL", "").strip()
+LEMON_SQUEEZY_CUSTOMER_PORTAL_URL = env("LEMON_SQUEEZY_CUSTOMER_PORTAL_URL", "").strip()
+LEMON_SQUEEZY_ENABLED = env_bool(
+    "LEMON_SQUEEZY_ENABLED",
+    bool(LEMON_SQUEEZY_STARTER_URL or LEMON_SQUEEZY_GROWTH_URL or LEMON_SQUEEZY_SCALE_URL),
+)
+GOOGLE_OAUTH_CLIENT_ID = env("GOOGLE_OAUTH_CLIENT_ID", "").strip()
+GOOGLE_OAUTH_CLIENT_SECRET = env("GOOGLE_OAUTH_CLIENT_SECRET", "").strip()
+GOOGLE_OAUTH_REDIRECT_URI = env("GOOGLE_OAUTH_REDIRECT_URI", "").strip()
+GOOGLE_OAUTH_AUTHORIZE_URL = env("GOOGLE_OAUTH_AUTHORIZE_URL", "https://accounts.google.com/o/oauth2/v2/auth").strip()
+GOOGLE_OAUTH_TOKEN_URL = env("GOOGLE_OAUTH_TOKEN_URL", "https://oauth2.googleapis.com/token").strip()
+GOOGLE_OAUTH_SCOPE = env("GOOGLE_OAUTH_SCOPE", "openid email profile").strip()
+GOOGLE_OAUTH_TIMEOUT = env_int("GOOGLE_OAUTH_TIMEOUT", 10)
+GOOGLE_SIGN_IN_ENABLED = env_bool(
+    "GOOGLE_SIGN_IN_ENABLED",
+    bool(GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET),
+)
 
 LOG_DIR = Path(env("DJANGO_LOG_DIR", str(BASE_DIR / "logs")))
 LOG_DIR.mkdir(parents=True, exist_ok=True)

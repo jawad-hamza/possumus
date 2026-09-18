@@ -1,6 +1,6 @@
-﻿from decimal import Decimal
+from decimal import Decimal
 from django import forms
-from django.contrib.auth import get_user_model
+from django.contrib.auth import authenticate, get_user_model
 from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
 from django.forms import BaseModelFormSet, modelformset_factory
 
@@ -10,7 +10,9 @@ from .models import (
     CompanyProfile,
     CustomRole,
     Customer,
+    OwnerOnboarding,
     Product,
+    UserPreference,
     Purchase,
     PurchaseItem,
     PurchaseReturn,
@@ -26,6 +28,7 @@ from .services.access import (
     MODULE_DEFINITIONS,
     get_role_choices,
 )
+from .services.user_timezones import normalize_time_zone_name, time_zone_choices
 
 
 class StyledFieldsMixin:
@@ -50,14 +53,96 @@ class StyledModelForm(StyledFieldsMixin, forms.ModelForm):
 
 
 class LoginForm(StyledFieldsMixin, AuthenticationForm):
-    username = forms.CharField(label="Login ID")
+    username = forms.CharField(label="Email or Login ID")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
         self.fields["username"].widget.attrs.setdefault("autofocus", True)
-        self.fields["username"].widget.attrs.setdefault("placeholder", "Enter login ID")
+        self.fields["username"].widget.attrs.setdefault("placeholder", "Enter email or login ID")
         self.fields["password"].widget.attrs.setdefault("placeholder", "Enter password")
+
+    @staticmethod
+    def _find_user(identifier):
+        identifier = (identifier or "").strip()
+        if not identifier:
+            return None
+        user_model = get_user_model()
+        user = user_model._default_manager.filter(username__iexact=identifier).first()
+        if user is not None:
+            return user
+        return user_model._default_manager.filter(email__iexact=identifier).order_by("id").first()
+
+    def clean(self):
+        identifier = (self.cleaned_data.get("username") or "").strip()
+        password = self.cleaned_data.get("password")
+
+        if identifier and password:
+            matched_user = self._find_user(identifier)
+            auth_username = matched_user.get_username() if matched_user is not None else identifier
+            self.user_cache = authenticate(self.request, username=auth_username, password=password)
+            if self.user_cache is None:
+                pending_user = matched_user
+                onboarding = getattr(pending_user, "owner_onboarding", None) if pending_user is not None else None
+                if pending_user is not None and not pending_user.is_active and onboarding and not onboarding.email_verified:
+                    raise forms.ValidationError(
+                        "Verify your email before signing in. Check your inbox for the confirmation link.",
+                        code="inactive",
+                    )
+                raise self.get_invalid_login_error()
+            self.confirm_login_allowed(self.user_cache)
+
+        return self.cleaned_data
+
+
+class OwnerSignupForm(StyledFieldsMixin, UserCreationForm):
+    first_name = forms.CharField(max_length=150, required=False)
+    last_name = forms.CharField(max_length=150, required=False)
+    email = forms.EmailField(required=True)
+    selected_plan = forms.ChoiceField(choices=OwnerOnboarding.PLAN_CHOICES, widget=forms.HiddenInput())
+
+    class Meta(UserCreationForm.Meta):
+        model = get_user_model()
+        fields = ["first_name", "last_name", "email", "selected_plan"]
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+        self.fields["first_name"].widget.attrs.setdefault("placeholder", "Owner first name")
+        self.fields["last_name"].widget.attrs.setdefault("placeholder", "Owner last name")
+        self.fields["email"].widget.attrs.setdefault("placeholder", "owner@yourstore.com")
+        self.fields["password1"].help_text = "Use at least 8 characters. A mix of letters, numbers, and symbols is best."
+        self.fields["password2"].help_text = "Repeat the password so we can confirm it."
+
+    def clean_email(self):
+        email = (self.cleaned_data.get("email") or "").strip().lower()
+        if not email:
+            raise forms.ValidationError("Email is required.")
+
+        user_model = get_user_model()
+        if user_model._default_manager.filter(email__iexact=email).exists() or user_model._default_manager.filter(username__iexact=email).exists():
+            raise forms.ValidationError("An account with this email already exists.")
+        return email
+
+    def clean_selected_plan(self):
+        selected_plan = (self.cleaned_data.get("selected_plan") or OwnerOnboarding.PLAN_STARTER).strip().lower()
+        allowed = {choice for choice, _ in OwnerOnboarding.PLAN_CHOICES}
+        if selected_plan not in allowed:
+            raise forms.ValidationError("Choose a valid pricing package before continuing.")
+        return selected_plan
+
+    def save(self, commit=True):
+        user = super().save(commit=False)
+        email = self.cleaned_data["email"]
+        user.username = email
+        user.email = email
+        user.first_name = self.cleaned_data.get("first_name", "")
+        user.last_name = self.cleaned_data.get("last_name", "")
+        user.is_active = False
+        user.is_staff = False
+        if commit:
+            user.save()
+        return user
 
 
 class FirstAdminSetupForm(StyledFieldsMixin, UserCreationForm):
@@ -85,6 +170,61 @@ class FirstAdminSetupForm(StyledFieldsMixin, UserCreationForm):
         if commit:
             user.save()
         return user
+
+
+class OwnerBusinessSetupForm(StyledModelForm):
+    class Meta:
+        model = CompanyProfile
+        fields = ["name", "phone", "email", "address", "tax_registration_number"]
+        labels = {
+            "name": "Business Name",
+            "tax_registration_number": "GST / Tax Number",
+        }
+        help_texts = {
+            "name": "This is the business name shown across the dashboard, invoices, and receipts.",
+            "tax_registration_number": "Optional registration shown on receipts and tax documents.",
+        }
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+        self.fields["name"].widget.attrs.setdefault("autofocus", True)
+        self.fields["name"].widget.attrs.setdefault("placeholder", "Your business name")
+        self.fields["phone"].widget.attrs.setdefault("placeholder", "+92 300 0000000")
+        self.fields["email"].widget.attrs.setdefault("placeholder", "billing@yourstore.com")
+        self.fields["address"].widget.attrs.setdefault("rows", 3)
+
+    def clean_name(self):
+        name = (self.cleaned_data.get("name") or "").strip()
+        if not name:
+            raise forms.ValidationError("Business name is required.")
+        return name
+
+
+class AdminTimeZoneForm(StyledModelForm):
+    time_zone = forms.ChoiceField(choices=(), required=False, label="Time zone")
+
+    class Meta:
+        model = UserPreference
+        fields = ["time_zone"]
+
+    def __init__(self, *args, detected_time_zone="", effective_time_zone="", **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+        self.detected_time_zone = normalize_time_zone_name(detected_time_zone, "")
+        self.effective_time_zone = normalize_time_zone_name(effective_time_zone, "")
+        self.fields["time_zone"].choices = time_zone_choices()
+        if self.detected_time_zone:
+            self.fields["time_zone"].help_text = (
+                f"Leave this on System detected to follow the device time zone ({self.detected_time_zone})."
+            )
+        else:
+            self.fields["time_zone"].help_text = (
+                "Leave this on System detected to follow the device time zone when it is available."
+            )
+
+    def clean_time_zone(self):
+        return normalize_time_zone_name(self.cleaned_data.get("time_zone"), "")
 
 
 class TeamUserForm(StyledFieldsMixin, UserCreationForm):

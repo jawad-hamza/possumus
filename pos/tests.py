@@ -1,3 +1,7 @@
+from datetime import timedelta
+import hashlib
+import hmac
+import json
 from decimal import Decimal
 from pathlib import Path
 from tempfile import TemporaryDirectory
@@ -5,13 +9,18 @@ from unittest import mock
 from urllib.parse import quote
 
 from django.contrib.auth import get_user_model
+from django.contrib.auth.tokens import default_token_generator
+from django.core import mail
 from django.core.files.uploadedfile import SimpleUploadedFile
+from django.utils import timezone
 from django.test import TestCase, override_settings
 from django.urls import reverse
+from django.utils.encoding import force_bytes
+from django.utils.http import urlsafe_base64_encode
 
 from accounts.models import Account, AuditLog, BackupSnapshot, PartyLedgerEntry, Voucher
 from accounts.services.settlements import create_payment
-from pos.models import Brand, Category, CompanyProfile, CustomRole, Customer, Product, Purchase, PurchaseItem, Sale, SaleItem, Supplier, SystemSettings, UserSessionLog
+from pos.models import BillingSubscription, BillingWebhookEvent, Brand, Category, CompanyProfile, CustomRole, Customer, OwnerOnboarding, Product, Purchase, PurchaseItem, Sale, SaleItem, Supplier, SystemSettings, UserPreference, UserSessionLog
 from pos.services.access import ADMIN_ROLE, CASHIER_ROLE, assign_role, ensure_role_groups
 from pos.test_support import AuthenticatedAdminTestCase
 
@@ -540,18 +549,38 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         self.assertEqual(self.client.get(reverse("daily_sales_report")).status_code, 200)
         self.assertEqual(self.client.get(reverse("invoice", args=[sale.id])).status_code, 200)
         self.assertEqual(self.client.get(reverse("invoice_pdf", args=[sale.id])).status_code, 200)
+    def test_public_home_shows_marketing_landing_page(self):
+        self.client.logout()
 
+        response = self.client.get(reverse("home"))
 
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Vendora")
+        self.assertContains(response, "Lemon Squeezy")
+        self.assertContains(response, "Get Started Free")
+        self.assertContains(response, "Sign Up")
+        self.assertContains(response, "Starter")
+        self.assertContains(response, "Growth")
+        self.assertContains(response, "Scale")
+        self.assertContains(response, "$10")
 
+    def test_start_trial_redirects_to_signup_when_workspace_exists(self):
+        self.client.logout()
 
+        response = self.client.get(reverse("start_trial"), follow=True)
 
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This Vendora workspace already has an owner account.")
+        self.assertContains(response, "Go to Sign In")
 
+    def test_demo_plan_checkout_redirects_to_signup_when_workspace_exists(self):
+        self.client.logout()
 
+        response = self.client.get(reverse("landing_plan_checkout", args=["growth"]), follow=True)
 
-
-
-
-
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "This Vendora workspace already has an owner account.")
+        self.assertContains(response, "Go to Sign In")
 
     def test_settings_page_updates_branding_and_tax_rules(self):
         branding_response = self.client.post(
@@ -651,6 +680,44 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         self.assertContains(response, 'id="settings-backups-pane"')
         self.assertContains(response, 'id="settings-audit-pane"')
         self.assertContains(response, 'id="settings-team-pane"')
+
+    def test_settings_page_uses_detected_time_zone_when_admin_has_no_saved_preference(self):
+        session = self.client.session
+        session["browser_time_zone"] = "America/New_York"
+        session.save()
+
+        response = self.client.get(reverse("settings_page"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["session_detected_time_zone"], "America/New_York")
+        self.assertEqual(response.context["effective_time_zone"], "America/New_York")
+        self.assertTrue(response.context["uses_system_detected_time_zone"])
+        self.assertContains(response, "Your Time Zone")
+        self.assertContains(response, "America/New_York")
+
+    def test_settings_page_saves_admin_time_zone_preference(self):
+        session = self.client.session
+        session["browser_time_zone"] = "America/New_York"
+        session.save()
+
+        response = self.client.post(
+            reverse("settings_page"),
+            {
+                "action": "save_time_zone",
+                "browser_time_zone": "America/New_York",
+                "timezone-time_zone": "Europe/London",
+            },
+            follow=True,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        preference = UserPreference.objects.get(user=self.admin_user)
+        self.assertEqual(preference.time_zone, "Europe/London")
+        self.assertEqual(response.context["saved_time_zone_preference"], "Europe/London")
+        self.assertEqual(response.context["effective_time_zone"], "Europe/London")
+        self.assertFalse(response.context["uses_system_detected_time_zone"])
+        self.assertTrue(AuditLog.objects.filter(action="admin_time_zone_updated", actor=self.admin_user).exists())
+        self.assertContains(response, "Time zone saved as Europe/London.")
 
     def test_settings_page_can_upload_database_snapshot(self):
         uploaded_file = SimpleUploadedFile(
@@ -911,6 +978,309 @@ class CustomRoleSettingsTests(AuthenticatedAdminTestCase):
         )
         self.assertEqual(assign_response.status_code, 302)
         self.assertTrue(member.groups.filter(name=role.group_name).exists())
+
+
+class PublicTrialRoutingTests(TestCase):
+    def test_start_trial_redirects_to_signup_when_no_workspace_exists(self):
+        response = self.client.get(reverse("start_trial"))
+
+        self.assertRedirects(response, reverse("signup") + "?plan=starter")
+
+    def test_demo_plan_checkout_redirects_to_signup_when_no_workspace_exists(self):
+        response = self.client.get(reverse("landing_plan_checkout", args=["starter"]))
+
+        self.assertRedirects(response, reverse("signup") + "?plan=starter")
+
+
+@override_settings(EMAIL_BACKEND="django.core.mail.backends.locmem.EmailBackend")
+class OwnerOnboardingTests(TestCase):
+    def test_signup_creates_inactive_owner_and_sends_verification_email(self):
+        response = self.client.post(
+            reverse("signup"),
+            {
+                "first_name": "Owner",
+                "last_name": "User",
+                "email": "owner@example.com",
+                "password1": "OwnerPass123!",
+                "password2": "OwnerPass123!",
+                "selected_plan": OwnerOnboarding.PLAN_GROWTH,
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Check your email")
+        user = get_user_model().objects.get(email="owner@example.com")
+        onboarding = OwnerOnboarding.objects.get(user=user)
+        self.assertFalse(user.is_active)
+        self.assertEqual(onboarding.selected_plan, OwnerOnboarding.PLAN_GROWTH)
+        self.assertEqual(len(mail.outbox), 1)
+        self.assertIn("signup/verify/", mail.outbox[0].body)
+
+    @override_settings(
+        GOOGLE_OAUTH_CLIENT_ID="google-client-id",
+        GOOGLE_OAUTH_CLIENT_SECRET="google-client-secret",
+        GOOGLE_SIGN_IN_ENABLED=True,
+    )
+    @mock.patch("pos.views.verify_google_identity_token")
+    @mock.patch("pos.views.exchange_google_authorization_code")
+    def test_google_sign_in_creates_verified_owner_account(self, exchange_code_mock, verify_token_mock):
+        start_response = self.client.get(reverse("google_auth_start"), {"plan": OwnerOnboarding.PLAN_GROWTH})
+
+        self.assertEqual(start_response.status_code, 302)
+        self.assertIn("accounts.google.com", start_response.url)
+        session = self.client.session
+        exchange_code_mock.return_value = {"id_token": "google-id-token"}
+        verify_token_mock.return_value = {
+            "sub": "google-user-1",
+            "email": "owner.google@example.com",
+            "email_verified": True,
+            "given_name": "Owner",
+            "family_name": "Google",
+            "nonce": session["google_oauth_nonce"],
+        }
+
+        callback_response = self.client.get(
+            reverse("google_auth_callback"),
+            {"state": session["google_oauth_state"], "code": "oauth-code"},
+        )
+
+        self.assertEqual(callback_response.status_code, 302)
+        self.assertEqual(callback_response.url, reverse("setup_admin"))
+        user = get_user_model().objects.get(email="owner.google@example.com")
+        onboarding = OwnerOnboarding.objects.get(user=user)
+        self.assertTrue(user.is_active)
+        self.assertTrue(onboarding.email_verified)
+        self.assertEqual(onboarding.selected_plan, OwnerOnboarding.PLAN_GROWTH)
+        self.assertIsNotNone(onboarding.trial_started_at)
+        self.assertTrue(AuditLog.objects.filter(action="owner_google_signup_created", actor=user).exists())
+
+    @override_settings(
+        GOOGLE_OAUTH_CLIENT_ID="google-client-id",
+        GOOGLE_OAUTH_CLIENT_SECRET="google-client-secret",
+        GOOGLE_SIGN_IN_ENABLED=True,
+    )
+    @mock.patch("pos.views.verify_google_identity_token")
+    @mock.patch("pos.views.exchange_google_authorization_code")
+    def test_google_sign_in_verifies_existing_owner_and_redirects_to_setup(self, exchange_code_mock, verify_token_mock):
+        user = get_user_model().objects.create_user(
+            username="owner@example.com",
+            email="owner@example.com",
+            password="OwnerPass123!",
+            is_active=False,
+        )
+        onboarding = OwnerOnboarding.objects.create(user=user, selected_plan=OwnerOnboarding.PLAN_STARTER)
+
+        start_response = self.client.get(reverse("google_auth_start"))
+
+        self.assertEqual(start_response.status_code, 302)
+        session = self.client.session
+        exchange_code_mock.return_value = {"id_token": "google-id-token"}
+        verify_token_mock.return_value = {
+            "sub": "google-user-2",
+            "email": "owner@example.com",
+            "email_verified": True,
+            "given_name": "Owner",
+            "family_name": "Verified",
+            "nonce": session["google_oauth_nonce"],
+        }
+
+        callback_response = self.client.get(
+            reverse("google_auth_callback"),
+            {"state": session["google_oauth_state"], "code": "oauth-code"},
+        )
+
+        self.assertEqual(callback_response.status_code, 302)
+        self.assertEqual(callback_response.url, reverse("setup_admin"))
+        user.refresh_from_db()
+        onboarding.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertTrue(onboarding.email_verified)
+        self.assertIsNotNone(onboarding.email_verified_at)
+
+    def test_verified_owner_can_create_business_workspace(self):
+        user = get_user_model().objects.create_user(
+            username="owner@example.com",
+            email="owner@example.com",
+            password="OwnerPass123!",
+            is_active=False,
+        )
+        onboarding = OwnerOnboarding.objects.create(user=user, selected_plan=OwnerOnboarding.PLAN_STARTER)
+        uid = urlsafe_base64_encode(force_bytes(user.pk))
+        token = default_token_generator.make_token(user)
+
+        verify_response = self.client.get(reverse("verify_signup_email", args=[uid, token]), follow=True)
+
+        self.assertEqual(verify_response.status_code, 200)
+        self.assertContains(verify_response, "Create the business workspace")
+        user.refresh_from_db()
+        onboarding.refresh_from_db()
+        self.assertTrue(user.is_active)
+        self.assertTrue(onboarding.email_verified)
+
+        setup_response = self.client.post(
+            reverse("setup_admin"),
+            {
+                "name": "Blue Mart",
+                "phone": "03001234567",
+                "email": "billing@bluemart.test",
+                "address": "Main Market",
+                "tax_registration_number": "GST-7788",
+            },
+        )
+
+        self.assertEqual(setup_response.status_code, 302)
+        self.assertEqual(setup_response.url, reverse("dashboard"))
+        self.assertTrue(CompanyProfile.objects.filter(name="Blue Mart", is_active=True).exists())
+        user.refresh_from_db()
+        onboarding.refresh_from_db()
+        self.assertTrue(user.is_staff)
+        self.assertIsNotNone(onboarding.business_created_at)
+
+    def test_setup_admin_requires_registered_owner_account(self):
+        response = self.client.get(reverse("setup_admin"), follow=True)
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Sign in with your registered owner account")
+
+
+    def test_login_page_explains_google_sign_in_setup_when_not_configured(self):
+        response = self.client.get(reverse("login"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "Google Sign-In Unavailable")
+        self.assertContains(response, "Google sign-in will turn on after the Google OAuth client ID, secret, and callback URL are connected.")
+
+    def test_billing_checkout_redirects_owner_to_provider_checkout(self):
+        user = get_user_model().objects.create_user(
+            username="owner.billing@example.com",
+            email="owner.billing@example.com",
+            password="OwnerPass123!",
+            is_active=True,
+            is_staff=True,
+        )
+        assign_role(user, ADMIN_ROLE)
+        onboarding = OwnerOnboarding.objects.create(
+            user=user,
+            selected_plan=OwnerOnboarding.PLAN_STARTER,
+            email_verified=True,
+            email_verified_at=timezone.now(),
+            business_created_at=timezone.now(),
+            trial_started_at=timezone.now() - timedelta(days=5),
+            trial_ends_at=timezone.now() - timedelta(days=2),
+            billing_state=OwnerOnboarding.BILLING_PENDING,
+        )
+        CompanyProfile.objects.create(name="Blue Mart", is_active=True)
+
+        self.client.force_login(user)
+        response = self.client.get(reverse("billing_checkout", args=[OwnerOnboarding.PLAN_GROWTH]))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertIn("growth-demo", response.url)
+        self.assertIn("owner_onboarding_id", response.url)
+        subscription = BillingSubscription.objects.get(owner_onboarding=onboarding)
+        self.assertEqual(subscription.plan_code, OwnerOnboarding.PLAN_GROWTH)
+        self.assertEqual(subscription.status, BillingSubscription.STATUS_PENDING)
+        onboarding.refresh_from_db()
+        self.assertEqual(onboarding.selected_plan, OwnerOnboarding.PLAN_GROWTH)
+
+    def test_expired_workspace_redirects_owner_to_billing(self):
+        user = get_user_model().objects.create_user(
+            username="owner.expired@example.com",
+            email="owner.expired@example.com",
+            password="OwnerPass123!",
+            is_active=True,
+            is_staff=True,
+        )
+        assign_role(user, ADMIN_ROLE)
+        OwnerOnboarding.objects.create(
+            user=user,
+            selected_plan=OwnerOnboarding.PLAN_STARTER,
+            email_verified=True,
+            email_verified_at=timezone.now(),
+            business_created_at=timezone.now(),
+            trial_started_at=timezone.now() - timedelta(days=6),
+            trial_ends_at=timezone.now() - timedelta(days=3),
+            billing_state=OwnerOnboarding.BILLING_PENDING,
+        )
+        CompanyProfile.objects.create(name="Billing Locked Shop", is_active=True)
+
+        self.client.force_login(user)
+        response = self.client.get(reverse("dashboard"))
+
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("billing_page"))
+
+    @override_settings(LEMON_SQUEEZY_WEBHOOK_SECRET="test-lemon-secret")
+    def test_lemonsqueezy_webhook_activates_subscription(self):
+        user = get_user_model().objects.create_user(
+            username="owner.webhook@example.com",
+            email="owner.webhook@example.com",
+            password="OwnerPass123!",
+            is_active=True,
+            is_staff=True,
+        )
+        assign_role(user, ADMIN_ROLE)
+        onboarding = OwnerOnboarding.objects.create(
+            user=user,
+            selected_plan=OwnerOnboarding.PLAN_STARTER,
+            email_verified=True,
+            email_verified_at=timezone.now(),
+            business_created_at=timezone.now(),
+            trial_started_at=timezone.now() - timedelta(days=6),
+            trial_ends_at=timezone.now() - timedelta(days=3),
+            billing_state=OwnerOnboarding.BILLING_PENDING,
+        )
+        CompanyProfile.objects.create(name="Webhook Shop", is_active=True)
+        BillingSubscription.objects.create(
+            owner_onboarding=onboarding,
+            plan_code=OwnerOnboarding.PLAN_GROWTH,
+            status=BillingSubscription.STATUS_PENDING,
+        )
+        payload = {
+            "meta": {
+                "event_name": "subscription_created",
+                "custom_data": {
+                    "owner_onboarding_id": str(onboarding.id),
+                    "plan_code": OwnerOnboarding.PLAN_GROWTH,
+                    "user_id": str(user.id),
+                },
+            },
+            "data": {
+                "type": "subscriptions",
+                "id": "sub_12345",
+                "attributes": {
+                    "status": "active",
+                    "customer_id": "cus_12345",
+                    "product_id": "prod_123",
+                    "variant_id": "var_123",
+                    "product_name": "Vendora Growth",
+                    "variant_name": "Growth Monthly",
+                    "renews_at": "2026-03-20T12:00:00Z",
+                    "urls": {
+                        "customer_portal": "https://vendora.lemonsqueezy.com/billing/demo-portal"
+                    },
+                },
+            },
+        }
+        body = json.dumps(payload).encode("utf-8")
+        signature = hmac.new(b"test-lemon-secret", body, hashlib.sha256).hexdigest()
+
+        response = self.client.post(
+            reverse("lemonsqueezy_webhook"),
+            data=body,
+            content_type="application/json",
+            HTTP_X_SIGNATURE=signature,
+        )
+
+        self.assertEqual(response.status_code, 200)
+        subscription = BillingSubscription.objects.get(owner_onboarding=onboarding)
+        onboarding.refresh_from_db()
+        self.assertEqual(subscription.status, BillingSubscription.STATUS_ACTIVE)
+        self.assertEqual(subscription.provider_subscription_id, "sub_12345")
+        self.assertEqual(subscription.plan_code, OwnerOnboarding.PLAN_GROWTH)
+        self.assertEqual(onboarding.billing_state, OwnerOnboarding.BILLING_ACTIVE)
+        self.assertFalse(onboarding.requires_payment_setup)
+        self.assertTrue(BillingWebhookEvent.objects.filter(event_name="subscription_created").exists())
 
 
 class RoleAccessTests(TestCase):

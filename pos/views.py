@@ -1,19 +1,25 @@
-﻿from datetime import datetime, time, timedelta
+import json
+from datetime import datetime, time, timedelta
 from decimal import Decimal, InvalidOperation
 from urllib.parse import urlencode
 
+from django.conf import settings
 from django.contrib import messages
 from django.contrib.auth import get_user_model, login, logout
+from django.contrib.auth.tokens import default_token_generator
 from django.core.exceptions import ValidationError
+from django.core.mail import send_mail
 from django.core.paginator import Paginator
 from django.db import transaction
 from django.db.models import Count, F, Q, Sum
 from django.db.models.functions import Coalesce
-from django.http import FileResponse, HttpResponse, JsonResponse
+from django.http import FileResponse, Http404, HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.urls import reverse
+from django.utils.encoding import force_bytes, force_str
 from django.utils import timezone
-from django.utils.http import url_has_allowed_host_and_scheme
+from django.utils.http import url_has_allowed_host_and_scheme, urlsafe_base64_decode, urlsafe_base64_encode
+from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from reportlab.lib.pagesizes import mm
 from reportlab.pdfgen import canvas
@@ -37,11 +43,13 @@ from accounts.services.pos_posting import post_purchase_from_pos, post_sale_from
 from .forms import (
     BrandForm,
     CategoryForm,
+    AdminTimeZoneForm,
     CompanyProfileForm,
     CustomRoleForm,
     CustomerForm,
-    FirstAdminSetupForm,
     LoginForm,
+    OwnerBusinessSetupForm,
+    OwnerSignupForm,
     ProductForm,
     PurchaseForm,
     PurchaseItemFormSet,
@@ -56,10 +64,13 @@ from .forms import (
 from .models import (
     Brand,
     Category,
+    BillingSubscription,
     CompanyProfile,
     CustomRole,
     Customer,
+    OwnerOnboarding,
     Product,
+    UserPreference,
     Purchase,
     PurchaseEditLog,
     PurchaseItem,
@@ -84,6 +95,7 @@ from .services.access import (
     describe_permissions,
     get_user_role_value,
     ensure_role_groups,
+    get_owner_onboarding,
     get_role_choices,
     get_role_label,
     get_user_role_label,
@@ -91,6 +103,7 @@ from .services.access import (
     is_first_user_setup_required,
     module_access_required,
     open_user_session,
+    user_requires_business_setup,
     pos_access_required,
     user_can_access_sale,
 )
@@ -111,6 +124,31 @@ from .services.navigation import (
 )
 from .services.purchase_balances import annotate_purchase_balances
 from .services.stock_control import create_stock_adjustment
+from .services.user_timezones import (
+    get_effective_time_zone,
+    get_session_time_zone,
+    get_user_time_zone_preference,
+    normalize_time_zone_name,
+)
+from .services.billing import (
+    LEMON_SQUEEZY_SIGNATURE_HEADER,
+    begin_lemon_squeezy_checkout,
+    get_lemon_squeezy_plan_url,
+    google_sign_in_setup_message,
+    process_lemon_squeezy_webhook,
+    user_can_manage_billing,
+    verify_lemon_squeezy_signature,
+    workspace_owner_onboarding,
+    workspace_requires_billing,
+)
+from .services.google_auth import (
+    build_google_authorization_url,
+    clear_google_oauth_session,
+    exchange_google_authorization_code,
+    get_google_oauth_session,
+    google_sign_in_enabled,
+    verify_google_identity_token,
+)
 from .services.business_rules import (
     category_tax_rate_for_product,
     expired_products,
@@ -141,6 +179,15 @@ def _normalized_rate(value):
     if rate > 100:
         return Decimal("100")
     return quantize_money(rate)
+
+
+def _remember_browser_time_zone(request, raw_time_zone):
+    time_zone_name = normalize_time_zone_name(raw_time_zone, "")
+    if not time_zone_name:
+        return ""
+    request.session["browser_time_zone"] = time_zone_name
+    request.session.modified = True
+    return time_zone_name
 
 
 def _parse_report_date(value, default):
@@ -532,45 +579,799 @@ def products_by_category(request, category_id):
     return JsonResponse({"category": category.name, "products": payload})
 
 
+LANDING_BRAND_NAME = getattr(settings, "PUBLIC_BRAND_NAME", "Vendora")
+LANDING_PUBLIC_DOMAIN = getattr(settings, "PUBLIC_APP_DOMAIN", "https://vendora.app")
+LANDING_SUPPORT_EMAIL = getattr(settings, "DEFAULT_FROM_EMAIL", "hello@vendora.app")
+LANDING_CHECKOUT_PROVIDER = getattr(settings, "LEMON_SQUEEZY_PROVIDER_NAME", "Lemon Squeezy")
+
+
+def _landing_pricing_plans():
+    return [
+        {
+            "code": OwnerOnboarding.PLAN_STARTER,
+            "name": "Starter",
+            "badge": "Lean retail",
+            "price": "10",
+            "description": "A clean starting package for a single counter or owner-operated shop.",
+            "features": [
+                "1 store workspace",
+                "POS, products, purchases, and reports",
+                "Up to 3 staff logins",
+                "3 free days to set up and run the workspace",
+            ],
+            "featured": False,
+            "cta_label": "Get Started Free",
+            "checkout_link": get_lemon_squeezy_plan_url(OwnerOnboarding.PLAN_STARTER),
+        },
+        {
+            "code": OwnerOnboarding.PLAN_GROWTH,
+            "name": "Growth",
+            "badge": "Most popular",
+            "price": "24",
+            "description": "For growing stores that need tighter controls, deeper reporting, and more staff capacity.",
+            "features": [
+                "Everything in Starter",
+                "Advanced GST, backups, and audit trail",
+                "Up to 10 staff logins",
+                "Priority onboarding help",
+            ],
+            "featured": True,
+            "cta_label": "Get Started Free",
+            "checkout_link": get_lemon_squeezy_plan_url(OwnerOnboarding.PLAN_GROWTH),
+        },
+        {
+            "code": OwnerOnboarding.PLAN_SCALE,
+            "name": "Scale",
+            "badge": "Operations ready",
+            "price": "59",
+            "description": "For larger retail teams that want broader operational control and room for custom rollout needs.",
+            "features": [
+                "Everything in Growth",
+                "Higher-volume team and workflow support",
+                "Operational rollout assistance",
+                "Best fit for serious branch growth",
+            ],
+            "featured": False,
+            "cta_label": "Get Started Free",
+            "checkout_link": get_lemon_squeezy_plan_url(OwnerOnboarding.PLAN_SCALE),
+        },
+    ]
+
+
+
+def _landing_plan_lookup(plan_code):
+    plan_code = (plan_code or "").strip().lower()
+    for plan in _landing_pricing_plans():
+        if plan["code"] == plan_code:
+            return plan
+    return None
+
+
+
+def _selected_plan_code(plan_code):
+    plan = _landing_plan_lookup(plan_code)
+    return plan["code"] if plan else OwnerOnboarding.PLAN_STARTER
+
+
+
+def _google_sign_in_url(*, plan_code="", next_url=""):
+    params = {}
+    if plan_code:
+        params["plan"] = _selected_plan_code(plan_code)
+    if next_url:
+        params["next"] = next_url
+    base_url = reverse("google_auth_start")
+    return f"{base_url}?{urlencode(params)}" if params else base_url
+
+
+
+def _signup_url_for_plan(plan_code):
+    return f"{reverse('signup')}?{urlencode({'plan': _selected_plan_code(plan_code)})}"
+
+
+
+def _public_signup_is_open():
+    return not get_user_model().objects.exists()
+
+
+
+def _public_signup_lock_message():
+    if OwnerOnboarding.objects.filter(email_verified=False, business_created_at__isnull=True).exists():
+        return "A registration is already in progress for this workspace. Verify that email address and then sign in to continue."
+    return "This Vendora workspace already has an owner account. Sign in with the existing owner email or a team login."
+
+
+
+def _owner_verification_url(request, user):
+    uid = urlsafe_base64_encode(force_bytes(user.pk))
+    token = default_token_generator.make_token(user)
+    return request.build_absolute_uri(reverse("verify_signup_email", args=[uid, token]))
+
+
+
+def _send_owner_verification_email(request, onboarding):
+    verification_url = _owner_verification_url(request, onboarding.user)
+    subject = f"{LANDING_BRAND_NAME} email verification"
+    body = (
+        f"Welcome to {LANDING_BRAND_NAME}.\n\n"
+        f"Verify your email to unlock your 3 free days on the {onboarding.plan_label} package and create the business workspace.\n\n"
+        "You can purchase or upgrade plans later after the workspace is live.\n\n"
+        f"Verification link:\n{verification_url}\n\n"
+        "If you did not request this account, you can ignore this email."
+    )
+    send_mail(subject, body, LANDING_SUPPORT_EMAIL, [onboarding.user.email], fail_silently=False)
+    return verification_url
+
+
+
+def _activate_owner_trial_if_needed(user):
+    onboarding = get_owner_onboarding(user)
+    if onboarding and onboarding.email_verified:
+        onboarding.start_trial()
+    return onboarding
+
+
+
+def _bool_claim(value):
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in {"1", "true", "yes", "on"}
+
+
+
+def _google_safe_next_url(request, next_url):
+    next_url = (next_url or "").strip()
+    if not next_url:
+        return ""
+    return (
+        next_url
+        if url_has_allowed_host_and_scheme(
+            url=next_url,
+            allowed_hosts={request.get_host()},
+            require_https=request.is_secure(),
+        )
+        else ""
+    )
+
+
+
+def _google_failure_redirect():
+    return "signup" if _public_signup_is_open() else "login"
+
+
+
+def _find_user_by_email_or_username(identifier):
+    identifier = (identifier or "").strip()
+    if not identifier:
+        return None
+    user_model = get_user_model()
+    return (
+        user_model.objects.filter(Q(email__iexact=identifier) | Q(username__iexact=identifier))
+        .order_by("id")
+        .first()
+    )
+
+
+
+def _update_user_from_google_claims(user, claims):
+    email = (claims.get("email") or "").strip().lower()
+    given_name = (claims.get("given_name") or "").strip()
+    family_name = (claims.get("family_name") or "").strip()
+    update_fields = []
+
+    if email and not user.email:
+        user.email = email
+        update_fields.append("email")
+    if given_name and not user.first_name:
+        user.first_name = given_name
+        update_fields.append("first_name")
+    if family_name and not user.last_name:
+        user.last_name = family_name
+        update_fields.append("last_name")
+
+    if update_fields:
+        user.save(update_fields=update_fields)
+
+
+
+def _resolve_google_user(request, claims, plan_code):
+    email = (claims.get("email") or "").strip().lower()
+    if not email:
+        raise ValueError("Google did not return an email address for this account.")
+    if not _bool_claim(claims.get("email_verified")):
+        raise ValueError("Google did not confirm that email address. Use a verified Google account instead.")
+
+    user = _find_user_by_email_or_username(email)
+    now = timezone.now()
+
+    if user is None:
+        if not _public_signup_is_open():
+            raise ValueError("This Google email is not registered for the current Vendora workspace.")
+
+        user_model = get_user_model()
+        with transaction.atomic():
+            user = user_model(
+                username=email,
+                email=email,
+                first_name=(claims.get("given_name") or "").strip(),
+                last_name=(claims.get("family_name") or "").strip(),
+                is_active=True,
+                is_staff=False,
+            )
+            user.set_unusable_password()
+            user.save()
+            onboarding = OwnerOnboarding.objects.create(
+                user=user,
+                selected_plan=_selected_plan_code(plan_code),
+            )
+            onboarding.mark_email_verified(now=now)
+            onboarding.start_trial(now=now)
+            record_audit(
+                action="owner_google_signup_created",
+                description=f"Owner account '{email}' created through Google sign-in.",
+                actor=user,
+                target=user,
+                metadata={"plan": onboarding.plan_label},
+            )
+        return user, onboarding, True
+
+    onboarding = getattr(user, "owner_onboarding", None)
+    if not user.is_active and onboarding is None:
+        raise ValueError("This Google email belongs to a disabled account. Ask an admin to re-enable it first.")
+
+    _update_user_from_google_claims(user, claims)
+    if onboarding is not None:
+        if not user.is_active:
+            user.is_active = True
+            user.save(update_fields=["is_active"])
+        if not onboarding.email_verified:
+            onboarding.mark_email_verified(now=now)
+        onboarding.start_trial(now=now)
+
+    return user, onboarding, False
+
+
+
+def _sign_in_user_and_redirect(request, user, *, next_url=""):
+    login(request, user)
+    open_user_session(request, user)
+    onboarding = _activate_owner_trial_if_needed(user)
+    welcome_name = user.get_full_name() or user.email or user.username
+    home_url = default_home_url(user)
+    messages.success(request, f"Welcome back, {welcome_name}.")
+    if onboarding and onboarding.email_verified and not onboarding.business_created_at:
+        messages.info(request, "Create the business workspace to finish onboarding.")
+    safe_next_url = _google_safe_next_url(request, next_url)
+    if home_url != reverse("setup_admin") and safe_next_url:
+        return redirect(safe_next_url)
+    return redirect(home_url)
+
+
+
+def _landing_context():
+    pricing_plans = []
+    for plan in _landing_pricing_plans():
+        pricing_plans.append(
+            {
+                **plan,
+                "cta_url": reverse("landing_plan_checkout", kwargs={"plan_code": plan["code"]}),
+            }
+        )
+    return {
+        "brand_name": LANDING_BRAND_NAME,
+        "public_domain": LANDING_PUBLIC_DOMAIN,
+        "support_email": LANDING_SUPPORT_EMAIL,
+        "checkout_provider": LANDING_CHECKOUT_PROVIDER,
+        "pricing_plans": pricing_plans,
+    }
+
+
+
+def _billing_status_tone(onboarding, subscription):
+    if onboarding is not None and onboarding.trial_is_active:
+        return "advance"
+    if subscription is not None:
+        return subscription.status_tone
+    if onboarding is not None and onboarding.requires_payment_setup:
+        return "payable"
+    return "clear"
+
+
+
+def _billing_page_context(request, onboarding, *, can_manage=False):
+    subscription = onboarding.current_subscription if onboarding is not None else None
+    current_plan_code = (
+        subscription.plan_code
+        if subscription is not None
+        else (onboarding.selected_plan if onboarding is not None else OwnerOnboarding.PLAN_STARTER)
+    )
+    current_plan = _landing_plan_lookup(current_plan_code) or _landing_plan_lookup(OwnerOnboarding.PLAN_STARTER)
+    portal_url = (
+        subscription.customer_portal_url
+        if subscription is not None and subscription.customer_portal_url
+        else getattr(settings, "LEMON_SQUEEZY_CUSTOMER_PORTAL_URL", "")
+    )
+    current_price = safe_decimal(current_plan["price"] if current_plan else "0")
+    plan_cards = []
+    for plan in _landing_pricing_plans():
+        plan_price = safe_decimal(plan["price"])
+        is_current = plan["code"] == current_plan_code
+        if is_current:
+            cta_label = "Current Plan" if onboarding and onboarding.billing_is_active else "Activate This Plan"
+        elif plan_price > current_price:
+            cta_label = f"Upgrade to {plan['name']}"
+        elif plan_price < current_price:
+            cta_label = f"Switch to {plan['name']}"
+        else:
+            cta_label = f"Choose {plan['name']}"
+        plan_cards.append(
+            {
+                **plan,
+                "cta_url": reverse("billing_checkout", args=[plan["code"]]),
+                "cta_label": cta_label,
+                "is_current": is_current,
+                "checkout_configured": bool(plan.get("checkout_link")),
+            }
+        )
+
+    return {
+        "billing_onboarding": onboarding,
+        "billing_subscription": subscription,
+        "billing_current_plan": current_plan,
+        "billing_status_label": onboarding.billing_status_label if onboarding is not None else "Setup not started",
+        "billing_status_tone": _billing_status_tone(onboarding, subscription),
+        "billing_trial_days_remaining": onboarding.trial_days_remaining if onboarding is not None else 0,
+        "billing_portal_url": (portal_url or "").strip(),
+        "billing_can_manage": can_manage,
+        "billing_plan_cards": plan_cards,
+        "billing_checkout_enabled": any(card["checkout_configured"] for card in plan_cards),
+        "billing_requires_action": bool(onboarding and onboarding.requires_payment_setup),
+        "billing_provider_name": LANDING_CHECKOUT_PROVIDER,
+    }
+
 def home(request):
-    if is_first_user_setup_required():
-        return redirect("setup_admin")
-    if not request.user.is_authenticated:
+    if request.user.is_authenticated:
+        return redirect(default_home_url(request.user))
+
+    return render(
+        request,
+        "pos/landing.html",
+        {
+            **_landing_context(),
+            "trial_cta_url": reverse("start_trial"),
+            "login_url": reverse("login"),
+            "signup_url": "#pricing",
+        },
+    )
+
+
+
+def landing_plan_checkout(request, plan_code):
+    plan = _landing_plan_lookup(plan_code)
+    if plan is None:
+        raise Http404("Unknown plan.")
+
+    if request.user.is_authenticated:
+        return redirect(default_home_url(request.user))
+
+    if _public_signup_is_open():
+        messages.info(
+            request,
+            f"{plan['name']} selected. Create your owner account and verify your email to unlock 3 free days.",
+        )
+    return redirect(_signup_url_for_plan(plan["code"]))
+
+
+
+def start_trial(request):
+    if request.user.is_authenticated:
+        return redirect(default_home_url(request.user))
+
+    return redirect(_signup_url_for_plan(OwnerOnboarding.PLAN_STARTER))
+
+
+
+def signup_view(request):
+    ensure_role_groups()
+    if request.user.is_authenticated:
+        return redirect(default_home_url(request.user))
+
+    selected_plan = _selected_plan_code(request.POST.get("selected_plan") or request.GET.get("plan"))
+    selected_plan_data = _landing_plan_lookup(selected_plan)
+    form = OwnerSignupForm(request.POST or None, initial={"selected_plan": selected_plan})
+    form.fields["selected_plan"].initial = selected_plan
+    signup_locked = not _public_signup_is_open()
+    signup_lock_message = _public_signup_lock_message() if signup_locked else ""
+
+    if request.method == "POST":
+        if signup_locked:
+            messages.info(request, signup_lock_message)
+        elif form.is_valid():
+            user = None
+            try:
+                with transaction.atomic():
+                    user = form.save()
+                    onboarding = OwnerOnboarding.objects.create(
+                        user=user,
+                        selected_plan=form.cleaned_data["selected_plan"],
+                    )
+                    onboarding.mark_verification_sent()
+                verification_url = _send_owner_verification_email(request, onboarding)
+            except Exception:
+                if user is not None and user.pk:
+                    user.delete()
+                messages.error(request, "We could not send the verification email. Check the mail settings and try again.")
+            else:
+                return render(
+                    request,
+                    "pos/signup_email_sent.html",
+                    {
+                        "brand_name": LANDING_BRAND_NAME,
+                        "email": onboarding.user.email,
+                        "plan": _landing_plan_lookup(onboarding.selected_plan),
+                        "login_url": reverse("login"),
+                        "resend_email": onboarding.user.email,
+                        "debug_verification_url": verification_url if settings.DEBUG else "",
+                    },
+                )
+        else:
+            messages.error(request, "Please review the owner account details below.")
+
+    return render(
+        request,
+        "pos/signup.html",
+        {
+            "brand_name": LANDING_BRAND_NAME,
+            "form": form,
+            "plan": selected_plan_data,
+            "login_url": reverse("login"),
+            "google_sign_in_url": _google_sign_in_url(plan_code=selected_plan),
+            "google_sign_in_enabled": google_sign_in_enabled(),
+            "google_sign_in_setup_message": google_sign_in_setup_message(),
+            "signup_locked": signup_locked,
+            "signup_lock_message": signup_lock_message,
+        },
+    )
+
+
+@require_POST
+def resend_verification_email(request):
+    email = (request.POST.get("email") or "").strip().lower()
+    if not email:
+        messages.error(request, "Enter the owner email address first.")
         return redirect("login")
-    return redirect(default_home_url(request.user))
+
+    user = get_user_model().objects.filter(email__iexact=email).first()
+    onboarding = getattr(user, "owner_onboarding", None) if user is not None else None
+    if user is None or onboarding is None or onboarding.email_verified:
+        messages.error(request, "No pending email verification was found for that address.")
+        return redirect("login")
+
+    onboarding.mark_verification_sent()
+    verification_url = _send_owner_verification_email(request, onboarding)
+    messages.success(request, f"A fresh verification email was sent to {user.email}.")
+    return render(
+        request,
+        "pos/signup_email_sent.html",
+        {
+            "brand_name": LANDING_BRAND_NAME,
+            "email": onboarding.user.email,
+            "plan": _landing_plan_lookup(onboarding.selected_plan),
+            "login_url": reverse("login"),
+            "resend_email": onboarding.user.email,
+            "debug_verification_url": verification_url if settings.DEBUG else "",
+        },
+    )
+
+
+
+def verify_signup_email(request, uidb64, token):
+    user_model = get_user_model()
+    try:
+        user_id = force_str(urlsafe_base64_decode(uidb64))
+        user = user_model.objects.get(pk=user_id)
+    except (TypeError, ValueError, OverflowError, user_model.DoesNotExist):
+        user = None
+
+    onboarding = getattr(user, "owner_onboarding", None) if user is not None else None
+    if user is None or onboarding is None:
+        messages.error(request, "That verification link is invalid.")
+        return redirect("login")
+
+    if onboarding.email_verified:
+        messages.info(request, "Your email is already verified. Sign in to continue.")
+        if request.user.is_authenticated and request.user.pk == user.pk:
+            return redirect(default_home_url(user))
+        return redirect("login")
+
+    if not default_token_generator.check_token(user, token):
+        messages.error(request, "That verification link is no longer valid. Use the resend option to get a fresh email.")
+        return redirect("login")
+
+    with transaction.atomic():
+        user.is_active = True
+        user.save(update_fields=["is_active"])
+        onboarding.mark_email_verified()
+        onboarding.start_trial()
+
+    login(request, user)
+    open_user_session(request, user)
+    messages.success(request, "Email verified. Finish creating your business workspace.")
+    return redirect("setup_admin")
+
+
+
+def google_auth_start(request):
+    if request.user.is_authenticated:
+        return redirect(default_home_url(request.user))
+
+    _remember_browser_time_zone(request, request.GET.get("browser_time_zone"))
+    if not google_sign_in_enabled():
+        messages.info(
+            request,
+            google_sign_in_setup_message(),
+        )
+        return redirect(_google_failure_redirect())
+
+    plan_code = _selected_plan_code(request.GET.get("plan")) if _public_signup_is_open() else ""
+    next_url = _google_safe_next_url(request, request.GET.get("next"))
+    return redirect(build_google_authorization_url(request, plan_code=plan_code, next_url=next_url))
+
+
+
+def google_auth_callback(request):
+    if request.user.is_authenticated:
+        return redirect(default_home_url(request.user))
+
+    if not google_sign_in_enabled():
+        messages.info(
+            request,
+            google_sign_in_setup_message(),
+        )
+        return redirect(_google_failure_redirect())
+
+    if request.GET.get("error"):
+        clear_google_oauth_session(request)
+        messages.error(request, "Google sign-in was cancelled before completion.")
+        return redirect(_google_failure_redirect())
+
+    oauth_session = get_google_oauth_session(request)
+    state = (request.GET.get("state") or "").strip()
+    code = (request.GET.get("code") or "").strip()
+    if not oauth_session.get("state") or state != oauth_session.get("state"):
+        clear_google_oauth_session(request)
+        messages.error(request, "Google sign-in expired or could not be verified. Please try again.")
+        return redirect(_google_failure_redirect())
+    if not code:
+        clear_google_oauth_session(request)
+        messages.error(request, "Google sign-in did not return an authorization code.")
+        return redirect(_google_failure_redirect())
+
+    try:
+        token_payload = exchange_google_authorization_code(request, code)
+        claims = verify_google_identity_token(
+            token_payload.get("id_token"),
+            expected_nonce=oauth_session.get("nonce", ""),
+        )
+        user, onboarding, created_owner = _resolve_google_user(
+            request,
+            claims,
+            oauth_session.get("plan_code", ""),
+        )
+    except ValueError as exc:
+        clear_google_oauth_session(request)
+        messages.error(request, str(exc))
+        return redirect(_google_failure_redirect())
+
+    clear_google_oauth_session(request)
+    if created_owner:
+        messages.success(request, "Google account verified. Finish creating the business workspace to continue.")
+    elif onboarding and onboarding.email_verified and not onboarding.business_created_at:
+        messages.success(request, "Google account verified. Continue with business setup.")
+    return _sign_in_user_and_redirect(request, user, next_url=oauth_session.get("next_url", ""))
+
 
 
 def setup_admin(request):
     ensure_role_groups()
-    if not is_first_user_setup_required():
+    if not request.user.is_authenticated:
+        messages.info(request, "Sign in with your registered owner account to create the business workspace.")
         return redirect("login")
 
-    form = FirstAdminSetupForm(request.POST or None)
+    onboarding = get_owner_onboarding(request.user)
+    if onboarding is None:
+        if _public_signup_is_open():
+            return redirect("signup")
+        messages.error(request, "Only the registered owner account can create the business workspace.")
+        return redirect(default_home_url(request.user))
+
+    if not onboarding.email_verified:
+        messages.warning(request, "Verify your email before creating the business workspace.")
+        return redirect("login")
+
+    if onboarding.business_created_at or CompanyProfile.objects.filter(is_active=True).exists():
+        return redirect(default_home_url(request.user))
+
+    company_profile = CompanyProfile(is_active=True, email=request.user.email or "")
+    form = OwnerBusinessSetupForm(request.POST or None, instance=company_profile)
     if request.method == "POST":
+        _remember_browser_time_zone(request, request.POST.get("browser_time_zone"))
         if form.is_valid():
             with transaction.atomic():
-                user = form.save()
-                assign_role(user, ADMIN_ROLE)
-                login(request, user)
-                open_user_session(request, user)
+                company = form.save(commit=False)
+                company.is_active = True
+                company.save()
+                assign_role(request.user, ADMIN_ROLE)
+                _activate_owner_trial_if_needed(request.user)
+                onboarding.mark_business_created()
                 record_audit(
-                    action="initial_admin_created",
-                    description="Initial administrator account created during first-time setup.",
-                    actor=user,
-                    target=user,
-                    metadata={"role": get_role_label(ADMIN_ROLE)},
+                    action="business_workspace_created",
+                    description=f"Business workspace '{company.name}' created during owner onboarding.",
+                    actor=request.user,
+                    target=company,
+                    metadata={"plan": onboarding.plan_label},
                 )
-            messages.success(request, "Admin account created. You can now configure the business workspace.")
-            return redirect(default_home_url(user))
-        messages.error(request, "Please review the admin account details below.")
+            messages.success(request, "Business workspace created. Your owner account now has full control.")
+            return redirect(default_home_url(request.user))
+        messages.error(request, "Please review the business details below.")
 
-    return render(request, "pos/setup_admin.html", {"form": form})
+    return render(
+        request,
+        "pos/setup_admin.html",
+        {
+            "form": form,
+            "onboarding": onboarding,
+            "brand_name": LANDING_BRAND_NAME,
+            "google_sign_in_enabled": getattr(settings, "GOOGLE_SIGN_IN_ENABLED", False),
+        },
+    )
 
+
+
+def billing_page(request):
+    ensure_role_groups()
+    if is_first_user_setup_required():
+        return redirect("signup")
+    if not request.user.is_authenticated:
+        return redirect(f"{reverse('login')}?{urlencode({'next': request.get_full_path()})}")
+    if user_requires_business_setup(request.user):
+        return redirect("setup_admin")
+
+    onboarding = workspace_owner_onboarding(request.user)
+    can_manage_billing = user_can_manage_billing(request.user, onboarding)
+    billing_context = _billing_page_context(request, onboarding, can_manage=can_manage_billing)
+
+    if workspace_requires_billing(request.user):
+        if can_manage_billing:
+            messages.warning(request, "The 3 free days have ended. Choose a paid package to reopen the workspace.")
+        else:
+            messages.warning(request, "This workspace is locked until the owner updates billing.")
+
+    if onboarding is None:
+        messages.info(request, "Billing becomes available after owner onboarding and business setup are complete.")
+
+    return render(
+        request,
+        "pos/billing.html",
+        {
+            "page_title": "Billing",
+            "page_subtitle": "Manage the workspace package, the 3 free days, and the subscription lifecycle.",
+            "page_icon": "bi-credit-card-2-front",
+            "page_icon_accent": "warning",
+            "brand_name": LANDING_BRAND_NAME,
+            **billing_context,
+        },
+    )
+
+
+
+def billing_checkout(request, plan_code):
+    ensure_role_groups()
+    if is_first_user_setup_required():
+        return redirect("signup")
+    if not request.user.is_authenticated:
+        return redirect(f"{reverse('login')}?{urlencode({'next': reverse('billing_page')})}")
+    if user_requires_business_setup(request.user):
+        return redirect("setup_admin")
+
+    onboarding = workspace_owner_onboarding(request.user)
+    if onboarding is None:
+        messages.error(request, "Billing is not available until the owner workspace is created.")
+        return redirect(default_home_url(request.user))
+    if not user_can_manage_billing(request.user, onboarding):
+        messages.error(request, "Only the owner or an admin can manage workspace billing.")
+        return redirect("billing_page")
+
+    plan = _landing_plan_lookup(plan_code)
+    if plan is None:
+        raise Http404("Unknown billing package.")
+
+    try:
+        subscription, checkout_url = begin_lemon_squeezy_checkout(onboarding, plan["code"])
+    except ValueError as exc:
+        messages.error(request, str(exc))
+        return redirect("billing_page")
+
+    record_audit(
+        action="billing_checkout_started",
+        description=f"{plan['name']} checkout opened from the billing centre.",
+        actor=request.user,
+        target=subscription,
+        metadata={"plan": plan["name"], "provider": LANDING_CHECKOUT_PROVIDER},
+    )
+    messages.info(request, f"{plan['name']} checkout opened in {LANDING_CHECKOUT_PROVIDER}. Complete payment there to activate the workspace.")
+    return redirect(checkout_url)
+
+
+
+def billing_portal_redirect(request):
+    ensure_role_groups()
+    if is_first_user_setup_required():
+        return redirect("signup")
+    if not request.user.is_authenticated:
+        return redirect(f"{reverse('login')}?{urlencode({'next': reverse('billing_page')})}")
+
+    onboarding = workspace_owner_onboarding(request.user)
+    if onboarding is None:
+        messages.error(request, "Billing portal is not available yet for this workspace.")
+        return redirect(default_home_url(request.user))
+    if not user_can_manage_billing(request.user, onboarding):
+        messages.error(request, "Only the owner or an admin can open the billing portal.")
+        return redirect("billing_page")
+
+    subscription = onboarding.current_subscription
+    portal_url = (
+        subscription.customer_portal_url
+        if subscription is not None and subscription.customer_portal_url
+        else getattr(settings, "LEMON_SQUEEZY_CUSTOMER_PORTAL_URL", "")
+    )
+    portal_url = (portal_url or "").strip()
+    if not portal_url:
+        messages.info(request, "Customer billing portal URL is not configured yet.")
+        return redirect("billing_page")
+    return redirect(portal_url)
+
+
+
+@csrf_exempt
+def lemonsqueezy_webhook(request):
+    if request.method != "POST":
+        return JsonResponse({"ok": False, "error": "method_not_allowed"}, status=405)
+
+    raw_body = request.body or b""
+    signature = (request.headers.get(LEMON_SQUEEZY_SIGNATURE_HEADER) or request.META.get("HTTP_X_SIGNATURE") or "").strip()
+    if not getattr(settings, "LEMON_SQUEEZY_WEBHOOK_SECRET", "").strip():
+        return JsonResponse({"ok": False, "error": "webhook_not_configured"}, status=503)
+    if not verify_lemon_squeezy_signature(raw_body, signature):
+        return JsonResponse({"ok": False, "error": "invalid_signature"}, status=400)
+
+    try:
+        payload = json.loads(raw_body.decode("utf-8"))
+    except (UnicodeDecodeError, json.JSONDecodeError):
+        return JsonResponse({"ok": False, "error": "invalid_json"}, status=400)
+
+    webhook_event, created, subscription = process_lemon_squeezy_webhook(payload, raw_body=raw_body, signature=signature)
+    if created and subscription is not None:
+        record_audit(
+            action="billing_subscription_synced",
+            description=f"Billing updated through {LANDING_CHECKOUT_PROVIDER} webhook ({subscription.status_label}).",
+            target=subscription,
+            metadata={
+                "plan": subscription.plan_label,
+                "status": subscription.status,
+                "provider_event": webhook_event.event_name,
+            },
+        )
+
+    return JsonResponse({
+        "ok": True,
+        "duplicate": not created,
+        "event": webhook_event.event_name,
+        "subscription": subscription.provider_subscription_id if subscription is not None else "",
+    })
 
 def login_view(request):
     ensure_role_groups()
-    if is_first_user_setup_required():
-        return redirect("setup_admin")
     if request.user.is_authenticated:
         return redirect(default_home_url(request.user))
 
@@ -578,19 +1379,11 @@ def login_view(request):
     form = LoginForm(request, data=request.POST or None)
 
     if request.method == "POST":
+        _remember_browser_time_zone(request, request.POST.get("browser_time_zone"))
         if form.is_valid():
             user = form.get_user()
-            login(request, user)
-            open_user_session(request, user)
-            messages.success(request, f"Welcome back, {user.get_full_name() or user.username}.")
-            if next_url and url_has_allowed_host_and_scheme(
-                url=next_url,
-                allowed_hosts={request.get_host()},
-                require_https=request.is_secure(),
-            ):
-                return redirect(next_url)
-            return redirect(default_home_url(user))
-        messages.error(request, "Check the login ID and password and try again.")
+            return _sign_in_user_and_redirect(request, user, next_url=next_url)
+        messages.error(request, "Check the email or login ID and password and try again.")
 
     return render(
         request,
@@ -598,6 +1391,11 @@ def login_view(request):
         {
             "form": form,
             "next_url": next_url,
+            "signup_url": reverse("signup") if _public_signup_is_open() else "",
+            "show_public_signup": _public_signup_is_open(),
+            "google_sign_in_url": _google_sign_in_url(next_url=next_url),
+            "google_sign_in_enabled": google_sign_in_enabled(),
+            "google_sign_in_setup_message": google_sign_in_setup_message(),
         },
     )
 
@@ -610,17 +1408,44 @@ def logout_view(request):
     return redirect("login")
 
 
+@require_POST
+def set_client_time_zone(request):
+    time_zone_name = _remember_browser_time_zone(
+        request,
+        request.POST.get("time_zone") or request.POST.get("browser_time_zone"),
+    )
+    if not time_zone_name:
+        return JsonResponse({"ok": False, "error": "invalid_time_zone"}, status=400)
+    return JsonResponse({"ok": True, "time_zone": time_zone_name})
+
+
 @admin_required
 def settings_page(request):
     ensure_role_groups()
     user_model = get_user_model()
     settings_obj = get_system_settings()
     company_profile = get_active_company_profile(create=True)
+    try:
+        time_zone_preference = request.user.preference
+    except UserPreference.DoesNotExist:
+        time_zone_preference = UserPreference(user=request.user)
+    detected_time_zone = get_session_time_zone(request)
+    effective_time_zone = getattr(
+        request,
+        "effective_time_zone",
+        get_effective_time_zone(request.user, session_time_zone=detected_time_zone),
+    )
 
     team_form = TeamUserForm(prefix="team")
     role_form = CustomRoleForm(prefix="role")
     branding_form = CompanyProfileForm(prefix="branding", instance=company_profile)
     system_form = SystemSettingsForm(prefix="business", instance=settings_obj)
+    time_zone_form = AdminTimeZoneForm(
+        prefix="timezone",
+        instance=time_zone_preference,
+        detected_time_zone=detected_time_zone,
+        effective_time_zone=effective_time_zone,
+    )
     bank_form = BankAccountForm(prefix="bank")
     backup_runtime = backup_runtime_summary()
     audit_page_size = 10
@@ -660,6 +1485,40 @@ def settings_page(request):
                 messages.success(request, f"Custom role '{role.name}' is ready to assign.")
                 return redirect("settings_page")
             messages.error(request, "Please review the custom role details below.")
+
+        elif action == "save_time_zone":
+            _remember_browser_time_zone(request, request.POST.get("browser_time_zone"))
+            time_zone_form = AdminTimeZoneForm(
+                request.POST,
+                prefix="timezone",
+                instance=time_zone_preference,
+                detected_time_zone=get_session_time_zone(request),
+                effective_time_zone=effective_time_zone,
+            )
+            if time_zone_form.is_valid():
+                preference = time_zone_form.save(commit=False)
+                preference.user = request.user
+                preference.save()
+                saved_time_zone = time_zone_form.cleaned_data["time_zone"]
+                effective_label = saved_time_zone or get_session_time_zone(request) or settings.TIME_ZONE
+                record_audit(
+                    action="admin_time_zone_updated",
+                    description=(
+                        f"Time zone preference updated for {request.user.get_full_name() or request.user.username}."
+                    ),
+                    actor=request.user,
+                    target=request.user,
+                    metadata={
+                        "time_zone": saved_time_zone or "system_detected",
+                        "effective_time_zone": effective_label,
+                    },
+                )
+                if saved_time_zone:
+                    messages.success(request, f"Time zone saved as {saved_time_zone}.")
+                else:
+                    messages.success(request, f"Time zone will follow the detected system zone ({effective_label}).")
+                return redirect("settings_page")
+            messages.error(request, "Please review the time zone setting below.")
 
         elif action == "change_user_role":
             member = get_object_or_404(user_model, pk=request.POST.get("user_id"))
@@ -795,6 +1654,13 @@ def settings_page(request):
                 )
                 messages.success(request, f"{member.get_full_name() or member.username} {status_copy}.")
 
+    detected_time_zone = get_session_time_zone(request)
+    saved_time_zone_preference = get_user_time_zone_preference(request.user)
+    effective_time_zone = saved_time_zone_preference or detected_time_zone or getattr(
+        request,
+        "effective_time_zone",
+        settings.TIME_ZONE,
+    )
     raw_users = (
         user_model.objects.order_by("username")
         .annotate(
@@ -850,6 +1716,13 @@ def settings_page(request):
         snapshot.vendor_label = database_vendor_label(snapshot.vendor)
         snapshot.can_restore_here = snapshot.vendor == backup_runtime["vendor"]
 
+    workspace_billing_onboarding = workspace_owner_onboarding(request.user)
+    billing_context = _billing_page_context(
+        request,
+        workspace_billing_onboarding,
+        can_manage=user_can_manage_billing(request.user, workspace_billing_onboarding),
+    )
+
     audit_log_queryset = AuditLog.objects.select_related("actor").order_by("-created_at", "-id")
     audit_event_count = audit_log_queryset.count()
     audit_mode = "all" if (request.GET.get("audit_mode") or "").lower() == "all" else "page"
@@ -869,6 +1742,7 @@ def settings_page(request):
         "role_form": role_form,
         "branding_form": branding_form,
         "system_form": system_form,
+        "time_zone_form": time_zone_form,
         "bank_form": bank_form,
         "role_choices": get_role_choices(),
         "team_users": team_users,
@@ -894,6 +1768,11 @@ def settings_page(request):
         "active_bank_count": bank_accounts.filter(is_active=True).count(),
         "backup_count": BackupSnapshot.objects.count(),
         "audit_event_count": audit_event_count,
+        "effective_time_zone": effective_time_zone,
+        "saved_time_zone_preference": saved_time_zone_preference,
+        "session_detected_time_zone": detected_time_zone,
+        "uses_system_detected_time_zone": not bool(saved_time_zone_preference),
+        **billing_context,
     }
     return render(request, "pos/settings.html", context)
 @admin_required

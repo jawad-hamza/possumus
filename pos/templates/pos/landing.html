@@ -1,0 +1,737 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{ brand_name }} | POS, Inventory, and Accounts for Growing Retail Teams</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,500;9..144,700&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        :root {
+            --ink: #12233f;
+            --ink-soft: #5f6d84;
+            --cream: #fbf6ee;
+            --line: rgba(18, 35, 63, 0.1);
+            --accent: #ff9f1c;
+            --accent-deep: #d97706;
+            --teal: #0f766e;
+            --sky: #dbeafe;
+            --rose: #fff1e6;
+            --panel: rgba(255, 255, 255, 0.84);
+        }
+
+        * {
+            box-sizing: border-box;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            margin: 0;
+            font-family: "Space Grotesk", sans-serif;
+            color: var(--ink);
+            background:
+                radial-gradient(circle at top left, rgba(255, 196, 119, 0.4), transparent 30%),
+                radial-gradient(circle at 85% 10%, rgba(59, 130, 246, 0.18), transparent 28%),
+                linear-gradient(180deg, #fffdf9 0%, #f6f8fc 58%, #edf2f8 100%);
+        }
+
+        body::before {
+            content: "";
+            position: fixed;
+            inset: 0;
+            pointer-events: none;
+            background-image: linear-gradient(rgba(18, 35, 63, 0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(18, 35, 63, 0.025) 1px, transparent 1px);
+            background-size: 28px 28px;
+            mask-image: radial-gradient(circle at center, black 45%, transparent 90%);
+        }
+
+        a {
+            color: inherit;
+            text-decoration: none;
+        }
+
+        .shell {
+            position: relative;
+            z-index: 1;
+            width: min(1180px, calc(100% - 32px));
+            margin: 0 auto;
+        }
+
+        .site-nav {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 20px;
+            padding: 22px 0 12px;
+        }
+
+        .brand {
+            display: inline-flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 700;
+            letter-spacing: 0.02em;
+        }
+
+        .brand-mark {
+            width: 46px;
+            height: 46px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border-radius: 16px;
+            background: linear-gradient(135deg, #162744, #274673 55%, #ffb347 140%);
+            color: #fff6e6;
+            box-shadow: 0 18px 36px rgba(18, 35, 63, 0.2);
+            font-weight: 700;
+        }
+
+        .brand-copy small {
+            display: block;
+            color: var(--ink-soft);
+            font-size: 0.76rem;
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+        }
+
+        .nav-links {
+            display: flex;
+            align-items: center;
+            gap: 18px;
+            color: var(--ink-soft);
+            font-size: 0.95rem;
+        }
+
+        .nav-actions {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .btn-ghost,
+        .btn-solid,
+        .btn-outline {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            border-radius: 999px;
+            padding: 0.9rem 1.25rem;
+            font-weight: 700;
+            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+        }
+
+        .btn-ghost {
+            color: var(--ink);
+            border: 1px solid transparent;
+        }
+
+        .btn-ghost:hover {
+            transform: translateY(-1px);
+            border-color: var(--line);
+            background: rgba(255, 255, 255, 0.7);
+        }
+
+        .btn-solid {
+            color: #fff;
+            background: linear-gradient(135deg, #12233f, #28518d);
+            box-shadow: 0 18px 32px rgba(18, 35, 63, 0.18);
+        }
+
+        .btn-solid:hover,
+        .btn-outline:hover {
+            transform: translateY(-2px);
+        }
+
+        .btn-outline {
+            border: 1px solid rgba(18, 35, 63, 0.14);
+            background: rgba(255, 255, 255, 0.78);
+            color: var(--ink);
+        }
+
+        .hero {
+            display: grid;
+            grid-template-columns: minmax(0, 1.05fr) minmax(340px, 420px);
+            gap: 28px;
+            align-items: stretch;
+            padding: 28px 0 34px;
+        }
+
+        .hero-panel,
+        .hero-aside,
+        .section-panel,
+        .price-card,
+        .cta-banner {
+            border: 1px solid var(--line);
+            background: var(--panel);
+            backdrop-filter: blur(12px);
+            box-shadow: 0 24px 60px rgba(18, 35, 63, 0.08);
+        }
+
+        .hero-panel {
+            border-radius: 34px;
+            padding: clamp(28px, 5vw, 52px);
+            overflow: hidden;
+            position: relative;
+        }
+
+        .hero-panel::after {
+            content: "";
+            position: absolute;
+            width: 220px;
+            height: 220px;
+            right: -40px;
+            top: -40px;
+            border-radius: 42px;
+            background: linear-gradient(180deg, rgba(255, 182, 88, 0.38), rgba(255, 182, 88, 0));
+            transform: rotate(18deg);
+        }
+
+        .eyebrow {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            border-radius: 999px;
+            padding: 8px 14px;
+            background: rgba(255, 159, 28, 0.12);
+            color: var(--accent-deep);
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+        }
+
+        .hero-title {
+            font-family: "Fraunces", serif;
+            font-size: clamp(2.8rem, 5vw, 5rem);
+            line-height: 0.94;
+            margin: 18px 0 18px;
+            max-width: 10.5ch;
+        }
+
+        .hero-copy {
+            color: var(--ink-soft);
+            font-size: 1.08rem;
+            max-width: 58ch;
+            margin-bottom: 24px;
+        }
+
+        .hero-actions {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+            margin-bottom: 26px;
+        }
+
+        .hero-meta {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+
+        .meta-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 10px 14px;
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.72);
+            border: 1px solid rgba(18, 35, 63, 0.08);
+            color: var(--ink-soft);
+            font-size: 0.92rem;
+        }
+
+        .hero-aside {
+            border-radius: 30px;
+            padding: 22px;
+            display: grid;
+            gap: 14px;
+            align-content: start;
+            background: linear-gradient(180deg, rgba(18, 35, 63, 0.96), rgba(26, 53, 93, 0.96));
+            color: #f8fbff;
+        }
+
+        .status-card {
+            border-radius: 22px;
+            padding: 18px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.12);
+        }
+
+        .status-card strong {
+            display: block;
+            font-size: 1.9rem;
+            margin-top: 6px;
+        }
+
+        .status-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 12px;
+        }
+
+        .status-mini {
+            border-radius: 18px;
+            padding: 16px;
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        .status-mini span,
+        .status-card p,
+        .section-copy,
+        .price-copy,
+        .price-features li,
+        .faq-item p,
+        .cta-banner p,
+        .section-kicker {
+            color: rgba(248, 251, 255, 0.72);
+        }
+
+        .section {
+            padding: 22px 0 30px;
+        }
+
+        .section-head {
+            display: flex;
+            flex-wrap: wrap;
+            justify-content: space-between;
+            align-items: end;
+            gap: 18px;
+            margin-bottom: 20px;
+        }
+
+        .section-title {
+            font-family: "Fraunces", serif;
+            font-size: clamp(2rem, 3vw, 3rem);
+            margin: 0 0 6px;
+        }
+
+        .section-kicker {
+            text-transform: uppercase;
+            letter-spacing: 0.14em;
+            font-size: 0.78rem;
+            font-weight: 700;
+            color: var(--accent-deep);
+        }
+
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
+        }
+
+        .section-panel {
+            border-radius: 26px;
+            padding: 22px;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(251, 246, 238, 0.92));
+        }
+
+        .feature-icon {
+            width: 54px;
+            height: 54px;
+            border-radius: 18px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            background: linear-gradient(135deg, rgba(18, 35, 63, 0.94), rgba(40, 81, 141, 0.9));
+            color: #fff;
+            box-shadow: 0 16px 28px rgba(18, 35, 63, 0.16);
+            margin-bottom: 16px;
+        }
+
+        .feature-card h3,
+        .price-card h3,
+        .faq-item h3 {
+            font-size: 1.2rem;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+
+        .feature-card p,
+        .price-copy,
+        .faq-item p {
+            color: var(--ink-soft);
+            margin-bottom: 0;
+        }
+
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(3, minmax(0, 1fr));
+            gap: 18px;
+        }
+
+        .price-card {
+            border-radius: 28px;
+            padding: 24px;
+            display: flex;
+            flex-direction: column;
+            min-height: 100%;
+            background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 248, 252, 0.94));
+        }
+
+        .price-card.featured {
+            transform: translateY(-8px);
+            background: linear-gradient(180deg, rgba(18, 35, 63, 0.98), rgba(34, 68, 118, 0.98));
+            color: #f8fbff;
+            border-color: rgba(255, 179, 71, 0.36);
+            box-shadow: 0 30px 70px rgba(18, 35, 63, 0.18);
+        }
+
+        .price-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 7px 12px;
+            border-radius: 999px;
+            background: rgba(255, 159, 28, 0.14);
+            color: var(--accent-deep);
+            font-size: 0.78rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+        }
+
+        .price-card.featured .price-badge {
+            background: rgba(255, 179, 71, 0.16);
+            color: #ffd27a;
+        }
+
+        .price-value {
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin: 20px 0 8px;
+        }
+
+        .price-value strong {
+            font-size: 3rem;
+            line-height: 1;
+        }
+
+        .price-value span {
+            color: var(--ink-soft);
+        }
+
+        .price-card.featured .price-value span,
+        .price-card.featured .price-copy,
+        .price-card.featured .price-features li,
+        .price-card.featured .plan-note {
+            color: rgba(248, 251, 255, 0.74);
+        }
+
+        .price-features {
+            list-style: none;
+            padding: 0;
+            margin: 18px 0 22px;
+            display: grid;
+            gap: 10px;
+        }
+
+        .price-features li {
+            display: flex;
+            gap: 10px;
+            align-items: flex-start;
+            color: var(--ink-soft);
+        }
+
+        .price-features i {
+            color: var(--teal);
+            margin-top: 3px;
+        }
+
+        .price-card.featured .price-features i {
+            color: #8ef0d3;
+        }
+
+        .price-action {
+            margin-top: auto;
+        }
+
+        .plan-note {
+            margin-top: 12px;
+            font-size: 0.88rem;
+            color: var(--ink-soft);
+        }
+
+        .pricing-footnote {
+            margin-top: 16px;
+            color: var(--ink-soft);
+            font-size: 0.92rem;
+        }
+
+        .faq-grid {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 18px;
+        }
+
+        .faq-item {
+            border-radius: 24px;
+            padding: 22px;
+            background: rgba(255, 255, 255, 0.78);
+            border: 1px solid var(--line);
+            box-shadow: 0 18px 42px rgba(18, 35, 63, 0.06);
+        }
+
+        .cta-banner {
+            border-radius: 32px;
+            padding: clamp(24px, 4vw, 38px);
+            margin: 26px 0 42px;
+            background: linear-gradient(135deg, rgba(18, 35, 63, 0.98), rgba(42, 84, 145, 0.96));
+            color: #fff;
+            display: flex;
+            flex-wrap: wrap;
+            align-items: center;
+            justify-content: space-between;
+            gap: 18px;
+        }
+
+        .cta-banner h2 {
+            font-family: "Fraunces", serif;
+            font-size: clamp(2rem, 3vw, 3rem);
+            margin: 0 0 8px;
+        }
+
+        .cta-banner p {
+            margin: 0;
+            max-width: 55ch;
+            color: rgba(248, 251, 255, 0.78);
+        }
+
+        .mobile-nav-note {
+            display: none;
+            color: var(--ink-soft);
+            font-size: 0.9rem;
+        }
+
+        @media (max-width: 1100px) {
+            .hero,
+            .feature-grid,
+            .pricing-grid,
+            .faq-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .price-card.featured {
+                transform: none;
+            }
+        }
+
+        @media (max-width: 760px) {
+            .site-nav {
+                flex-wrap: wrap;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .mobile-nav-note {
+                display: block;
+            }
+
+            .nav-actions {
+                width: 100%;
+                justify-content: stretch;
+            }
+
+            .nav-actions a {
+                flex: 1 1 0;
+            }
+
+            .status-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .hero-panel,
+            .hero-aside,
+            .section-panel,
+            .price-card,
+            .faq-item,
+            .cta-banner {
+                border-radius: 24px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="shell">
+        <nav class="site-nav">
+            <a href="{% url 'home' %}" class="brand">
+                <span class="brand-mark">VD</span>
+                <span class="brand-copy">
+                    {{ brand_name }}
+                    <small>Retail SaaS Platform</small>
+                </span>
+            </a>
+            <div class="nav-links">
+                <a href="#features">Features</a>
+                <a href="#pricing">Pricing</a>
+                <a href="#faq">FAQ</a>
+            </div>
+            <div class="nav-actions">
+                <a class="btn-ghost" href="{{ login_url }}">Sign In</a>
+                <a class="btn-solid" href="{{ signup_url }}">Sign Up</a>
+            </div>
+            <div class="mobile-nav-note">POS, inventory, billing, and accounts in one browser workspace.</div>
+        </nav>
+
+        <section class="hero">
+            <div class="hero-panel">
+                <div class="eyebrow"><i class="bi bi-stars"></i> Built for small retail teams moving to SaaS</div>
+                <h1 class="hero-title">Run the counter, stock room, and books from one calm workspace.</h1>
+                <p class="hero-copy">{{ brand_name }} brings POS checkout, inventory, purchases, GST handling, team access, expenses, and accounting into one browser app. Start with 3 free days, create the owner account, verify the email, and open the business workspace. Plans can be purchased or upgraded later without changing the setup flow.</p>
+                <div class="hero-actions">
+                    <a class="btn-solid" href="{{ trial_cta_url }}"><i class="bi bi-rocket-takeoff"></i>Get Started Free</a>
+                    <a class="btn-outline" href="#pricing"><i class="bi bi-tags"></i>See Pricing</a>
+                </div>
+                <div class="hero-meta">
+                    <span class="meta-chip"><i class="bi bi-receipt"></i>POS + thermal receipts</span>
+                    <span class="meta-chip"><i class="bi bi-box-seam"></i>Inventory + purchases</span>
+                    <span class="meta-chip"><i class="bi bi-journal-check"></i>Accounts + reporting</span>
+                </div>
+            </div>
+
+            <aside class="hero-aside">
+                <div class="status-card">
+                    <div class="text-uppercase small fw-semibold opacity-75">What your operators get</div>
+                    <strong>One verified owner account, one workspace, one source of truth.</strong>
+                    <p class="mb-0 mt-2">Cashiers stay focused on checkout. Owners keep pricing, stock, team access, backups, and reporting under control.</p>
+                </div>
+                <div class="status-grid">
+                    <div class="status-mini">
+                        <div class="small text-uppercase opacity-75">Free access</div>
+                        <div class="fs-4 fw-bold mt-1">3 days</div>
+                        <span>Every new owner gets 3 free days before choosing a paid plan.</span>
+                    </div>
+                    <div class="status-mini">
+                        <div class="small text-uppercase opacity-75">Starting at</div>
+                        <div class="fs-4 fw-bold mt-1">$10</div>
+                        <span>Entry package for lean retail operations.</span>
+                    </div>
+                    <div class="status-mini">
+                        <div class="small text-uppercase opacity-75">Ideal for</div>
+                        <div class="fs-5 fw-bold mt-1">Retail shops</div>
+                        <span>Grocery, pharmacy, electronics, garments, and mixed stores.</span>
+                    </div>
+                    <div class="status-mini">
+                        <div class="small text-uppercase opacity-75">Checkout later</div>
+                        <div class="fs-5 fw-bold mt-1">Billing-ready</div>
+                        <span>The pricing buttons can accept your checkout links as soon as you share them.</span>
+                    </div>
+                </div>
+            </aside>
+        </section>
+
+        <section class="section" id="features">
+            <div class="section-head">
+                <div>
+                    <div class="section-kicker">Core Product</div>
+                    <h2 class="section-title">A retail control stack, not just a POS screen.</h2>
+                </div>
+                <p class="section-copy mb-0" style="max-width: 44ch; color: var(--ink-soft);">The goal is simple: sell faster, know what is in stock, and keep the financial side tied to real operations without jumping between disconnected tools.</p>
+            </div>
+            <div class="feature-grid">
+                <article class="section-panel feature-card">
+                    <span class="feature-icon"><i class="bi bi-cart4"></i></span>
+                    <h3>Checkout built for real counters</h3>
+                    <p>Barcode scan, fast cart handling, bank or cash payment, role-aware price controls, and receipt output sized for thermal printers.</p>
+                </article>
+                <article class="section-panel feature-card">
+                    <span class="feature-icon"><i class="bi bi-boxes"></i></span>
+                    <h3>Inventory that stays connected</h3>
+                    <p>Purchases, stock movement, low-stock alerts, expiry tracking, and category tax rules all update from the same operating workflow.</p>
+                </article>
+                <article class="section-panel feature-card">
+                    <span class="feature-icon"><i class="bi bi-bank2"></i></span>
+                    <h3>Accounts that reflect operations</h3>
+                    <p>Sales, purchases, supplier balances, expenses, bank ledgers, and accounting reports move together instead of living in a separate spreadsheet universe.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="section" id="pricing">
+            <div class="section-head">
+                <div>
+                    <div class="section-kicker">Pricing</div>
+                    <h2 class="section-title">Start small, then scale the workspace with your store.</h2>
+                </div>
+                <p class="section-copy mb-0" style="max-width: 44ch; color: var(--ink-soft);">Every package starts with the same safe onboarding flow: owner signup, email verification, and 3 free days to get the workspace live. Paid packages and upgrades can be connected later through {{ checkout_provider }} without redesigning the page.</p>
+            </div>
+
+            <div class="pricing-grid">
+                {% for plan in pricing_plans %}
+                <article class="price-card {% if plan.featured %}featured{% endif %}">
+                    <span class="price-badge">{% if plan.featured %}<i class="bi bi-lightning-charge-fill"></i>{% endif %}{{ plan.badge }}</span>
+                    <h3 class="mt-3">{{ plan.name }}</h3>
+                    <p class="price-copy">{{ plan.description }}</p>
+                    <div class="price-value">
+                        <strong>${{ plan.price }}</strong>
+                        <span>/ month</span>
+                    </div>
+                    <div class="plan-note">Includes 3 free days before you choose or upgrade a paid package.</div>
+                    <ul class="price-features">
+                        {% for feature in plan.features %}
+                        <li><i class="bi bi-check2-circle"></i><span>{{ feature }}</span></li>
+                        {% endfor %}
+                    </ul>
+                    <div class="price-action">
+                        <a class="{% if plan.featured %}btn-solid{% else %}btn-outline{% endif %} w-100" href="{{ plan.cta_url }}" data-plan-code="{{ plan.code }}" data-checkout-link="{{ plan.checkout_link }}">{{ plan.cta_label }}</a>
+                    </div>
+                </article>
+                {% endfor %}
+            </div>
+
+            <div class="pricing-footnote">Demo setup is using the placeholder domain {{ public_domain }}. The pricing buttons currently start verified signup and the 3 free days. Later each package can point to its real {{ checkout_provider }} checkout link without changing the layout.</div>
+        </section>
+
+        <section class="section" id="faq">
+            <div class="section-head">
+                <div>
+                    <div class="section-kicker">FAQ</div>
+                    <h2 class="section-title">A few questions buyers usually ask first.</h2>
+                </div>
+            </div>
+            <div class="faq-grid">
+                <article class="faq-item">
+                    <h3>Does every plan start with the same free setup period?</h3>
+                    <p>Yes. Each package starts with 3 free days, and the owner unlocks them by creating the account, verifying the email, and finishing business setup. Paid plans can be chosen or upgraded later.</p>
+                </article>
+                <article class="faq-item">
+                    <h3>Can {{ checkout_provider }} be connected later?</h3>
+                    <p>Yes. The pricing cards are already structured for plan-specific checkout links, so we only need to plug in the {{ checkout_provider }} URLs you share.</p>
+                </article>
+                <article class="faq-item">
+                    <h3>Will owners control the whole workspace?</h3>
+                    <p>Yes. The signed-up owner account becomes the admin with full control, while cashier or staff access can stay limited by role.</p>
+                </article>
+                <article class="faq-item">
+                    <h3>Can this evolve into a full SaaS?</h3>
+                    <p>Yes. This landing page and pricing flow are a public-facing first step before we finish the multi-tenant onboarding and subscription architecture.</p>
+                </article>
+            </div>
+        </section>
+
+        <section class="cta-banner">
+            <div>
+                <h2>Ready to package this as a real SaaS front door?</h2>
+                <p>The public page now leads into verified owner signup and business creation. Next, we can plug in real Google OAuth credentials, tenant onboarding, and {{ checkout_provider }} checkout one layer at a time.</p>
+            </div>
+            <div class="d-flex flex-wrap gap-2">
+                <a class="btn-solid" href="{{ signup_url }}">Sign Up</a>
+                <a class="btn-outline" href="{{ login_url }}">Sign In</a>
+            </div>
+        </section>
+        <div class="text-center pb-5 small" style="color: var(--ink-soft);">
+            Demo contact: <a href="mailto:{{ support_email }}">{{ support_email }}</a>
+        </div>
+    </div>
+</body>
+</html>

@@ -152,6 +152,35 @@
         padding-top: 1rem;
     }
 
+    .settings-badge-list {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.75rem;
+    }
+
+    .settings-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.5rem;
+        border-radius: 999px;
+        padding: 0.65rem 0.95rem;
+        border: 1px solid var(--card-border);
+        background: #f8fbff;
+        color: var(--text-main);
+        font-size: 0.9rem;
+        font-weight: 600;
+    }
+
+    .settings-timezone-card {
+        border: 1px solid #dbeafe;
+        background: linear-gradient(135deg, #f8fbff, #eef4ff);
+    }
+
+    .settings-timezone-summary {
+        display: grid;
+        gap: 0.9rem;
+    }
+
     @media (max-width: 991px) {
         .settings-form-grid {
             grid-template-columns: 1fr;
@@ -273,6 +302,104 @@
 
 <div class="tab-content">
 <div class="tab-pane fade show active settings-tab-pane" id="settings-business-pane" role="tabpanel" aria-labelledby="settings-business-tab" tabindex="0">
+<div class="page-card settings-timezone-card p-4 mb-4">
+    <div class="row g-4 align-items-start">
+        <div class="col-xl-7">
+            <div class="section-title d-flex align-items-center gap-2 mb-3">
+                <span class="section-title-icon"><i class="bi bi-globe2"></i></span>
+                <div>
+                    <h2 class="h4 mb-1">Your Time Zone</h2>
+                    <p class="text-muted mb-0">Each admin can keep a personal time zone for dates, logs, and daily workflows. Leave it on system detected to follow the device you sign in from.</p>
+                </div>
+            </div>
+            <div class="settings-timezone-summary">
+                <div class="settings-badge-list">
+                    <span class="settings-badge"><i class="bi bi-clock-history"></i>Effective now: <strong data-effective-time-zone-label>{{ effective_time_zone }}</strong></span>
+                    <span class="settings-badge"><i class="bi bi-person-check"></i>Saved preference: <strong>{% if saved_time_zone_preference %}{{ saved_time_zone_preference }}{% else %}System detected{% endif %}</strong></span>
+                    <span class="settings-badge"><i class="bi bi-laptop"></i>This device: <strong data-browser-time-zone-label>{{ session_detected_time_zone|default:"Detecting..." }}</strong></span>
+                </div>
+                <div class="settings-note">
+                    <div class="fw-semibold mb-1"><i class="bi bi-shield-check me-1"></i>How it works</div>
+                    <div class="small">
+                        {% if uses_system_detected_time_zone %}
+                        Right now this admin follows the detected browser time zone. If the browser shares a different zone later, Vendora will use that automatically.
+                        {% else %}
+                        This admin is pinned to a saved time zone, so device changes will not affect the timestamps they see.
+                        {% endif %}
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="col-xl-5">
+            <form method="post" novalidate>
+                {% csrf_token %}
+                <input type="hidden" name="action" value="save_time_zone">
+                <input type="hidden" name="browser_time_zone" value="{{ session_detected_time_zone }}" data-browser-time-zone-input>
+                <label class="form-label fw-semibold" for="{{ time_zone_form.time_zone.id_for_label }}">{{ time_zone_form.time_zone.label }}</label>
+                {{ time_zone_form.time_zone }}
+                {% if time_zone_form.time_zone.help_text %}<div class="form-text">{{ time_zone_form.time_zone.help_text }}</div>{% endif %}
+                {% if time_zone_form.time_zone.errors %}<div class="text-danger small mt-1">{{ time_zone_form.time_zone.errors|striptags }}</div>{% endif %}
+                {% if time_zone_form.non_field_errors %}<div class="text-danger small mt-2">{{ time_zone_form.non_field_errors|striptags }}</div>{% endif %}
+                <button class="btn btn-dark mt-3">Save Time Zone</button>
+            </form>
+        </div>
+    </div>
+</div>
+
+<div class="page-card p-4 mb-4">
+    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
+        <div class="section-title d-flex align-items-center gap-2 mb-0">
+            <span class="section-title-icon"><i class="bi bi-credit-card-2-front"></i></span>
+            <div>
+                <h2 class="h4 mb-1">Workspace Billing</h2>
+                <p class="text-muted mb-0">Track the 3 free days, current package, and subscription access without leaving Settings.</p>
+            </div>
+        </div>
+        <span class="status-chip {{ billing_status_tone }}">{{ billing_status_label }}</span>
+    </div>
+    {% if billing_onboarding %}
+    <div class="row g-3 align-items-stretch">
+        <div class="col-md-4">
+            <div class="settings-note h-100">
+                <div class="fw-semibold mb-1"><i class="bi bi-stars me-1"></i>Current package</div>
+                <div class="small">{{ billing_current_plan.name }} at ${{ billing_current_plan.price }}/month.</div>
+                <div class="small mt-1">Owner: {{ billing_onboarding.user.email|default:billing_onboarding.user.username }}</div>
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="settings-note h-100">
+                <div class="fw-semibold mb-1"><i class="bi bi-clock-history me-1"></i>Access window</div>
+                {% if billing_onboarding.trial_is_active %}
+                <div class="small">{{ billing_trial_days_remaining }} day{{ billing_trial_days_remaining|pluralize }} left in the automatic free period.</div>
+                {% elif billing_subscription and billing_subscription.renews_at %}
+                <div class="small">Renews on {{ billing_subscription.renews_at|date:"d M Y H:i" }}.</div>
+                {% elif billing_subscription and billing_subscription.ends_at %}
+                <div class="small">Access runs until {{ billing_subscription.ends_at|date:"d M Y H:i" }}.</div>
+                {% else %}
+                <div class="small">No paid renewal date has been synced yet.</div>
+                {% endif %}
+            </div>
+        </div>
+        <div class="col-md-4">
+            <div class="settings-note h-100">
+                <div class="fw-semibold mb-1"><i class="bi bi-box-arrow-up-right me-1"></i>Provider</div>
+                <div class="small">{{ billing_provider_name }} handles hosted checkout and subscription changes.</div>
+                <div class="d-flex flex-wrap gap-2 mt-3">
+                    <a href="{% url 'billing_page' %}" class="btn btn-sm btn-dark">Open Billing</a>
+                    {% if billing_portal_url and billing_can_manage %}
+                    <a href="{% url 'billing_portal_redirect' %}" class="btn btn-sm btn-outline-secondary">Customer Portal</a>
+                    {% endif %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% else %}
+    <div class="settings-note">
+        Billing becomes available after the owner signup flow is complete and the business workspace is created.
+    </div>
+    {% endif %}
+</div>
+
 <div class="row g-4 mb-4">
     <div class="col-xl-6">
         <div class="page-card p-4 h-100">

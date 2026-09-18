@@ -1,3 +1,5 @@
+from django.utils import timezone
+
 from pos.services.access import (
     get_navigation_access,
     get_navigation_manage_access,
@@ -6,12 +8,11 @@ from pos.services.access import (
     is_admin,
     is_cashier,
 )
+from pos.services.user_timezones import get_session_time_zone, get_user_time_zone_preference
 
 
 def app_shell(request):
     active_session = None
-    active_company = None
-    system_settings = None
 
     from pos.models import CompanyProfile, SystemSettings
 
@@ -30,6 +31,8 @@ def app_shell(request):
             )
 
     user = getattr(request, "user", None)
+    session_time_zone = getattr(request, "session_time_zone", get_session_time_zone(request))
+    effective_time_zone = getattr(request, "effective_time_zone", timezone.get_current_timezone_name())
     return {
         "is_admin_user": is_admin(user),
         "is_cashier_user": is_cashier(user),
@@ -40,4 +43,7 @@ def app_shell(request):
         "active_user_session": active_session,
         "active_company": active_company,
         "system_settings": system_settings,
+        "session_time_zone": session_time_zone,
+        "preferred_time_zone": get_user_time_zone_preference(user),
+        "effective_time_zone": effective_time_zone,
     }

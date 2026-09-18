@@ -8,6 +8,8 @@ from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
 
+from pos.services.billing import workspace_owner_onboarding, workspace_requires_billing
+
 
 ADMIN_ROLE = "admin"
 CASHIER_ROLE = "cashier"
@@ -105,6 +107,26 @@ def ensure_role_groups():
 def is_first_user_setup_required():
     return not get_user_model().objects.exists()
 
+
+def get_owner_onboarding(user):
+    if not getattr(user, "is_authenticated", False):
+        return None
+    return getattr(user, "owner_onboarding", None)
+
+
+def user_has_verified_owner_account(user):
+    onboarding = get_owner_onboarding(user)
+    return onboarding is not None and onboarding.email_verified
+
+
+def user_requires_business_setup(user):
+    onboarding = get_owner_onboarding(user)
+    if onboarding is None or not onboarding.email_verified or onboarding.business_created_at:
+        return False
+
+    from pos.models import CompanyProfile
+
+    return not CompanyProfile.objects.filter(is_active=True).exists()
 
 def _normalize_access_level(value):
     normalized = (value or "").strip().lower()
@@ -291,6 +313,12 @@ def get_navigation_manage_access(user):
 
 
 def default_home_url(user):
+    if user_requires_business_setup(user):
+        return reverse("setup_admin")
+
+    if workspace_requires_billing(user):
+        return reverse("billing_page")
+
     if is_cashier(user):
         return reverse("pos_screen")
 
@@ -372,6 +400,15 @@ def close_user_session(request):
     request.session.modified = True
 
 
+def _billing_access_message(user):
+    onboarding = workspace_owner_onboarding(user)
+    if onboarding is not None and onboarding.trial_is_active:
+        return "Billing checkout was started, but the workspace is still using its free access period for now."
+    if is_admin(user):
+        return "The 3 free days have ended. Open Billing to activate or update the subscription."
+    return "This workspace is locked until the owner updates billing."
+
+
 def user_can_access_sale(user, sale):
     if is_admin(user):
         return True
@@ -387,10 +424,17 @@ def role_required(*allowed_roles):
         @wraps(view_func)
         def wrapped(request, *args, **kwargs):
             if is_first_user_setup_required():
-                return redirect("setup_admin")
+                return redirect("signup")
 
             if not request.user.is_authenticated:
                 return redirect_to_login(request.get_full_path(), reverse("login"))
+
+            if user_requires_business_setup(request.user):
+                return redirect("setup_admin")
+
+            if workspace_requires_billing(request.user):
+                messages.warning(request, _billing_access_message(request.user))
+                return redirect("billing_page")
 
             if is_admin(request.user) and ADMIN_ROLE in normalized_roles:
                 return view_func(request, *args, **kwargs)
@@ -415,10 +459,17 @@ def module_access_required(module_key, minimum=ACCESS_VIEW, write_level=ACCESS_M
         @wraps(view_func)
         def wrapped(request, *args, **kwargs):
             if is_first_user_setup_required():
-                return redirect("setup_admin")
+                return redirect("signup")
 
             if not request.user.is_authenticated:
                 return redirect_to_login(request.get_full_path(), reverse("login"))
+
+            if user_requires_business_setup(request.user):
+                return redirect("setup_admin")
+
+            if workspace_requires_billing(request.user):
+                messages.warning(request, _billing_access_message(request.user))
+                return redirect("billing_page")
 
             required_level = write_level if request.method.upper() in write_methods else minimum
             if user_can_access_module(request.user, module_key, required_level):
@@ -447,10 +498,17 @@ def any_module_access_required(module_keys, minimum=ACCESS_VIEW, write_level=ACC
         @wraps(view_func)
         def wrapped(request, *args, **kwargs):
             if is_first_user_setup_required():
-                return redirect("setup_admin")
+                return redirect("signup")
 
             if not request.user.is_authenticated:
                 return redirect_to_login(request.get_full_path(), reverse("login"))
+
+            if user_requires_business_setup(request.user):
+                return redirect("setup_admin")
+
+            if workspace_requires_billing(request.user):
+                messages.warning(request, _billing_access_message(request.user))
+                return redirect("billing_page")
 
             required_level = write_level if request.method.upper() in write_methods else minimum
             if any(user_can_access_module(request.user, module_key, required_level) for module_key in module_keys):

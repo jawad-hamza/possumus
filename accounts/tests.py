@@ -1,4 +1,4 @@
-﻿from decimal import Decimal
+from decimal import Decimal
 
 from django.urls import reverse
 from django.utils import timezone
@@ -15,6 +15,7 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
         cls.cash = Account.objects.create(title="Cash", type=Account.ASSET)
         cls.bank = Account.objects.create(title="Bank", type=Account.ASSET)
         cls.sales = Account.objects.create(title="Sales", type=Account.INCOME)
+        cls.sales_tax = Account.objects.create(title="Sales Tax Payable", type=Account.LIABILITY)
         cls.rent = Account.objects.create(title="Rent Expense", type=Account.EXPENSE)
         cls.expense_payable = Account.objects.create(title="Expense Payable", type=Account.LIABILITY)
         cls.owner_capital = Account.objects.create(title="Owner Capital", type=Account.EQUITY)
@@ -32,6 +33,7 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
         self.assertEqual(home_response.status_code, 200)
         self.assertContains(home_response, "Money Available Now")
         self.assertContains(home_response, "Operating Bills Due")
+        self.assertContains(home_response, "Tax Collected")
         self.assertContains(home_response, "Money Desk")
 
         expense_response = self.client.get(reverse("expense_list"))
@@ -55,6 +57,18 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
         self.assertEqual(balance_response.status_code, 200)
         self.assertContains(balance_response, "Net Position")
         self.assertContains(home_response, reverse("money_breakdown"))
+
+    def test_accounts_home_reports_tax_collected_from_gst_entries(self):
+        gst_sale_voucher = Voucher.objects.create(voucher_type=Voucher.SALE, narration="GST sale")
+        VoucherLine.objects.create(voucher=gst_sale_voucher, account=self.cash, debit=Decimal("115.00"))
+        VoucherLine.objects.create(voucher=gst_sale_voucher, account=self.sales, credit=Decimal("100.00"))
+        VoucherLine.objects.create(voucher=gst_sale_voucher, account=self.sales_tax, credit=Decimal("15.00"))
+
+        response = self.client.get(reverse("accounts_home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertEqual(response.context["tax_collected"], Decimal("15.00"))
+        self.assertContains(response, "Tax Collected")
 
     def test_money_breakdown_page_shows_cash_and_bank_movements(self):
         bank_voucher = Voucher.objects.create(voucher_type=Voucher.RECEIPT, narration="Bank deposit")
