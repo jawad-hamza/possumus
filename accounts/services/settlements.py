@@ -5,14 +5,12 @@ from django.utils import timezone
 
 from accounts.models import Account, Settlement, Voucher, VoucherLine
 from accounts.services.cash_bank import resolve_money_account
+from accounts.services.chart_of_accounts import get_core_account
 from accounts.services.party_ledger import post_party_ledger
 
 
 def _acc(title: str) -> Account:
-    try:
-        return Account.objects.get(title=title, is_active=True)
-    except Account.DoesNotExist as exc:
-        raise ValueError(f"Required account not found or inactive: {title}") from exc
+    return get_core_account(title)
 
 
 def _to_decimal(value) -> Decimal:
@@ -31,7 +29,7 @@ def _money_label(settlement: Settlement) -> str:
 
 
 @transaction.atomic
-def post_settlement(settlement: Settlement) -> Voucher:
+def post_settlement(settlement: Settlement, *, actor=None) -> Voucher:
     if settlement.party is None:
         raise ValueError("Settlement.party is required")
 
@@ -56,11 +54,12 @@ def post_settlement(settlement: Settlement) -> Voucher:
         raise ValueError("Invalid settlement type. Use RECEIPT or PAYMENT.")
 
     voucher = Voucher.objects.create(
-        date=getattr(settlement, "date", None) or timezone.now().date(),
+        date=getattr(settlement, "date", None) or timezone.localdate(),
         voucher_type=vtype,
         narration=narration,
         ref_model="Settlement",
         ref_id=settlement.id,
+        created_by=actor,
     )
 
     if settlement.settlement_type == Settlement.RECEIPT:
@@ -79,26 +78,26 @@ def post_settlement(settlement: Settlement) -> Voucher:
 
 
 @transaction.atomic
-def create_receipt(*, party, amount, payment_method, bank_account=None, date=None) -> Voucher:
+def create_receipt(*, party, amount, payment_method, bank_account=None, date=None, actor=None) -> Voucher:
     settlement = Settlement.objects.create(
         settlement_type=Settlement.RECEIPT,
         payment_method=payment_method,
         bank_account=bank_account,
-        date=date or timezone.now().date(),
+        date=date or timezone.localdate(),
         party=party,
         amount=_to_decimal(amount),
     )
-    return post_settlement(settlement)
+    return post_settlement(settlement, actor=actor)
 
 
 @transaction.atomic
-def create_payment(*, party, amount, payment_method, bank_account=None, date=None) -> Voucher:
+def create_payment(*, party, amount, payment_method, bank_account=None, date=None, actor=None) -> Voucher:
     settlement = Settlement.objects.create(
         settlement_type=Settlement.PAYMENT,
         payment_method=payment_method,
         bank_account=bank_account,
-        date=date or timezone.now().date(),
+        date=date or timezone.localdate(),
         party=party,
         amount=_to_decimal(amount),
     )
-    return post_settlement(settlement)
+    return post_settlement(settlement, actor=actor)

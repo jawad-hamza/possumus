@@ -1,308 +1,188 @@
 {% extends "pos/base.html" %}
-{% load accounting_tags %}
+{% load static accounting_tags %}
 
-{% block title %}Accounts Overview{% endblock %}
-
-{% block extra_css %}
-<style>
-    .account-report-card {
-        text-decoration: none;
-        color: inherit;
-        display: block;
-    }
-
-    .account-report-card .report-shell {
-        position: relative;
-        overflow: hidden;
-        border-radius: 18px;
-        border: 1px solid var(--card-border);
-        background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
-        padding: 1.2rem;
-        height: 100%;
-        transition: transform 0.18s ease, box-shadow 0.18s ease;
-    }
-
-    .account-report-card .report-shell::before {
-        content: "";
-        position: absolute;
-        inset: 0 0 auto 0;
-        height: 4px;
-        background: var(--card-accent, var(--accent-primary));
-    }
-
-    .account-report-card .report-shell.primary { --card-accent: var(--accent-primary); }
-    .account-report-card .report-shell.success { --card-accent: var(--accent-success); }
-    .account-report-card .report-shell.info { --card-accent: var(--accent-info); }
-    .account-report-card .report-shell.warning { --card-accent: var(--accent-warning); }
-    .account-report-card .report-shell.slate { --card-accent: var(--accent-slate); }
-
-    .account-report-card:hover .report-shell {
-        transform: translateY(-3px);
-        box-shadow: 0 16px 28px rgba(20, 33, 61, 0.12);
-    }
-
-    .glossary-card {
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
-        padding: 14px 16px;
-        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-    }
-
-    .metric-card-link {
-        display: block;
-        text-decoration: none;
-        color: inherit;
-        height: 100%;
-    }
-</style>
-{% endblock %}
+{% block title %}Accounts overview{% endblock %}
+{% block page_title %}Accounts{% endblock %}
+{% block page_help %}A simple business view of cash, customer dues, supplier dues, operating bills, stock value, and profit.{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="{{ money_desk_url }}" class="btn btn-primary"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Money desk</a>{% if nav_access.expenses %}<a href="{% url 'expense_list' %}" class="btn btn-outline-secondary">Expenses</a>{% endif %}<a href="{% url 'day_book' %}" class="btn btn-outline-secondary">Day book</a>{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon slate"><i class="bi bi-journal-text"></i></span>
-        <div>
-            <h1 class="page-title">Accounts Overview</h1>
-            <p class="page-subtitle">A simple business view of cash, customer dues, supplier dues, operating bills, stock value, and profit.</p>
-        </div>
-    </div>
-    <div class="page-actions">
-        <a href="{{ money_desk_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left-right"></i> Money Desk</a>
-        {% if books_balanced %}
-        <span class="status-chip healthy"><i class="bi bi-check-circle"></i> Books balanced</span>
-        {% else %}
-        <span class="status-chip below"><i class="bi bi-exclamation-circle"></i> Needs accounting review</span>
-        {% endif %}
-    </div>
-</div>
+<div class="b-grid">
+    <div>
+        <section class="k-section" aria-labelledby="standing-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="standing-title">Where the business stands today</h2>
+                {% if books_balanced %}
+                <span class="k-badge k-badge--green">Books balanced</span>
+                {% else %}
+                <span class="k-badge k-badge--red">Needs accounting review</span>
+                {% endif %}
+            </div>
+            <table class="b-statement" aria-label="Where the business stands">
+                <thead>
+                    <tr>
+                        <th scope="col">Item</th>
+                        <th scope="col" class="k-num">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="b-group"><th scope="colgroup" colspan="2">Money you can use</th></tr>
+                    <tr class="b-acct">
+                        <td>Cash</td>
+                        <td class="k-num">{{ cash_balance|money }}</td>
+                    </tr>
+                    <tr class="b-acct">
+                        <td>Bank{% if bank_ledgers %}<span class="b-sub">{% for bank in bank_ledgers %}{{ bank.label }} {{ bank.balance|money }}{% if not forloop.last %} &middot; {% endif %}{% endfor %}</span>{% endif %}</td>
+                        <td class="k-num">{{ bank_balance|money }}</td>
+                    </tr>
+                    <tr class="b-subtotal">
+                        <td><a href="{{ money_breakdown_url }}">Money available now</a> <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Money available now" aria-describedby="tipAvail" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipAvail" role="tooltip" hidden>Why this number? Open every movement behind it.</span></span></td>
+                        <td class="k-num {% if available_money >= 0 %}k-in{% else %}k-out{% endif %}">{{ available_money|money }}</td>
+                    </tr>
 
-<div class="row g-3 mb-4">
-    <div class="col-sm-6 col-xl">
-        <a href="{{ money_breakdown_url }}" class="metric-card-link">
-            <div class="metric-card primary">
-                <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div>
-                        <div class="metric-label">Money Available Now</div>
-                        <div class="metric-value">{{ available_money|money }}</div>
-                        <div class="metric-meta">Cash: {{ cash_balance|money }} | Bank: {{ bank_balance|money }} | Why this number?</div>{% if bank_ledgers %}<div class="small text-muted mt-2">{% for bank in bank_ledgers %}{{ bank.label }} {{ bank.balance|money }}{% if not forloop.last %} | {% endif %}{% endfor %}</div>{% endif %}
-                    </div>
-                    <span class="metric-icon"><i class="bi bi-wallet2"></i></span>
-                </div>
-            </div>
-        </a>
-    </div>
-    <div class="col-sm-6 col-xl">
-        <div class="metric-card info">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Customers Owe You</div>
-                    <div class="metric-value">{{ ar_balance|money }}</div>
-                    <div class="metric-meta">Open credit sales waiting for collection.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-people"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-xl">
-        <div class="metric-card warning">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">You Owe Suppliers</div>
-                    <div class="metric-value">{{ ap_balance|money }}</div>
-                    <div class="metric-meta">Unpaid purchases still to be settled.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-truck"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-xl">
-        <div class="metric-card danger">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Operating Bills Due</div>
-                    <div class="metric-value">{{ expense_payable_balance|money }}</div>
-                    <div class="metric-meta">Rent, utilities, internet, and other unpaid running costs.{% if expense_alert_count %} {{ expense_alert_count }} recurring bills also need recording.{% endif %}</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-lightning-charge"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-xl">
-        <div class="metric-card info">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Tax Collected</div>
-                    <div class="metric-value">{{ tax_collected|money }}</div>
-                    <div class="metric-meta">GST collected from sales and currently sitting in Sales Tax Payable.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-receipt"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-xl">
-        <div class="metric-card success">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Stock Value</div>
-                    <div class="metric-value">{{ inventory_balance|money }}</div>
-                    <div class="metric-meta">Inventory valued at cost.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-box-seam"></i></span>
-            </div>
-        </div>
-    </div>
-</div>
+                    <tr class="b-group"><th scope="colgroup" colspan="2">Owed to you</th></tr>
+                    <tr class="b-acct">
+                        <td><a href="{% url 'receivables_aging' %}">Customers owe you</a> <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Customers owe you" aria-describedby="tipAr" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipAr" role="tooltip" hidden>Open credit sales waiting for collection. See who and how old.</span></span></td>
+                        <td class="k-num {% if ar_balance %}k-due{% endif %}">{{ ar_balance|money }}</td>
+                    </tr>
 
-<div class="row g-3 mb-4">
-    <div class="col-lg-8">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-slate"><i class="bi bi-heart-pulse"></i></span>
-                    <div>
-                        <h2 class="section-title">Business Health</h2>
-                        <p class="section-copy">These numbers summarize profitability and overall position.</p>
-                    </div>
+                    <tr class="b-group"><th scope="colgroup" colspan="2">You owe</th></tr>
+                    <tr class="b-acct">
+                        <td><a href="{% url 'payables_aging' %}">You owe suppliers</a> <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About You owe suppliers" aria-describedby="tipAp" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipAp" role="tooltip" hidden>Unpaid purchases still to be settled. See who and how old.</span></span></td>
+                        <td class="k-num {% if ap_balance %}k-out{% endif %}">{{ ap_balance|money }}</td>
+                    </tr>
+                    <tr class="b-acct">
+                        <td>Operating bills due <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Operating bills due" aria-describedby="tipBillsDue" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipBillsDue" role="tooltip" hidden>Rent, utilities, internet, and other unpaid running costs.{% if expense_alert_count %} {{ expense_alert_count }} recurring bills also need recording.{% endif %}</span></span>{% if expense_alert_count %} <span class="k-badge k-badge--amber">{{ expense_alert_count }} to record</span>{% endif %}</td>
+                        <td class="k-num {% if expense_payable_balance %}k-due{% endif %}">{{ expense_payable_balance|money }}</td>
+                    </tr>
+                    <tr class="b-acct">
+                        <td>Tax collected <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Tax collected" aria-describedby="tipTax" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipTax" role="tooltip" hidden>Sales tax collected from customers and currently sitting in Sales Tax Payable.</span></span></td>
+                        <td class="k-num">{{ tax_collected|money }}</td>
+                    </tr>
+
+                    <tr class="b-group"><th scope="colgroup" colspan="2">On the shelf</th></tr>
+                    <tr class="b-acct">
+                        <td>Stock value <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Stock value" aria-describedby="tipStockValue" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipStockValue" role="tooltip" hidden>Inventory valued at cost.</span></span></td>
+                        <td class="k-num">{{ inventory_balance|money }}</td>
+                    </tr>
+
+                    <tr class="b-group"><th scope="colgroup" colspan="2">Business health</th></tr>
+                    <tr class="b-acct">
+                        <td><a href="{% url 'profit_loss' %}">Net profit</a> <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Net profit" aria-describedby="tipProfit" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipProfit" role="tooltip" hidden>Income earned less expenses spent, all time.</span></span></td>
+                        <td class="k-num {% if net_profit >= 0 %}k-in{% else %}k-out{% endif %}">{{ net_profit|money }}</td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr class="b-total">
+                        <td><a href="{% url 'balance_sheet' %}" class="text-reset">Net worth</a></td>
+                        <td class="k-num">{{ net_worth|money }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </section>
+
+        <div class="b-grid b-grid--even">
+            <section class="k-section" aria-labelledby="chart-flow-title">
+                <div class="k-section-head"><h2 class="k-section-title" id="chart-flow-title">Money flow</h2></div>
+                <div class="chart-shell compact">
+                    <canvas id="incomeExpenseChart" role="img" aria-label="Income {{ profit_loss.total_income|money }} against expense {{ profit_loss.total_expense|money }}"></canvas>
                 </div>
-            </div>
-            <div class="row g-3">
-                <div class="col-md-4">
-                    <div class="metric-card {% if net_profit >= 0 %}success{% else %}danger{% endif %}">
-                        <div class="d-flex justify-content-between align-items-start gap-3">
-                            <div>
-                                <div class="metric-label">Net Profit</div>
-                                <div class="metric-value">{{ net_profit|money }}</div>
-                            </div>
-                            <span class="metric-icon"><i class="bi bi-graph-up-arrow"></i></span>
-                        </div>
-                    </div>
+            </section>
+            <section class="k-section" aria-labelledby="chart-position-title">
+                <div class="k-section-head"><h2 class="k-section-title" id="chart-position-title">Business position</h2></div>
+                <div class="chart-shell compact">
+                    <canvas id="balanceSheetChart" role="img" aria-label="Assets {{ balance_sheet.total_assets|money }}, liabilities {{ balance_sheet.total_liabilities|money }}, equity {{ balance_sheet.total_equity|money }}"></canvas>
                 </div>
-                <div class="col-md-4">
-                    <div class="metric-card primary">
-                        <div class="d-flex justify-content-between align-items-start gap-3">
-                            <div>
-                                <div class="metric-label">Net Worth</div>
-                                <div class="metric-value">{{ net_worth|money }}</div>
-                            </div>
-                            <span class="metric-icon"><i class="bi bi-bank"></i></span>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-4">
-                    <div class="metric-card slate">
-                        <div class="d-flex justify-content-between align-items-start gap-3">
-                            <div>
-                                <div class="metric-label">Accounting Check</div>
-                                <div class="metric-value">{% if books_balanced %}Balanced{% else %}Review{% endif %}</div>
-                            </div>
-                            <span class="metric-icon"><i class="bi bi-shield-check"></i></span>
-                        </div>
-                    </div>
-                </div>
-            </div>
-            <div class="row g-3 mt-1">
-                <div class="col-md-6">
-                    <div class="border rounded-4 p-3 h-100 bg-white">
-                        <div class="d-flex align-items-center gap-2 fw-semibold mb-2"><i class="bi bi-bar-chart"></i> Money Flow</div>
-                        <div class="chart-shell compact">
-                            <canvas id="incomeExpenseChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-                <div class="col-md-6">
-                    <div class="border rounded-4 p-3 h-100 bg-white">
-                        <div class="d-flex align-items-center gap-2 fw-semibold mb-2"><i class="bi bi-pie-chart"></i> Business Position</div>
-                        <div class="chart-shell compact">
-                            <canvas id="balanceSheetChart"></canvas>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            </section>
         </div>
-    </div>
-    <div class="col-lg-4">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon"><i class="bi bi-translate"></i></span>
-                    <div>
-                        <h2 class="section-title">Accounting Terms in Plain Language</h2>
-                        <p class="section-copy">Quick definitions for non-accounting staff.</p>
-                    </div>
-                </div>
+
+        <section class="k-section" aria-labelledby="recent-entries-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="recent-entries-title">Recent accounting entries <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Recent accounting entries" aria-describedby="tipRecent" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipRecent" role="tooltip" hidden>Latest vouchers created from sales, purchases, settlements, and expenses.</span></span></h2>
+                <div class="k-actions"><a href="{% url 'day_book' %}" class="btn btn-sm btn-outline-secondary">Day book</a></div>
             </div>
-            <div class="vstack gap-3">
+            <div class="table-responsive">
+                <table class="k-table k-ledger--stack b-bahi">
+                    <thead>
+                        <tr>
+                            <th scope="col" data-k="meta">Date</th>
+                            <th scope="col" data-k="what">Voucher</th>
+                            <th scope="col" data-k="more">Narration</th>
+                            <th scope="col" class="k-num" data-k="amount">Debit</th>
+                            <th scope="col" class="k-num" data-k="field">Credit</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for voucher in recent_vouchers %}
+                        <tr>
+                            <td data-label="Date">{{ voucher.date }}</td>
+                            <td data-label="Voucher">#{{ voucher.id }} &middot; {{ voucher.get_voucher_type_display }}</td>
+                            <td data-label="Narration">{{ voucher.narration|default:"-" }}</td>
+                            <td class="k-num" data-label="Debit">{{ voucher.total_debit|money }}</td>
+                            <td class="k-num" data-label="Credit">{{ voucher.total_credit|money }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="k-empty"><p class="k-empty-title">No vouchers posted yet.</p><p>The first sale, purchase, expense or payment writes its entry here automatically.</p></td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </section>
+    </div>
+
+    <div>
+        <section class="k-section" id="reports" aria-labelledby="reports-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="reports-title">Reports <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Reports" aria-describedby="tipReports" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipReports" role="tooltip" hidden>Every report opens with date shortcuts, a CSV export and an A4 print. You can jump between reports from the tabs at the top of each one.</span></span></h2>
+            </div>
+            <ul class="b-links">
+                {% for link in report_links %}
+                <li><a href="{{ link.url }}" data-tip="{{ link.description }}"><strong>{{ link.label }}</strong><i class="bi bi-chevron-right b-links-aside" aria-hidden="true"></i><span class="visually-hidden">{{ link.description }}</span></a></li>
+                {% endfor %}
+                {% for card in report_cards %}
+                <li><a href="{{ card.url }}" data-tip="{{ card.description }}"><strong>{{ card.title }}</strong><i class="bi bi-chevron-right b-links-aside" aria-hidden="true"></i><span class="visually-hidden">{{ card.description }}</span></a></li>
+                {% endfor %}
+            </ul>
+        </section>
+
+        <section class="k-section" id="books-lock" aria-labelledby="books-lock-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="books-lock-title">Books lock <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Books lock" aria-describedby="tipBooksLock" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipBooksLock" role="tooltip" hidden>Close a finished period so nobody can change it by accident.<br><br><strong>While locked:</strong> sales, purchases, returns, expenses, payments and opening balances dated on or before that day are refused, for every user.<br><strong>Still works:</strong> everything dated after the lock, and every report, export and print.<br><strong>To undo:</strong> clear the date and save. The books reopen at once and the change is written to the audit log.</span></span></h2>
+                {% if books_locked_until %}
+                <span class="k-badge k-badge--amber"><i class="bi bi-lock-fill" aria-hidden="true"></i> Locked up to {{ books_locked_until }}</span>
+                {% else %}
+                <span class="k-badge">Books are open</span>
+                {% endif %}
+            </div>
+            {% if can_lock_books %}
+            <form method="post" action="{{ books_lock_url }}">
+                {% csrf_token %}
+                <label class="form-label" for="{{ books_lock_form.books_locked_until.id_for_label }}">{{ books_lock_form.books_locked_until.label }}{% if books_lock_form.books_locked_until.help_text %} {% include "pos/partials/_help_tip.html" with tip_id=books_lock_form.books_locked_until.auto_id|add:"_helptext" tip_name=books_lock_form.books_locked_until.label tip_text=books_lock_form.books_locked_until.help_text %}{% endif %}</label>
+                {{ books_lock_form.books_locked_until }}
+                {% for error in books_lock_form.books_locked_until.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ error }}</div>{% endfor %}
+                <p class="b-warn"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><span>Entries dated on or before this day are refused for every user until you clear it.</span></p>
+                <div class="k-form-actions">
+                    <button class="btn btn-primary"><i class="bi bi-check2" aria-hidden="true"></i> Save lock</button>
+                </div>
+            </form>
+            {% else %}
+            <p class="text-muted mb-0">Only an administrator can lock or reopen the books.</p>
+            {% endif %}
+        </section>
+
+        <section class="k-section" aria-labelledby="terms-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="terms-title">Accounting terms <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Accounting terms" aria-describedby="tipTerms" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipTerms" role="tooltip" hidden>Accounting terms in plain language. Quick definitions for non-accounting staff.</span></span></h2>
+            </div>
+            <dl class="b-terms">
                 {% for item in glossary %}
-                <div class="glossary-card d-flex align-items-start gap-3">
-                    <span class="section-title-icon"><i class="bi {{ item.icon|default:'bi-info-circle' }}"></i></span>
-                    <div>
-                        <div class="fw-semibold">{{ item.term }}</div>
-                        <div class="small text-muted">{{ item.detail }}</div>
-                    </div>
-                </div>
+                <div><dt>{{ item.term }}</dt><dd>{{ item.detail }}</dd></div>
                 {% endfor %}
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-3 mb-4">
-    {% for card in report_cards %}
-    <div class="col-md-6 col-xl-3">
-        <a href="{{ card.url }}" class="account-report-card">
-            <div class="report-shell {{ card.accent|default:'primary' }}">
-                <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
-                    <div>
-                        <div class="metric-label">{{ card.summary }}</div>
-                        <h2 class="section-title mt-2">{{ card.title }}</h2>
-                    </div>
-                    <span class="metric-icon"><i class="bi {{ card.icon|default:'bi-arrow-up-right' }}"></i></span>
-                </div>
-                <p class="section-copy">{{ card.description }}</p>
-                <div class="section-link mt-3 d-inline-flex align-items-center gap-2">{{ card.cta }} <i class="bi bi-arrow-right"></i></div>
-            </div>
-        </a>
-    </div>
-    {% endfor %}
-</div>
-
-<div class="page-card p-0 overflow-hidden">
-    <div class="section-heading p-4 border-bottom mb-0">
-        <div class="section-heading-copy">
-            <span class="section-title-icon section-icon-slate"><i class="bi bi-journal-richtext"></i></span>
-            <div>
-                <h2 class="section-title">Recent Accounting Entries</h2>
-                <p class="section-copy">Latest vouchers created from sales, purchases, settlements, and expenses.</p>
-            </div>
-        </div>
-    </div>
-    <div class="table-responsive">
-        <table class="table align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th class="ps-4">Date</th>
-                    <th>Voucher</th>
-                    <th>Narration</th>
-                    <th class="text-end">Debit</th>
-                    <th class="text-end pe-4">Credit</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for voucher in recent_vouchers %}
-                <tr>
-                    <td class="ps-4">{{ voucher.date }}</td>
-                    <td>#{{ voucher.id }} | {{ voucher.get_voucher_type_display }}</td>
-                    <td>{{ voucher.narration|default:"-" }}</td>
-                    <td class="text-end">{{ voucher.total_debit|money }}</td>
-                    <td class="text-end pe-4">{{ voucher.total_credit|money }}</td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="5" class="text-center text-muted py-5">No vouchers posted yet.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+            </dl>
+        </section>
     </div>
 </div>
 {% endblock %}
@@ -310,7 +190,9 @@
 {% block extra_js %}
 <script>
 (function () {
-    const incomeExpenseCanvas = document.getElementById('incomeExpenseChart');
+    if (typeof Chart === 'undefined') return;
+    var theme = window.ZehnChart || {};
+    var incomeExpenseCanvas = document.getElementById('incomeExpenseChart');
     if (incomeExpenseCanvas) {
         new Chart(incomeExpenseCanvas.getContext('2d'), {
             type: 'bar',
@@ -318,8 +200,9 @@
                 labels: ['Income', 'Expense'],
                 datasets: [{
                     data: [{{ profit_loss.total_income|default:0 }}, {{ profit_loss.total_expense|default:0 }}],
-                    backgroundColor: ['rgba(22, 163, 74, 0.75)', 'rgba(220, 38, 38, 0.75)'],
-                    borderRadius: 10,
+                    backgroundColor: [theme.moneyIn, theme.moneyOut],
+                    borderWidth: 0,
+                    maxBarThickness: 72,
                 }],
             },
             options: {
@@ -328,37 +211,37 @@
                 plugins: { legend: { display: false } },
                 scales: {
                     x: { grid: { display: false } },
-                    y: { grid: { color: 'rgba(148, 163, 184, 0.18)' } },
+                    y: { beginAtZero: true },
                 },
             },
         });
     }
 
-    const balanceSheetCanvas = document.getElementById('balanceSheetChart');
+    var balanceSheetCanvas = document.getElementById('balanceSheetChart');
     if (balanceSheetCanvas) {
         new Chart(balanceSheetCanvas.getContext('2d'), {
-            type: 'doughnut',
+            type: 'bar',
             data: {
                 labels: ['Assets', 'Liabilities', 'Equity'],
                 datasets: [{
                     data: [{{ balance_sheet.total_assets|default:0 }}, {{ balance_sheet.total_liabilities|default:0 }}, {{ balance_sheet.total_equity|default:0 }}],
-                    backgroundColor: ['rgba(37, 99, 235, 0.85)', 'rgba(245, 158, 11, 0.85)', 'rgba(8, 145, 178, 0.85)'],
+                    backgroundColor: [theme.primary, theme.inkSoft, theme.neutral],
                     borderWidth: 0,
+                    maxBarThickness: 40,
                 }],
             },
             options: {
+                indexAxis: 'y',
                 responsive: true,
                 maintainAspectRatio: false,
-                cutout: '68%',
-                plugins: { legend: { position: 'bottom' } },
+                plugins: { legend: { display: false } },
+                scales: {
+                    x: { beginAtZero: true },
+                    y: { grid: { display: false } },
+                },
             },
         });
     }
 })();
 </script>
 {% endblock %}
-
-
-
-
-

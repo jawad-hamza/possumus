@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-19T12:00:00Z",
+  "title": "Design System: ZehnMS",
+  "extensions": {
+    "colorMeta": {
+      "accent": { "role": "primary", "displayName": "Counter Blue", "canonical": "#2563eb", "tonalRamp": ["#172554", "#1e3a8a", "#1e40af", "#1d4ed8", "#2563eb", "#60a5fa", "#bfdbfe", "#eff4ff"] },
+      "accent-hover": { "role": "primary", "displayName": "Counter Blue Deep (links, blue text)", "canonical": "#1d4ed8" },
+      "accent-active": { "role": "primary", "displayName": "Counter Blue Pressed", "canonical": "#1e40af" },
+      "accent-tint": { "role": "primary", "displayName": "Blue Wash", "canonical": "#eff4ff" },
+      "ground": { "role": "neutral", "displayName": "Counter Grey", "canonical": "#f3f4f6", "tonalRamp": ["#111827", "#1f2937", "#374151", "#5b6472", "#aeb5c0", "#e2e5e9", "#f3f4f6", "#ffffff"] },
+      "panel": { "role": "neutral", "displayName": "Panel White", "canonical": "#ffffff" },
+      "sunk": { "role": "neutral", "displayName": "Sunk Grey", "canonical": "#eef0f3" },
+      "border": { "role": "neutral", "displayName": "Hairline", "canonical": "#e2e5e9" },
+      "divider": { "role": "neutral", "displayName": "Divider", "canonical": "#edeff2" },
+      "border-strong": { "role": "neutral", "displayName": "Strong Hairline", "canonical": "#cdd2d9" },
+      "border-field": { "role": "neutral", "displayName": "Field Edge", "canonical": "#aeb5c0" },
+      "ink-title": { "role": "neutral", "displayName": "Title Slate", "canonical": "#111827" },
+      "ink": { "role": "neutral", "displayName": "Body Slate", "canonical": "#1f2937" },
+      "ink-soft": { "role": "neutral", "displayName": "Muted Slate", "canonical": "#5b6472" },
+      "ink-faint": { "role": "neutral", "displayName": "Faint Slate", "canonical": "#667085" },
+      "money-in": { "role": "tertiary", "displayName": "Received Green (money only)", "canonical": "#15803d", "tonalRamp": ["#052e16", "#14532d", "#166534", "#15803d", "#22c55e", "#86efac", "#bbf7d0", "#dcfce7"] },
+      "money-out": { "role": "tertiary", "displayName": "Owed Red (money only)", "canonical": "#b91c1c", "tonalRamp": ["#450a0a", "#7f1d1d", "#991b1b", "#b91c1c", "#ef4444", "#fca5a5", "#fecaca", "#fee2e2"] },
+      "money-due": { "role": "tertiary", "displayName": "Due Amber (money only)", "canonical": "#b45309", "tonalRamp": ["#451a03", "#78350f", "#92400e", "#b45309", "#f59e0b", "#fcd34d", "#fde68a", "#fef3c7"] }
+    },
+    "typographyMeta": {
+      "display": { "displayName": "Display figure", "purpose": "The till total and hero money figures only; the till total runs 48px, 40px when long." },
+      "headline": { "displayName": "Headline", "purpose": "Page title in the fixed head; stat figures." },
+      "title": { "displayName": "Panel title", "purpose": "Panel titles beside their info glyph." },
+      "body": { "displayName": "Body", "purpose": "Table cells, form values, running text; 15px under 992px." },
+      "label": { "displayName": "Label", "purpose": "Form labels above fields; table heads use the size at weight 500 in muted slate." },
+      "caption": { "displayName": "Badge", "purpose": "Pill badges." }
+    },
+    "shadows": [
+      { "name": "panel", "value": "0 1px 2px rgba(16, 24, 40, 0.04)", "purpose": "Every panel at rest; the faintest lift off the grey ground." },
+      { "name": "pop", "value": "0 10px 28px rgba(16, 24, 40, 0.14), 0 2px 6px rgba(16, 24, 40, 0.06)", "purpose": "Menus, tooltips, toasts, drawers, modals." },
+      { "name": "focus-halo", "value": "0 0 0 3px rgba(37, 99, 235, 0.28)", "purpose": "Focused input halo with the blue border; buttons use a 2px blue outline offset 2px instead." }
+    ],
+    "motion": [
+      { "name": "ease-out", "value": "cubic-bezier(0.16, 1, 0.3, 1)", "purpose": "All state transitions." },
+      { "name": "duration", "value": "140ms", "purpose": "Colour, background, border and tooltip fade; 0ms under reduced motion; never above 160ms." }
+    ],
+    "breakpoints": [
+      { "name": "sm", "value": "576px", "purpose": "Phone lists stack into two-line entries; till key chips hide." },
+      { "name": "md", "value": "768px", "purpose": "Form grid goes to one column." },
+      { "name": "lg", "value": "992px", "purpose": "Rail becomes a drawer, bottom tab bar, 44px controls, 16px gutter and panel padding." }
+    ],
+    "layout": {
+      "railWidth": "232px",
+      "railCollapsed": "64px",
+      "headHeight": "60px (56px phone)",
+      "tabBarHeight": "60px",
+      "controlHeight": "38px (44px phone); sm 32px; lg 46px",
+      "rowHeight": "48px"
+    }
+  },
+  "components": [
+    {
+      "name": "Primary Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The one filled blue action of a page or panel, including actions that take or receive money.",
+      "html": "<button class=\"ds-btn ds-btn-primary\">Take cash</button>",
+      "css": ".ds-btn { display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem; min-height: 38px; padding: 0 0.875rem; border: 1px solid; border-radius: 6px; font-family: \"Public Sans\", \"Segoe UI\", system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; line-height: 1.15; cursor: pointer; transition: background-color 140ms cubic-bezier(0.16,1,0.3,1), border-color 140ms cubic-bezier(0.16,1,0.3,1), color 140ms cubic-bezier(0.16,1,0.3,1); } .ds-btn-primary { background: #2563eb; border-color: #2563eb; color: #fff; } .ds-btn-primary:hover { background: #1d4ed8; border-color: #1d4ed8; } .ds-btn-primary:active { background: #1e40af; border-color: #1e40af; } .ds-btn:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }"
+    },
+    {
+      "name": "Secondary Button",
+      "kind": "button",
+      "refersTo": "button-secondary",
+      "description": "Neutral outline for every non-primary action; every other variant maps here.",
+      "html": "<button class=\"ds-btn2\">Record purchase</button>",
+      "css": ".ds-btn2 { display: inline-flex; align-items: center; min-height: 38px; padding: 0 0.875rem; border: 1px solid #cdd2d9; border-radius: 6px; background: #fff; color: #1f2937; font-family: \"Public Sans\", \"Segoe UI\", system-ui, sans-serif; font-size: 0.875rem; font-weight: 600; cursor: pointer; transition: background-color 140ms cubic-bezier(0.16,1,0.3,1), border-color 140ms; } .ds-btn2:hover { background: #eef0f3; border-color: #aeb5c0; color: #111827; } .ds-btn2:active { background: #e2e5e9; } .ds-btn2:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; }"
+    },
+    {
+      "name": "Text Field",
+      "kind": "input",
+      "refersTo": "input",
+      "description": "Soft white field with a field-edge hairline; blue border and halo on focus.",
+      "html": "<label class=\"ds-label\" for=\"ds-f\">Sale price</label><input id=\"ds-f\" class=\"ds-input\" placeholder=\"0.00\">",
+      "css": ".ds-label { display: block; margin: 0 0 6px; color: #1f2937; font: 600 0.8125rem/1.35 \"Public Sans\", system-ui, sans-serif; } .ds-input { box-sizing: border-box; width: 240px; min-height: 38px; padding: 0.4rem 0.75rem; border: 1px solid #aeb5c0; border-radius: 6px; background: #fff; color: #1f2937; font: 400 0.875rem/1.4 \"Public Sans\", system-ui, sans-serif; font-variant-numeric: tabular-nums lining-nums; transition: border-color 140ms, box-shadow 140ms; } .ds-input::placeholder { color: #667085; } .ds-input:hover { border-color: #667085; } .ds-input:focus { outline: 0; border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37,99,235,0.28); }"
+    },
+    {
+      "name": "Sidebar Navigation",
+      "kind": "nav",
+      "refersTo": "nav-item",
+      "description": "White rail of icon-and-label links; the active module is a blue wash with blue icon and label.",
+      "html": "<nav class=\"ds-rail\"><div class=\"ds-rail-group\">Counter</div><a class=\"ds-rail-link\" href=\"#\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\"><path d=\"M3 13a9 9 0 0 1 18 0\"/><path d=\"M12 13l4-4\"/></svg>Dashboard</a><a class=\"ds-rail-link is-active\" aria-current=\"page\" href=\"#\"><svg width=\"18\" height=\"18\" viewBox=\"0 0 24 24\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.8\"><path d=\"M3 4h2l2.5 11h11L21 7H7\"/><circle cx=\"9\" cy=\"19\" r=\"1.5\"/><circle cx=\"18\" cy=\"19\" r=\"1.5\"/></svg>Till</a></nav>",
+      "css": ".ds-rail { width: 232px; padding: 12px; background: #fff; border-right: 1px solid #e2e5e9; font-family: \"Public Sans\", system-ui, sans-serif; } .ds-rail-group { padding: 8px 10px 4px; color: #5b6472; font-size: 0.8125rem; } .ds-rail-link { display: flex; align-items: center; gap: 10px; min-height: 38px; margin: 1px 0; padding: 0 10px; border-radius: 6px; color: #1f2937; font-size: 0.875rem; font-weight: 500; text-decoration: none; transition: background-color 140ms, color 140ms; } .ds-rail-link svg { color: #5b6472; } .ds-rail-link:hover { background: #eef0f3; color: #111827; } .ds-rail-link:hover svg { color: #111827; } .ds-rail-link.is-active { background: #eff4ff; color: #1d4ed8; font-weight: 600; } .ds-rail-link.is-active svg { color: #1d4ed8; } .ds-rail-link:focus-visible { outline: 2px solid #2563eb; outline-offset: -2px; }"
+    },
+    {
+      "name": "Status Pills",
+      "kind": "chip",
+      "refersTo": "badge",
+      "description": "Ink on a pale wash; green paid, amber due or low, red out or overdue, blue held, neutral settled.",
+      "html": "<span class=\"ds-pill ds-pill-green\">Paid</span> <span class=\"ds-pill ds-pill-amber\">Low</span> <span class=\"ds-pill ds-pill-red\">Out</span> <span class=\"ds-pill ds-pill-blue\">Held</span> <span class=\"ds-pill\">Settled</span>",
+      "css": ".ds-pill { display: inline-flex; align-items: center; padding: 2px 9px; border-radius: 999px; background: #eceef1; color: #374151; font: 600 0.75rem/1.45 \"Public Sans\", system-ui, sans-serif; white-space: nowrap; } .ds-pill-green { background: #dcfce7; color: #166534; } .ds-pill-amber { background: #fef3c7; color: #92400e; } .ds-pill-red { background: #fee2e2; color: #991b1b; } .ds-pill-blue { background: #dbeafe; color: #1e40af; }"
+    },
+    {
+      "name": "Panel with no-grid table",
+      "kind": "card",
+      "refersTo": "panel",
+      "description": "White panel, 8px corners, hairline, faintest shadow; table runs edge to edge with faint dividers, muted heads, right-aligned figures and a semibold total.",
+      "html": "<section class=\"ds-panel\"><h2 class=\"ds-panel-title\">Today</h2><table class=\"ds-table\"><thead><tr><th>Item</th><th class=\"n\">Today</th></tr></thead><tbody><tr><td>Sales before returns</td><td class=\"n\">5,427.00</td></tr><tr><td>Returns</td><td class=\"n\">0.00</td></tr></tbody><tfoot><tr><td>Net sales</td><td class=\"n\">5,427.00</td></tr></tfoot></table></section>",
+      "css": ".ds-panel { width: 420px; padding: 20px 0 0; border: 1px solid #e2e5e9; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(16,24,40,0.04); font-family: \"Public Sans\", system-ui, sans-serif; color: #1f2937; } .ds-panel-title { margin: 0 20px 16px; color: #111827; font-size: 1rem; font-weight: 600; } .ds-table { width: 100%; border-collapse: collapse; font-size: 0.875rem; font-variant-numeric: tabular-nums lining-nums; } .ds-table th, .ds-table td { height: 48px; padding: 10px 20px; border-bottom: 1px solid #edeff2; text-align: left; } .ds-table thead th { height: 40px; border-bottom-color: #e2e5e9; color: #5b6472; font-size: 0.8125rem; font-weight: 500; } .ds-table .n { text-align: right; } .ds-table tbody tr:hover td { background: #f7f8fa; } .ds-table tfoot td { border-top: 1px solid #cdd2d9; border-bottom: 0; color: #111827; font-weight: 600; }"
+    },
+    {
+      "name": "Help Tooltip",
+      "kind": "custom",
+      "refersTo": "tooltip",
+      "description": "Info glyph beside a title or label; dark slate tooltip opens on hover, focus or tap, closes on Esc.",
+      "html": "<span class=\"ds-tip\"><span class=\"ds-tip-label\">Barcode</span><button type=\"button\" class=\"ds-tip-btn\" aria-label=\"About Barcode\"><svg width=\"14\" height=\"14\" viewBox=\"0 0 16 16\" fill=\"none\" stroke=\"currentColor\" stroke-width=\"1.4\"><circle cx=\"8\" cy=\"8\" r=\"6.5\"/><path d=\"M8 7v4\"/><circle cx=\"8\" cy=\"4.8\" r=\"0.6\" fill=\"currentColor\"/></svg></button><span class=\"ds-tip-pop\" role=\"tooltip\">Scan the pack or type its printed code. Leave empty to have one made.</span></span>",
+      "css": ".ds-tip { position: relative; display: inline-flex; align-items: center; gap: 4px; font-family: \"Public Sans\", system-ui, sans-serif; } .ds-tip-label { color: #1f2937; font-size: 0.8125rem; font-weight: 600; } .ds-tip-btn { display: inline-flex; align-items: center; justify-content: center; width: 20px; height: 20px; padding: 0; border: 0; border-radius: 999px; background: none; color: #667085; cursor: help; transition: background-color 140ms, color 140ms; } .ds-tip-btn:hover, .ds-tip-btn:focus-visible { background: #eff4ff; color: #1d4ed8; outline: 2px solid #2563eb; outline-offset: 2px; } .ds-tip-btn:hover { outline: 0; } .ds-tip-pop { position: absolute; top: calc(100% + 8px); left: 0; width: max-content; max-width: 300px; padding: 8px 12px; border-radius: 8px; background: #1f2937; color: #f9fafb; box-shadow: 0 10px 28px rgba(16,24,40,0.14), 0 2px 6px rgba(16,24,40,0.06); font-size: 0.8125rem; line-height: 1.45; opacity: 0; transform: translateY(2px); transition: opacity 140ms cubic-bezier(0.16,1,0.3,1), transform 140ms cubic-bezier(0.16,1,0.3,1); pointer-events: none; } .ds-tip-btn:hover + .ds-tip-pop, .ds-tip-btn:focus-visible + .ds-tip-pop { opacity: 1; transform: none; }"
+    },
+    {
+      "name": "Till Total",
+      "kind": "custom",
+      "refersTo": "panel",
+      "description": "The largest figure in the product, then tender and change, then the one blue pay button with its key chip (key chips print only on the till).",
+      "html": "<div class=\"ds-total\"><div class=\"ds-total-label\">Total Rs</div><div class=\"ds-total-figure\">1,328.80</div><button class=\"ds-pay\">Take cash <span class=\"ds-key\">Enter</span></button></div>",
+      "css": ".ds-total { width: 320px; padding: 24px; border: 1px solid #e2e5e9; border-radius: 8px; background: #fff; box-shadow: 0 1px 2px rgba(16,24,40,0.04); font-family: \"Public Sans\", system-ui, sans-serif; } .ds-total-label { color: #5b6472; font-size: 0.8125rem; font-weight: 500; } .ds-total-figure { color: #111827; font-size: 3rem; font-weight: 600; letter-spacing: -0.02em; line-height: 1.1; text-align: right; font-variant-numeric: tabular-nums lining-nums; margin-bottom: 20px; } .ds-pay { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 52px; border: 1px solid #2563eb; border-radius: 8px; background: #2563eb; color: #fff; font: 600 1rem \"Public Sans\", system-ui, sans-serif; cursor: pointer; transition: background-color 140ms; } .ds-pay:hover { background: #1d4ed8; } .ds-pay:active { background: #1e40af; } .ds-pay:focus-visible { outline: 2px solid #2563eb; outline-offset: 2px; } .ds-key { padding: 0 5px; border: 1px solid currentColor; border-radius: 4px; font-size: 0.6875rem; font-weight: 600; line-height: 1.5; opacity: 0.8; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Familiar Counter",
+    "overview": "ZehnMS looks like the business software a shopkeeper has already used: Zoho Books, QuickBooks, Vyapar, Square POS, Loyverse. It is recognisable on first open and works without teaching. The system does not try to be novel. Its job is polish and calm: white panels on a light grey ground, slate ink, one blue accent, few lines, and plenty of room. The rule is to cut clutter while keeping every convention the user already knows.\n\nDensity is set for work, not for show. Rows are 48px, controls are 38px (44px on phones), and every figure is tabular and right-aligned. The till fits the 1366x768 viewport without scrolling, and its total is the largest figure in the product. Explanations do not sit on the page. Each one waits behind a small info glyph and opens in a dark tooltip on hover, focus or tap. Errors are the exception and always stay visible. The system is light only, uses Public Sans as its only typeface, and loads nothing from a CDN.\n\nThe owner rejected an earlier themed build (a ruled, cloth-bound ledger book). Tinted or themed surfaces, decorative rules and stamps have no place here. Neutral white is the standing preference.",
+    "keyCharacteristics": [
+      "White panels (8px corners, hairline neutral border, the faintest shadow) on a light grey ground, one level deep",
+      "Slate ink in three steps (title, body, muted), tabular lining figures everywhere",
+      "One blue accent for primary actions, links, focus, selection and the active menu item",
+      "Green, red and amber carry money meaning and stock state only",
+      "Tables with no grid: faint row dividers, hover tint, muted sentence-case heads",
+      "Pill badges for status; tooltips for help; sentence case throughout",
+      "Public Sans only, light only, no CDN assets"
+    ],
+    "rules": [
+      { "name": "The One Blue Rule", "body": "Blue is the only accent, and every primary action is blue, including actions that receive money. There is no green button. The success variant renders as the blue primary, and green stays on figures.", "section": "colors" },
+      { "name": "The Money Meaning Rule", "body": "Green, red and amber mean money in, money out and money owed (plus in-stock, out-of-stock and low-stock pills). They are never decoration, section colour or chart styling for ordinary series.", "section": "colors" },
+      { "name": "The Neutral Ground Rule", "body": "Surfaces are white or neutral grey. Nothing is tinted, themed or gradient-filled.", "section": "colors" },
+      { "name": "The One Face Rule", "body": "Public Sans is the only typeface. No display face, no second family and no webfont from a CDN.", "section": "typography" },
+      { "name": "The Sentence Case Rule", "body": "Headings, table heads, buttons, labels and badges are sentence case with no added tracking. Uppercase appears only on the single-letter avatar and on printed receipt column heads.", "section": "typography" },
+      { "name": "The Tabular Figures Rule", "body": "Every number (tables, inputs, stats, totals) uses tabular lining numerals and sits right-aligned in its column.", "section": "typography" },
+      { "name": "The Head Actions Rule", "body": "Page actions go in the fixed head. The primary action comes first and is blue, and extra actions fold into \"More\". When a side panel already holds an action, the head copy of it shows only on phones.", "section": "layout" },
+      { "name": "The One Save Row Rule", "body": "Entry pages pin a single save row to the bottom on phones. Long forms may use a sticky action bar.", "section": "layout" },
+      { "name": "The Side-by-Side Rule", "body": "Supporting records (a brand, a supplier, a customer) are added in a side panel next to the form, so the user keeps his place and his typing.", "section": "layout" },
+      { "name": "The One Level Rule", "body": "Panels never nest. A panel inside a panel loses its box and becomes a spaced group, and a row of stats sits in one panel or in one panel per stat.", "section": "elevation" }
+    ],
+    "dos": [
+      "Do put the primary action first and make it the one blue filled button in its scope, including actions that take or receive money.",
+      "Do keep money colours for money: green in, red out, amber owed, plus the in-stock, out and low stock pills.",
+      "Do set every figure in tabular lining numerals, right-aligned, with totals semibold under a strong hairline.",
+      "Do move help and explanations into info tooltips that open on hover, focus and tap and close on Esc. Keep errors on the page.",
+      "Do light the sidebar module by URL prefix with the blue wash, blue icon and label, and aria-current.",
+      "Do name the counting unit in list counts (\"22 products in 20 rows, sizes grouped\") and give each ledger entry one reference the shop knows (\"Invoice INV-00024\").",
+      "Do check every screen at 1366x768 and 390x844. The till must not page-scroll at 1366x768."
+    ],
+    "donts": [
+      "Don't nest a panel inside a panel.",
+      "Don't draw vertical table lines, grids, zebra stripes or coloured side stripes on selected rows.",
+      "Don't make a green (or any non-blue) primary button, or use green, red or amber as decoration.",
+      "Don't print key chips outside the till. Shortcuts go in tooltips and the F1 sheet.",
+      "Don't use a second typeface, uppercase tracked labels, kickers or eyebrow text above headings.",
+      "Don't tint or theme surfaces, use gradients, or bring back ledger rules, cloth, stamps or condensed display type.",
+      "Don't show Django's dashed empty choice or the browser's raw date format text.",
+      "Don't load fonts, icons or scripts from a CDN, or add a dark theme.",
+      "Don't add shadows beyond Panel and Pop, or animate longer than 160ms."
+    ]
+  }
+}

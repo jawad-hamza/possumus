@@ -1,4 +1,6 @@
-﻿from django import template
+from django import template
+
+from pos.templatetags.currency_tags import money as format_with_currency
 
 register = template.Library()
 
@@ -22,8 +24,5 @@ def drcr(amount):
 
 @register.filter
 def money(amount):
-    try:
-        amount = float(amount)
-    except (TypeError, ValueError):
-        return "Rs 0.00"
-    return f"Rs {amount:,.2f}"
+    # Same output as the pos currency_tags filter, so ledgers follow the shop's currency.
+    return format_with_currency(amount)

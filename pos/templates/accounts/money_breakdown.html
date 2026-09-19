@@ -1,156 +1,69 @@
 {% extends "pos/base.html" %}
-{% load accounting_tags %}
+{% load static accounting_tags %}
 
-{% block title %}Money Breakdown{% endblock %}
-
-{% block extra_css %}
-<style>
-    .money-explainer {
-        border: 1px solid #dbe7f5;
-        border-radius: 18px;
-        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-        padding: 18px;
-    }
-
-    .movement-source {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        border-radius: 999px;
-        padding: 4px 10px;
-        font-size: 0.8rem;
-        font-weight: 700;
-    }
-
-    .movement-source.cash {
-        color: #15803d;
-        background: #dcfce7;
-    }
-
-    .movement-source.bank {
-        color: #1d4ed8;
-        background: #dbeafe;
-    }
-
-    .movement-figure.in {
-        color: #15803d;
-        font-weight: 700;
-    }
-
-    .movement-figure.out {
-        color: #b91c1c;
-        font-weight: 700;
-    }
-</style>
-{% endblock %}
+{% block title %}Money breakdown{% endblock %}
+{% block page_title %}Money breakdown{% endblock %}
+{% block page_help %}<strong>Why is money available now this much?</strong> This page shows every cash and bank movement that builds the current money available figure on the dashboard.{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="{{ money_desk_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Money desk</a><a href="{% url 'accounts_home' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Accounts</a>{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon primary"><i class="bi bi-wallet2"></i></span>
-        <div>
-            <h1 class="page-title">Why Is Money Available Now This Much?</h1>
-            <p class="page-subtitle">This page shows every cash and bank movement that builds the current money available figure on the dashboard.</p>
-        </div>
+<div class="b-balances">
+    <div class="k-balance {% if available_money < 0 %}k-balance--out{% endif %} b-balances-wide">
+        <div class="k-balance-label">Money available now</div>
+        <div class="k-balance-figure">{{ available_money|money }}</div>
+        <div class="k-balance-note">Cash plus bank as of the latest posted voucher.</div>
     </div>
-    <div class="page-actions">
-        <a href="{% url 'accounts_home' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Accounts</a>
-        <a href="{{ money_desk_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left-right"></i> Money Desk</a>
+    <div class="k-balance">
+        <div class="k-balance-label">Cash balance</div>
+        <div class="k-balance-figure">{{ cash_balance|money }}</div>
+        <div class="k-balance-note">{{ cash_movements }} cash movements</div>
     </div>
-</div>
-
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="metric-card primary">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Money Available Now</div>
-                    <div class="metric-value">{{ available_money|money }}</div>
-                    <div class="metric-meta">Cash plus bank as of the latest posted voucher.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-wallet2"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="metric-card success">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Cash Balance</div>
-                    <div class="metric-value">{{ cash_balance|money }}</div>
-                    <div class="metric-meta">{{ cash_movements }} cash movements posted.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-cash"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="metric-card info">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Bank Balance</div>
-                    <div class="metric-value">{{ bank_balance|money }}</div>
-                    <div class="metric-meta">{{ bank_movements }} bank movements posted.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-bank"></i></span>
-            </div>
-        </div>
+    <div class="k-balance">
+        <div class="k-balance-label">Bank balance</div>
+        <div class="k-balance-figure">{{ bank_balance|money }}</div>
+        <div class="k-balance-note">{{ bank_movements }} bank movements</div>
     </div>
 </div>
 
-<div class="money-explainer mb-4">
-    <div class="fw-semibold mb-2">How to read this page</div>
-    <div class="small text-muted">A green <strong>Money In</strong> amount means cash or bank increased. A red <strong>Money Out</strong> amount means money left cash or bank. <strong>Available Money After Entry</strong> shows what the dashboard total became right after that voucher line was posted.</div>
-</div>
-
-<div class="page-card p-0 overflow-hidden">
-    <div class="section-heading p-4 border-bottom mb-0">
-        <div class="section-heading-copy">
-            <span class="section-title-icon section-icon-slate"><i class="bi bi-journal-richtext"></i></span>
-            <div>
-                <h2 class="section-title">Cash and Bank Movement Log</h2>
-                <p class="section-copy">Showing the most recent {{ movement_rows|length }} of {{ movement_count }} posted cash and bank movements.</p>
-            </div>
-        </div>
+<section class="k-section" aria-labelledby="movement-log-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="movement-log-title">Cash and bank movements <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Cash and bank movements" aria-describedby="tipMoves" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipMoves" role="tooltip" hidden>A green <strong>Money in</strong> amount means cash or bank increased. A red <strong>Money out</strong> amount means money left cash or bank. <strong>Available money after entry</strong> shows what the dashboard total became right after that voucher line was posted.</span></span></h2>
+        <span class="k-section-note">{{ movement_count }} posted, newest first</span>
     </div>
+    <span id="movements"></span>
     <div class="table-responsive">
-        <table class="table align-middle mb-0">
-            <thead class="table-light">
+        <table class="k-table k-ledger--stack b-bahi">
+            <thead>
                 <tr>
-                    <th class="ps-4">Date</th>
-                    <th>Source</th>
-                    <th>Voucher</th>
-                    <th>Narration</th>
-                    <th class="text-end">Money In</th>
-                    <th class="text-end">Money Out</th>
-                    <th class="text-end">Source Balance After</th>
-                    <th class="text-end pe-4">Available Money After Entry</th>
+                    <th scope="col" data-k="meta">Date</th>
+                    <th scope="col" data-k="what">Voucher</th>
+                    <th scope="col" data-k="more">Narration</th>
+                    <th scope="col" class="k-num" data-k="amount">Money in</th>
+                    <th scope="col" class="k-num" data-k="amount">Money out</th>
+                    <th scope="col" class="k-num" data-k="more">Source balance after</th>
+                    <th scope="col" class="k-num" data-k="balance">Available money after entry</th>
                 </tr>
             </thead>
             <tbody>
                 {% for row in movement_rows %}
                 <tr>
-                    <td class="ps-4">{{ row.date }}</td>
-                    <td>
-                        <span class="movement-source {% if row.source == 'Cash' %}cash{% else %}bank{% endif %}">
-                            <i class="bi {% if row.source == 'Cash' %}bi-cash{% else %}bi-bank{% endif %}"></i>
-                            {{ row.source }}
-                        </span>
-                    </td>
-                    <td>#{{ row.voucher.id }} | {{ row.voucher.get_voucher_type_display }}</td>
-                    <td>{{ row.narration }}</td>
-                    <td class="text-end">{% if row.money_in > 0 %}<span class="movement-figure in">{{ row.money_in|money }}</span>{% else %}-{% endif %}</td>
-                    <td class="text-end">{% if row.money_out > 0 %}<span class="movement-figure out">{{ row.money_out|money }}</span>{% else %}-{% endif %}</td>
-                    <td class="text-end">{{ row.source_balance|money }}</td>
-                    <td class="text-end pe-4">{{ row.available_money_after|money }}</td>
+                    <td data-label="Date">{{ row.date }}</td>
+                    <td data-label="Voucher">#{{ row.voucher.id }} &middot; {{ row.voucher.get_voucher_type_display }}<span class="b-sub"><i class="bi {% if row.source == 'Cash' %}bi-cash{% else %}bi-bank{% endif %}" aria-hidden="true"></i> {{ row.source }}</span></td>
+                    <td data-label="Narration">{{ row.narration }}</td>
+                    <td class="k-num k-in" data-label="Money in">{% if row.money_in > 0 %}{{ row.money_in|money }}{% endif %}</td>
+                    <td class="k-num k-out" data-label="Money out">{% if row.money_out > 0 %}{{ row.money_out|money }}{% endif %}</td>
+                    <td class="k-num" data-label="Source balance after">{{ row.source_balance|money }}</td>
+                    <td class="k-num b-bal" data-label="Available after">{{ row.available_money_after|money }}</td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="8" class="text-center text-muted py-5">No cash or bank entries have been posted yet.</td>
+                    <td colspan="7" class="k-empty"><p class="k-empty-title">No cash or bank entries have been posted yet.</p><p>Sales, purchases, payments and funds recorded at the money desk are listed here as they move cash or bank.</p></td>
                 </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-</div>
+    {% include "accounts/_pagination.html" with page_obj=movement_rows anchor="movements" %}
+</section>
 {% endblock %}

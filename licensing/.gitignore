@@ -1,0 +1,2 @@
+# The signing key mints licences. It must never be committed or shipped in the installer.
+private_key.pem

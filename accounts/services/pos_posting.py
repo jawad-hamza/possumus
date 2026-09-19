@@ -11,15 +11,14 @@ from django.contrib.contenttypes.models import ContentType
 from django.db import transaction
 
 from accounts.models import Account, PartyLedgerEntry, Voucher, VoucherLine
+from accounts.services.books_lock import assert_books_open, normalize_voucher_date
 from accounts.services.cash_bank import resolve_money_account
-from pos.models import PurchaseItem, SaleItem
+from accounts.services.chart_of_accounts import get_core_account
+from pos.models import PurchaseItem, Sale, SaleItem
 
 
 def _acc(title: str) -> Account:
-    try:
-        return Account.objects.get(title=title, is_active=True)
-    except Account.DoesNotExist as exc:
-        raise ValueError(f"Required account not found or inactive: {title}") from exc
+    return get_core_account(title)
 
 
 def _to_decimal(value) -> Decimal:
@@ -37,7 +36,10 @@ def _money_label(payment_method: str, bank_account=None) -> str:
     return "Bank"
 
 
-def _sync_voucher(*, voucher_type: str, ref_model: str, ref_id: int, narration: str, date) -> Voucher:
+def _sync_voucher(*, voucher_type: str, ref_model: str, ref_id: int, narration: str, date, actor=None) -> Voucher:
+    date = normalize_voucher_date(date)
+    # Checked up front so a locked period is refused before get_or_create inserts anything.
+    assert_books_open(date, action=f"post {ref_model} #{ref_id}")
     voucher, created = Voucher.objects.get_or_create(
         voucher_type=voucher_type,
         ref_model=ref_model,
@@ -45,10 +47,12 @@ def _sync_voucher(*, voucher_type: str, ref_model: str, ref_id: int, narration: 
         defaults={
             "narration": narration,
             "date": date,
+            "created_by": actor,
         },
     )
 
     if not created:
+        # Saving first lets the books-lock guard refuse before any line is removed.
         voucher.narration = narration
         voucher.date = date
         voucher.save(update_fields=["narration", "date"])
@@ -56,6 +60,12 @@ def _sync_voucher(*, voucher_type: str, ref_model: str, ref_id: int, narration: 
         voucher.party_entries.all().delete()
 
     return voucher
+
+
+def _document_actor(model, pk, field):
+    """The user recorded on the source document, used when the caller passed no actor."""
+    row = model.objects.filter(pk=pk).select_related(field).first()
+    return getattr(row, field, None) if row else None
 
 
 def _sale_cost_total(sale_id: int) -> Decimal:
@@ -73,6 +83,12 @@ def _purchase_inventory_total(purchase_id: int) -> Decimal:
 
 
 @transaction.atomic
+def _sale_number(sale_id):
+    """The invoice number people see on the receipt, so the ledger reads the same as the paper."""
+    sale = Sale.objects.filter(pk=sale_id).only("id", "invoice_number").first()
+    return sale.display_number if sale is not None else f"#{sale_id}"
+
+
 def post_sale_from_pos(
     *,
     sale_id: int,
@@ -83,6 +99,8 @@ def post_sale_from_pos(
     bank_account=None,
     sale_date=None,
     tax_amount=0,
+    actor=None,
+    allow_zero_total=False,
 ):
     assert sale_id is not None, "POS sale_id is required"
 
@@ -90,7 +108,7 @@ def post_sale_from_pos(
     paid = _to_decimal(paid_amount or 0)
     tax = _to_decimal(tax_amount or 0)
 
-    if total <= 0:
+    if total < 0 or (total == 0 and not allow_zero_total):
         raise ValueError("Sale total must be greater than zero")
     if paid < 0:
         raise ValueError("Paid amount cannot be negative")
@@ -112,8 +130,9 @@ def post_sale_from_pos(
         voucher_type=Voucher.SALE,
         ref_model="Sale",
         ref_id=sale_id,
-        narration=f"Sale #{sale_id} via {_money_label(payment_method, bank_account)}",
+        narration=f"Sale {_sale_number(sale_id)} via {_money_label(payment_method, bank_account)}",
         date=sale_date,
+        actor=actor or _document_actor(Sale, sale_id, "sold_by"),
     )
 
     if paid > 0:
@@ -136,11 +155,13 @@ def post_sale_from_pos(
             debit=credit,
         )
 
-    VoucherLine.objects.create(
-        voucher=voucher,
-        account=_acc("Sales"),
-        credit=net_sales,
-    )
+    # A giveaway (total of zero) earns nothing; only the cost of the goods leaves the books.
+    if net_sales > 0:
+        VoucherLine.objects.create(
+            voucher=voucher,
+            account=_acc("Sales"),
+            credit=net_sales,
+        )
 
     if tax > 0:
         VoucherLine.objects.create(
@@ -175,6 +196,7 @@ def post_purchase_from_pos(
     payment_method: str,
     bank_account=None,
     purchase_date=None,
+    actor=None,
 ):
     assert purchase_id is not None, "POS purchase_id is required"
 
@@ -200,6 +222,7 @@ def post_purchase_from_pos(
         ref_id=purchase_id,
         narration=f"Purchase #{purchase_id} via {_money_label(payment_method, bank_account)}",
         date=purchase_date,
+        actor=actor,
     )
 
     VoucherLine.objects.create(

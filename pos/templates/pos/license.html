@@ -1,0 +1,41 @@
+{% extends "pos/base.html" %}
+{% load static %}
+{% block title %}Licence{% endblock %}
+{% block page_title %}Licence{% endblock %}
+{% block page_help %}Activate {{ brand_name }} with the key you received.{% endblock %}
+{% block body_class %}k-lic-page{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/settings.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="{% url 'billing_page' %}" class="btn btn-outline-secondary">{% if billing_is_desktop %}Trial and Licence Details{% else %}Plans and Billing Details{% endif %}</a>{% endblock %}
+
+{% block content %}
+<div class="lic">
+    <p class="set-pane-note"><span class="status-chip {{ billing_status_tone }}">{{ billing_status_label }}</span></p>
+
+    {% if messages %}
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }}" role="alert">
+        {{ message }}
+        {% if typed_license_key and 'danger' in message.tags %}<div class="mt-1" data-k-keep>Nothing has changed. The key you pasted is still in the box below so you can correct it.</div>{% endif %}
+    </div>
+    {% endfor %}
+    {% endif %}
+
+    {% if billing_clock_rolled_back %}
+    <div class="alert alert-warning">
+        <div class="alert-heading">This computer's date and time look wrong</div>
+        Set the correct date and time in Windows, then reload this page.
+    </div>
+    {% elif workspace_locked %}
+    <div class="alert alert-warning">
+        <div class="alert-heading">The free trial has ended</div>
+        Your data is safe and nothing has been deleted. Activate below and you go straight back to work.
+    </div>
+    {% elif billing_onboarding and billing_onboarding.trial_is_active and not billing_license %}
+    <div class="alert alert-info">
+        {{ billing_trial_days_remaining }} day{{ billing_trial_days_remaining|pluralize }} left in the free trial. You can activate now or any time before it ends.
+    </div>
+    {% endif %}
+
+    {% include "pos/partials/_license_activation.html" %}
+</div>
+{% endblock %}

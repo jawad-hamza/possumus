@@ -1,25 +1,30 @@
-﻿<tr class="purchase-line-row">
-    <td>
+<tr class="purchase-line-row{% if form.errors %} has-error{% endif %}">
+    <td class="st-line-product" data-label="Product">
         {{ form.id }}
         <div class="d-none">{{ form.DELETE }}</div>
         {{ form.product }}
-        {% if form.product.errors %}<div class="text-danger small mt-1">{{ form.product.errors|join:', ' }}</div>{% endif %}
+        {% if form.product.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.product.errors|join:', ' }}</div>{% endif %}
     </td>
-    <td>
-        {{ form.quantity }}
-        {% if form.quantity.errors %}<div class="text-danger small mt-1">{{ form.quantity.errors|join:', ' }}</div>{% endif %}
+    <td data-label="Qty / weight">
+        <div class="input-group">
+            {{ form.quantity }}
+            <span class="input-group-text" data-line-unit>{{ form.instance.product.unit|default:"qty" }}</span>
+        </div>
+        {% if form.quantity.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.quantity.errors|join:', ' }}</div>{% endif %}
     </td>
-    <td>
+    <td data-label="Unit cost">
         {{ form.cost_price }}
-        {% if form.cost_price.errors %}<div class="text-danger small mt-1">{{ form.cost_price.errors|join:', ' }}</div>{% endif %}
+        {% if form.cost_price.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.cost_price.errors|join:', ' }}</div>{% endif %}
     </td>
-    <td>
+    <td data-label="Sale price">
         {{ form.sale_price }}
-        {% if form.sale_price.errors %}<div class="text-danger small mt-1">{{ form.sale_price.errors|join:', ' }}</div>{% endif %}
+        <div class="form-text d-none" data-line-price-hint></div>
+        {% if form.sale_price.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.sale_price.errors|join:', ' }}</div>{% endif %}
     </td>
-    <td class="text-end">
-        <button type="button" class="btn btn-outline-danger btn-sm" data-remove-line>
-            <i class="bi bi-x-circle"></i> Remove
+    <td class="k-num text-end st-line-amount" data-label="Amount" data-line-amount></td>
+    <td class="text-end st-line-x">
+        <button type="button" class="k-icon-btn st-line-remove" data-remove-line data-tip="Remove this line" aria-label="Remove this line">
+            <i class="bi bi-x-lg" aria-hidden="true"></i><span class="d-md-none"> Remove</span>
         </button>
     </td>
 </tr>

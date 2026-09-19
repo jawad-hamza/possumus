@@ -1,113 +1,41 @@
 {% extends "pos/base.html" %}
+{% load static %}
 {% block title %}Parties{% endblock %}
+{% block page_title %}Parties{% endblock %}
+{% block page_help %}Customers and suppliers used by sales, purchases and statements. Each one has a ledger leaf with its running balance.{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="{% url 'customer_add' %}" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add customer</a><a href="{% url 'supplier_add' %}" class="btn btn-outline-secondary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add supplier</a><a href="{% url 'party_statement_page' %}" class="btn btn-outline-secondary">Combined statement</a>{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon"><i class="bi bi-people"></i></span>
-        <div>
-            <h1 class="page-title">Parties</h1>
-            <p class="page-subtitle">Manage customer and supplier masters used by sales, purchases, and statements.</p>
+<div class="b-grid b-grid--even">
+    <section class="k-section" aria-labelledby="parties-customers-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="parties-customers-title">Customers {% include "pos/partials/_help_tip.html" with tip_id="tipPartiesCustomers" tip_name="Customers" tip_text="Buyers for cash and credit sales." %}</h2>
+            <span class="k-badge">{{ total_customers }}</span>
+            <div class="k-actions"><a href="{% url 'customer_list' %}" class="btn btn-sm btn-outline-secondary">View all</a></div>
         </div>
-    </div>
-    <div class="page-actions">
-        <a href="{% url 'pos_screen' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to POS</a>
-    </div>
-</div>
+        <ul class="b-links" aria-label="Recently added customers">
+            {% for customer in recent_customers %}
+            <li><a href="{% url 'customer_detail' customer.id %}"><strong>{{ customer.name }}</strong><span class="b-links-aside">{{ customer.phone|default:"No phone" }}</span></a></li>
+            {% empty %}
+            <li class="k-empty"><p class="k-empty-title">No customers added yet.</p><p>Add a customer to sell on credit and keep their balance here.</p><a href="{% url 'customer_add' %}" class="btn btn-primary">Add customer</a></li>
+            {% endfor %}
+        </ul>
+    </section>
 
-<div class="row g-4 mb-4">
-    <div class="col-md-6">
-        <div class="metric-card primary">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Customers</div>
-                    <div class="metric-value">{{ total_customers }}</div>
-                    <div class="metric-meta">Registered buyers for cash and credit sales.</div>
-                    <div class="page-actions mt-3">
-                        <a href="{% url 'customer_list' %}" class="btn btn-dark">View Customers</a>
-                        <a href="{% url 'customer_add' %}" class="btn btn-outline-primary">Add Customer</a>
-                    </div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-people"></i></span>
-            </div>
+    <section class="k-section" aria-labelledby="parties-suppliers-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="parties-suppliers-title">Suppliers {% include "pos/partials/_help_tip.html" with tip_id="tipPartiesSuppliers" tip_name="Suppliers" tip_text="Vendors behind purchases and payables." %}</h2>
+            <span class="k-badge">{{ total_suppliers }}</span>
+            <div class="k-actions"><a href="{% url 'supplier_list' %}" class="btn btn-sm btn-outline-secondary">View all</a></div>
         </div>
-    </div>
-    <div class="col-md-6">
-        <div class="metric-card success">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Suppliers</div>
-                    <div class="metric-value">{{ total_suppliers }}</div>
-                    <div class="metric-meta">Vendors linked to purchases and payable tracking.</div>
-                    <div class="page-actions mt-3">
-                        <a href="{% url 'supplier_list' %}" class="btn btn-dark">View Suppliers</a>
-                        <a href="{% url 'supplier_add' %}" class="btn btn-outline-primary">Add Supplier</a>
-                    </div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-building"></i></span>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="row g-4">
-    <div class="col-lg-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon"><i class="bi bi-person-lines-fill"></i></span>
-                    <div>
-                        <h2 class="section-title">Recent Customers</h2>
-                        <p class="section-copy">Quick access to recently added buyers.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="d-grid gap-2">
-                {% for customer in recent_customers %}
-                <a href="{% url 'customer_detail' customer.id %}" class="list-link-card d-flex justify-content-between align-items-center gap-3">
-                    <div class="d-flex align-items-center gap-3">
-                        <span class="list-link-icon"><i class="bi bi-person"></i></span>
-                        <div>
-                            <div class="fw-semibold">{{ customer.name }}</div>
-                            <div class="small text-muted">{{ customer.phone|default:"No phone" }}</div>
-                        </div>
-                    </div>
-                    <i class="bi bi-arrow-right text-muted"></i>
-                </a>
-                {% empty %}
-                <div class="text-muted">No customers added yet.</div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-    <div class="col-lg-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-success"><i class="bi bi-building-check"></i></span>
-                    <div>
-                        <h2 class="section-title">Recent Suppliers</h2>
-                        <p class="section-copy">Quick access to recently added vendors.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="d-grid gap-2">
-                {% for supplier in recent_suppliers %}
-                <a href="{% url 'supplier_detail' supplier.id %}" class="list-link-card d-flex justify-content-between align-items-center gap-3">
-                    <div class="d-flex align-items-center gap-3">
-                        <span class="list-link-icon"><i class="bi bi-building"></i></span>
-                        <div>
-                            <div class="fw-semibold">{{ supplier.name }}</div>
-                            <div class="small text-muted">{{ supplier.phone|default:"No phone" }}</div>
-                        </div>
-                    </div>
-                    <i class="bi bi-arrow-right text-muted"></i>
-                </a>
-                {% empty %}
-                <div class="text-muted">No suppliers added yet.</div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
+        <ul class="b-links" aria-label="Recently added suppliers">
+            {% for supplier in recent_suppliers %}
+            <li><a href="{% url 'supplier_detail' supplier.id %}"><strong>{{ supplier.name }}</strong><span class="b-links-aside">{{ supplier.phone|default:"No phone" }}</span></a></li>
+            {% empty %}
+            <li class="k-empty"><p class="k-empty-title">No suppliers added yet.</p><p>Add a supplier to record purchases on credit and track what you owe.</p><a href="{% url 'supplier_add' %}" class="btn btn-primary">Add supplier</a></li>
+            {% endfor %}
+        </ul>
+    </section>
 </div>
 {% endblock %}

@@ -1,0 +1,25 @@
+{% comment %}Needs page_obj and page_querystring (the other GET parameters, already url-encoded).{% endcomment %}
+{% if page_obj.paginator.num_pages > 1 %}
+<nav class="rp-pages report-pagination d-print-none" aria-label="Pages">
+    <div class="rp-pages-count text-muted small">Showing {{ page_obj.start_index }}-{{ page_obj.end_index }} of {{ page_obj.paginator.count }}</div>
+    <ul class="pagination mb-0">
+        {% if page_obj.has_previous %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.previous_page_number }}{% if page_querystring %}&{{ page_querystring }}{% endif %}" rel="prev">Prev</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">Prev</span></li>
+        {% endif %}
+        {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <li class="page-item active" aria-current="page"><span class="page-link">{{ num }}</span></li>
+            {% elif num > page_obj.number|add:"-3" and num < page_obj.number|add:"3" %}
+            <li class="page-item"><a class="page-link" href="?page={{ num }}{% if page_querystring %}&{{ page_querystring }}{% endif %}">{{ num }}</a></li>
+            {% endif %}
+        {% endfor %}
+        {% if page_obj.has_next %}
+        <li class="page-item"><a class="page-link" href="?page={{ page_obj.next_page_number }}{% if page_querystring %}&{{ page_querystring }}{% endif %}" rel="next">Next</a></li>
+        {% else %}
+        <li class="page-item disabled"><span class="page-link">Next</span></li>
+        {% endif %}
+    </ul>
+</nav>
+{% endif %}

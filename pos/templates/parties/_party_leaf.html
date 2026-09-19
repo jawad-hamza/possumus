@@ -1,0 +1,91 @@
+{% comment %}
+One party's ledger page, shared by the customer and supplier pages.
+Needs: party, role ("customer" or "supplier"), badge, bank_accounts, total_transactions,
+turnover, turnover_label, returned (optional), settle_title, settle_button, bank_help.
+{% endcomment %}
+{% load currency_tags %}
+<section class="k-section b-leaf" aria-label="{{ party.name }}">
+    <div>
+        <h2 class="b-leaf-name">{{ party.name }}{% if not party.is_active %} <span class="k-badge">Inactive</span>{% endif %}</h2>
+        <ul class="b-leaf-meta">
+            <li><i class="bi bi-telephone" aria-hidden="true"></i><span class="visually-hidden">Phone </span>{{ party.phone|default:"-" }}</li>
+            {% if party.email %}<li><i class="bi bi-envelope" aria-hidden="true"></i><span class="visually-hidden">Email </span>{{ party.email }}</li>{% endif %}
+            {% if party.address %}<li><i class="bi bi-geo-alt" aria-hidden="true"></i><span class="visually-hidden">Address </span>{{ party.address }}</li>{% endif %}
+        </ul>
+        <ul class="b-leaf-facts">
+            <li><strong>{{ total_transactions }}</strong> {% if role == 'customer' %}invoice{{ total_transactions|pluralize }}{% else %}purchase{{ total_transactions|pluralize }}{% endif %}</li>
+            <li>{{ turnover_label }} <strong>{{ turnover|money }}</strong>{% if returned %} after {{ returned|money }} returned{% endif %}</li>
+            <li>Since <strong>{{ party.created_at|date:"d M Y" }}</strong></li>
+        </ul>
+    </div>
+    <div class="b-leaf-balance" aria-live="polite">
+        <div class="b-leaf-label">Balance</div>
+        <div class="b-leaf-figure {% if badge.balance_type == 'clear' %}b-state--none{% elif badge.balance_type == 'payable' %}b-state--out{% elif badge.balance_type == 'advance' and role == 'customer' %}b-state--out{% else %}b-state--due{% endif %}" id="closing_balance">{{ badge.amount|money }}</div>
+        <div class="b-leaf-words"><span class="k-badge {% if badge.balance_type == 'clear' %}{% elif badge.balance_type == 'payable' %}k-badge--red{% elif badge.balance_type == 'advance' and role == 'customer' %}k-badge--red{% else %}k-badge--amber{% endif %}" id="balance_badge">{% if badge.balance_type == 'clear' %}Settled{% elif badge.balance_type == 'receivable' %}Owes you{% elif badge.balance_type == 'payable' %}You owe them{% elif role == 'customer' %}Paid in advance, you owe them{% else %}You paid in advance, they owe you{% endif %}</span></div>
+    </div>
+</section>
+
+<div class="b-grid">
+    <section class="k-section" aria-labelledby="leaf-ledger-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="leaf-ledger-title">Ledger {% include "pos/partials/_help_tip.html" with tip_id="tipLeafLedger" tip_name="Ledger" tip_text="Every credit sale or purchase, payment and opening balance for this party, newest first. Dr means they owe you; Cr means you owe them." %}</h2>
+            <form class="b-range b-no-print" onsubmit="loadStatement(); return false;">
+                <div>
+                    <label class="form-label" for="from_date">From</label>
+                    <input type="date" id="from_date" class="form-control form-control-sm">
+                </div>
+                <div>
+                    <label class="form-label" for="to_date">To</label>
+                    <input type="date" id="to_date" class="form-control form-control-sm">
+                </div>
+                <button type="submit" class="btn btn-sm btn-outline-secondary">Load</button>
+            </form>
+        </div>
+        <div class="table-responsive">
+            <table class="k-table k-ledger--stack b-bahi">
+                <thead>
+                    <tr><th scope="col" data-k="meta">Date</th><th scope="col" data-k="what">Entry</th><th scope="col" class="k-num" data-k="amount">Debit</th><th scope="col" class="k-num" data-k="amount">Credit</th><th scope="col" class="k-num" data-k="balance">Balance</th></tr>
+                </thead>
+                <tbody id="ledger" aria-busy="true"><tr><td colspan="5" data-k="note"><div class="k-loading">Loading the ledger</div></td></tr></tbody>
+                <tfoot id="ledger_total"></tfoot>
+            </table>
+        </div>
+        <div class="b-pager" id="ledger_pager" hidden></div>
+    </section>
+
+    <aside class="k-side b-side-sticky b-no-print" id="settle" aria-labelledby="settle-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="settle-title">{{ settle_title }} <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About {{ settle_title }}" aria-describedby="tipSettle" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipSettle" role="tooltip" hidden>{% if role == 'customer' %}Money received from this customer. It lowers what they owe and goes into cash or the bank you choose.{% else %}Money paid to this supplier. It lowers what you owe and leaves cash or the bank you choose.{% endif %} Press F2 to jump to the amount.</span></span></h2>
+        </div>
+        <form id="settle-form" onsubmit="submitSettlement(); return false;" novalidate>
+            <div>
+                <label class="form-label" for="amount">Amount ({{ currency_symbol }})</label>
+                <input class="form-control form-control-lg k-num" id="amount" type="number" min="0" step="0.01" inputmode="decimal" placeholder="0.00" autocomplete="off" data-k-key="F2" data-k-key-label="{{ settle_title }}">
+            </div>
+            <div>
+                <label class="form-label" for="method">Paid by</label>
+                <select class="form-select" id="method" onchange="toggleBankLedger()">
+                    <option value="cash">Cash</option>
+                    <option value="bank">Bank</option>
+                </select>
+            </div>
+            <div id="bank-ledger-wrap" class="d-none">
+                <label class="form-label" for="bank_account_id">Bank account {% include "pos/partials/_help_tip.html" with tip_id="tipSettleBank" tip_name="Bank account" tip_text=bank_help %}</label>
+                <select class="form-select" id="bank_account_id">
+                    <option value="">Choose a bank account</option>
+                    {% for bank in bank_accounts %}
+                    <option value="{{ bank.id }}">{{ bank.display_name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="k-error" id="settle-error" role="alert" hidden></div>
+            <button type="submit" class="btn btn-primary w-100" id="settle-submit">{{ settle_button }}</button>
+        </form>
+        {% if nav_access.accounts %}
+        <ul class="b-links">
+            <li><a href="{% url 'party_opening_balance' role party.id %}?next={{ request.path|urlencode }}" data-tip="What was owed before this book was started."><strong>Opening balance</strong><i class="bi bi-chevron-right b-links-aside" aria-hidden="true"></i></a></li>
+            <li><a href="{% url 'party_statement' role party.id %}" data-tip="With narration, date shortcuts, CSV and A4 print."><strong>Printable statement</strong><i class="bi bi-chevron-right b-links-aside" aria-hidden="true"></i></a></li>
+        </ul>
+        {% endif %}
+    </aside>
+</div>

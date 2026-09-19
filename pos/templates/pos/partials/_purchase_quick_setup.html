@@ -1,98 +1,70 @@
-<div class="page-card p-4 p-lg-5 mb-4">
-    <div class="d-flex flex-wrap justify-content-between align-items-start gap-3 mb-4">
-        <div>
-            <h4 class="mb-1">Quick Setup</h4>
-            <p class="text-muted mb-0">Create missing supplier, brand, category, or product here without leaving the purchase screen.</p>
-        </div>
-        <span class="status-chip clear">No page switching needed</span>
+<aside class="k-side" id="quickSetup" aria-labelledby="quickSetupTitle" hidden>
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="quickSetupTitle">Quick setup {% include "pos/partials/_help_tip.html" with tip_id="tipQuickSetup" tip_name="Quick setup" tip_text="Create a missing supplier, brand, category, or product here without leaving the purchase. What you save appears in the purchase straight away." %}</h2>
+        <button type="button" class="btn-close" data-quick-close aria-label="Close quick setup"></button>
     </div>
 
-    <div class="row g-3 align-items-start">
-        <div class="col-lg-4">
-            <div class="border rounded-4 p-3 bg-light h-100">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div>
-                        <h6 class="mb-1">Supplier</h6>
-                        <p class="text-muted small mb-0">Use this when some amount will stay unpaid.</p>
-                    </div>
-                    <span class="badge text-bg-light">Party</span>
-                </div>
-                <form id="quickSupplierForm" class="quick-create-form" data-kind="supplier" action="{{ quick_create_supplier_url }}" method="post" novalidate>
-                    {% csrf_token %}
-                    <div class="row g-2">
-                        <div class="col-12">{% include "pos/partials/_field.html" with field=quick_supplier_form.name %}</div>
-                        <div class="col-md-6">{% include "pos/partials/_field.html" with field=quick_supplier_form.phone %}</div>
-                        <div class="col-md-6">{% include "pos/partials/_field.html" with field=quick_supplier_form.email %}</div>
-                        <div class="col-12">{% include "pos/partials/_field.html" with field=quick_supplier_form.address %}</div>
-                    </div>
-                    <div class="small mt-2 d-none" data-form-feedback></div>
-                    <button type="submit" class="btn btn-outline-dark mt-3">Save Supplier</button>
-                </form>
+    <details class="st-quick" open>
+        <summary>Product <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+        <p class="st-quick-note">Create the catalog item now. Cost and received quantity still come from the purchase lines.</p>
+        <form id="quickProductForm" class="quick-create-form" data-kind="product" action="{{ quick_create_product_url }}" method="post" novalidate>
+            {% csrf_token %}
+            <div class="k-form-grid">
+                <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=quick_product_form.name %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.sku %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.barcode %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.unit %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.price %}</div>
+                {% if quick_product_form.markup_percent %}<div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.markup_percent %}</div>{% endif %}
+                {% if quick_product_form.markup_amount %}<div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.markup_amount %}</div>{% endif %}
+                <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.minimum_margin_percent %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.low_stock_threshold %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.brand %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.category %}</div>
+                <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=quick_product_form.supplier %}</div>
+                <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=quick_product_form.location %}</div>
+                {% if quick_product_form.expiry_date %}<div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=quick_product_form.expiry_date %}</div>{% endif %}
             </div>
-        </div>
-        <div class="col-lg-4 d-flex flex-column gap-3">
-            <div class="border rounded-4 p-3 bg-light">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div>
-                        <h6 class="mb-1">Brand</h6>
-                        <p class="text-muted small mb-0">Keep product labels organized for search and reporting.</p>
-                    </div>
-                    <span class="badge text-bg-light">Catalog</span>
-                </div>
-                <form id="quickBrandForm" class="quick-create-form" data-kind="brand" action="{{ quick_create_brand_url }}" method="post" novalidate>
-                    {% csrf_token %}
-                    {% include "pos/partials/_field.html" with field=quick_brand_form.name %}
-                    <div class="small mt-2 d-none" data-form-feedback></div>
-                    <button type="submit" class="btn btn-outline-dark mt-3">Save Brand</button>
-                </form>
-            </div>
-            <div class="border rounded-4 p-3 bg-light">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div>
-                        <h6 class="mb-1">Category</h6>
-                        <p class="text-muted small mb-0">Use categories so products stay easy to filter later.</p>
-                    </div>
-                    <span class="badge text-bg-light">Catalog</span>
-                </div>
-                <form id="quickCategoryForm" class="quick-create-form" data-kind="category" action="{{ quick_create_category_url }}" method="post" novalidate>
-                    {% csrf_token %}
-                    {% include "pos/partials/_field.html" with field=quick_category_form.name %}
-                    <div class="small mt-2 d-none" data-form-feedback></div>
-                    <button type="submit" class="btn btn-outline-dark mt-3">Save Category</button>
-                </form>
-            </div>
-        </div>
-        <div class="col-lg-4">
-            <div class="border rounded-4 p-3 bg-light h-100">
-                <div class="d-flex justify-content-between align-items-start mb-2">
-                    <div>
-                        <h6 class="mb-1">Product</h6>
-                        <p class="text-muted small mb-0">Create the catalog item now. Cost and received quantity still come from the purchase lines below.</p>
-                    </div>
-                    <span class="badge text-bg-light">Ready for purchase</span>
-                </div>
-                <form id="quickProductForm" class="quick-create-form" data-kind="product" action="{{ quick_create_product_url }}" method="post" novalidate>
-                    {% csrf_token %}
-                    <div class="row g-2">
-                        <div class="col-md-6">{% include "pos/partials/_field.html" with field=quick_product_form.name %}</div>
-                        <div class="col-md-6">{% include "pos/partials/_field.html" with field=quick_product_form.sku %}</div>
-                        <div class="col-md-6">{% include "pos/partials/_field.html" with field=quick_product_form.barcode %}</div>
-                        <div class="col-md-6">{% include "pos/partials/_field.html" with field=quick_product_form.price %}</div>
-                        <div class="col-md-4">{% include "pos/partials/_field.html" with field=quick_product_form.brand %}</div>
-                        <div class="col-md-4">{% include "pos/partials/_field.html" with field=quick_product_form.category %}</div>
-                        <div class="col-md-4">{% include "pos/partials/_field.html" with field=quick_product_form.supplier %}</div>
-                        <div class="col-md-4">{% include "pos/partials/_field.html" with field=quick_product_form.minimum_margin_percent %}</div>
-                        <div class="col-md-4">{% include "pos/partials/_field.html" with field=quick_product_form.low_stock_threshold %}</div>
-                        <div class="col-md-4">{% include "pos/partials/_field.html" with field=quick_product_form.location %}</div>
-                        <div class="col-md-6">{% include "pos/partials/_field.html" with field=quick_product_form.expiry_date %}</div>
-                    </div>
-                    <div class="small mt-2 d-none" data-form-feedback></div>
-                    <button type="submit" class="btn btn-dark mt-3">Create Product</button>
-                </form>
-            </div>
-        </div>
-    </div>
-</div>
+            <div class="st-feedback d-none" data-form-feedback role="status"></div>
+            <button type="submit" class="btn btn-primary mt-4">Create product</button>
+        </form>
+    </details>
 
+    <details class="st-quick">
+        <summary>Supplier <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+        <p class="st-quick-note">Use this when some amount will stay unpaid.</p>
+        <form id="quickSupplierForm" class="quick-create-form" data-kind="supplier" action="{{ quick_create_supplier_url }}" method="post" novalidate>
+            {% csrf_token %}
+            <div class="k-form-grid">
+                <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=quick_supplier_form.name %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=quick_supplier_form.phone %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=quick_supplier_form.email %}</div>
+                <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=quick_supplier_form.address %}</div>
+            </div>
+            <div class="st-feedback d-none" data-form-feedback role="status"></div>
+            <button type="submit" class="btn btn-outline-secondary mt-4">Save supplier</button>
+        </form>
+    </details>
 
+    <details class="st-quick">
+        <summary>Brand <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+        <p class="st-quick-note">Keep product labels organized for search and reporting.</p>
+        <form id="quickBrandForm" class="quick-create-form" data-kind="brand" action="{{ quick_create_brand_url }}" method="post" novalidate>
+            {% csrf_token %}
+            {% include "pos/partials/_entry_field.html" with field=quick_brand_form.name %}
+            <div class="st-feedback d-none" data-form-feedback role="status"></div>
+            <button type="submit" class="btn btn-outline-secondary mt-4">Save brand</button>
+        </form>
+    </details>
 
+    <details class="st-quick">
+        <summary>Category <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+        <p class="st-quick-note">Use categories so products stay easy to filter later.</p>
+        <form id="quickCategoryForm" class="quick-create-form" data-kind="category" action="{{ quick_create_category_url }}" method="post" novalidate>
+            {% csrf_token %}
+            {% include "pos/partials/_entry_field.html" with field=quick_category_form.name %}
+            <div class="st-feedback d-none" data-form-feedback role="status"></div>
+            <button type="submit" class="btn btn-outline-secondary mt-4">Save category</button>
+        </form>
+    </details>
+</aside>

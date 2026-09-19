@@ -1,0 +1,76 @@
+{% extends "pos/reports/_shell.html" %}
+{% load currency_tags %}
+
+{% block report_body %}
+{% block report_summary %}
+{% if report.cards %}
+<section class="k-section rp-sums" aria-label="Summary">
+    {% for card in report.cards %}
+    <div class="k-balance rp-sum">
+        <div class="k-balance-label">{{ card.label|lower|capfirst }}</div>
+        <div class="k-balance-figure">{% if card.kind == "money" %}{{ card.value|money }}{% else %}{{ card.value }}{% endif %}</div>
+        {% if card.meta %}<div class="k-balance-note">{{ card.meta }}</div>{% endif %}
+    </div>
+    {% endfor %}
+</section>
+{% endif %}
+{% endblock %}
+
+{% block report_before_table %}{% endblock %}
+
+<section class="k-section rp-results" aria-label="Results">
+    <div class="k-ledger-scroll rp-table{% if columns|length > 7 %} rp-wide{% endif %}">
+        <table class="k-table k-ledger--stack report-table" data-rp-labels>
+            <thead>
+                <tr>
+                    {% for column in columns %}
+                    <th scope="col" class="{% if column.is_numeric %}k-num num{% endif %}">{{ column.label }}</th>
+                    {% endfor %}
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in table_rows %}
+                <tr>
+                    {% for cell in row %}
+                    <td class="{% if cell.numeric %}k-num num{% endif %}{% if forloop.first %} rp-lead{% endif %}">{% include "pos/reports/_cell.html" %}</td>
+                    {% endfor %}
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="{{ columns|length }}" class="k-empty">
+                        <p class="k-empty-title">{{ report.empty_message }}</p>
+                        {% block report_empty_help %}
+                        {% if range_mode == "range" %}
+                        <p>Nothing was recorded for these dates and filters. Try a wider range.</p>
+                        <div class="k-actions">
+                            {% for item in quick_ranges %}{% if not item.active %}{% if item.label == "This month" or item.label == "This year" or item.label == "All time" %}<a href="{{ item.url }}" class="btn btn-outline-secondary btn-sm" data-rp-preset="{{ item.label }}">{{ item.label }}</a>{% endif %}{% endif %}{% endfor %}
+                        </div>
+                        {% elif range_mode == "as_of" %}
+                        <p>Nothing was on hand on this date for the chosen filter. Pick another date or category above.</p>
+                        {% endif %}
+                        {% endblock %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            {% if total_cells and table_rows %}
+            <tfoot>
+                <tr>
+                    {% for cell in total_cells %}
+                    <td class="{% if cell.numeric %}k-num num{% endif %}">{% if cell.value is None %}{% else %}{% include "pos/reports/_cell.html" %}{% endif %}</td>
+                    {% endfor %}
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</section>
+{% if total_cells and page_obj.paginator.num_pages > 1 or report.note %}
+<p class="rp-foot-note">
+    {% if total_cells and page_obj.paginator.num_pages > 1 %}Totals cover every row of the report, not only this page.{% endif %}
+    {% if report.note %}{{ report.note }}{% endif %}
+</p>
+{% endif %}
+
+{% include "pos/reports/_pagination.html" %}
+{% endblock %}

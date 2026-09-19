@@ -1,0 +1,17 @@
+{% comment %}Optional opening balance on the add customer / add supplier pages. Needs opening_form and party_word.{% endcomment %}
+{% if opening_form %}
+<section class="k-section" aria-labelledby="party-opening-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="party-opening-title">Opening balance <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Opening balance" aria-describedby="tipPartyOpening" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipPartyOpening" role="tooltip" hidden>Did this {{ party_word }} already owe money, or were they owed money, before you started using the system? Enter it here and it becomes the first line of their statement.<br><br><strong>What saving does:</strong> the amount is posted against Opening Balance Equity and shows in the {{ party_word }}'s balance, the aging report and the balance sheet straight away.<br><strong>If you leave it empty:</strong> the {{ party_word }} starts at zero. You can add or correct the opening balance later from their ledger.</span></span></h2>
+        <span class="k-section-note">Optional</span>
+    </div>
+    {% if opening_form.non_field_errors %}
+    <div class="alert alert-danger">{{ opening_form.non_field_errors }}</div>
+    {% endif %}
+    <div class="k-form-grid">
+        {% include "pos/partials/_field.html" with field=opening_form.amount %}
+        {% include "pos/partials/_field.html" with field=opening_form.direction %}
+        {% include "pos/partials/_field.html" with field=opening_form.date %}
+    </div>
+</section>
+{% endif %}

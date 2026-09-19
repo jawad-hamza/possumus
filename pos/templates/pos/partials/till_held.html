@@ -1,0 +1,15 @@
+{% load currency_tags %}{% for held in held_carts %}
+<div class="t-held-row" data-held="{{ held.id }}">
+    <form method="post" class="t-held-form" data-held-resume>{% csrf_token %}<input type="hidden" name="action" value="resume_cart"><input type="hidden" name="held_id" value="{{ held.id }}">
+        <button class="t-held-btn" data-tip="Resume this held bill">
+            <span class="k-badge k-badge--blue t-held-badge">Held</span>
+            <span class="t-held-label">{{ held.label }}</span>
+            <span class="t-held-meta">{{ held.line_count }} line{{ held.line_count|pluralize }}{% if held.held_at %} &middot; {{ held.held_at|time:"H:i" }}{% endif %}</span>
+            <span class="t-held-total k-num">{{ held.total|money }}</span>
+        </button>
+    </form>
+    <form method="post" class="t-held-form" data-held-discard>{% csrf_token %}<input type="hidden" name="action" value="discard_held"><input type="hidden" name="held_id" value="{{ held.id }}">
+        <button class="t-icon-btn t-held-x" data-tip="Discard this held bill" aria-label="Discard held bill {{ held.label }}"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+    </form>
+</div>
+{% endfor %}

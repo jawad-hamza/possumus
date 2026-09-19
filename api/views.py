@@ -1,16 +1,41 @@
-from datetime import date
-
+from django.db import transaction
 from rest_framework import status
+from rest_framework.authentication import SessionAuthentication
 from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
 from accounts.models import BankAccount
+from accounts.services.audit import record_audit
 from accounts.services.party_statement import get_party_statement, get_unified_party_statement
 from accounts.services.settlements import create_payment, create_receipt
-from api.serializers import PartyStatementSerializer, SettlementCreateSerializer
+from api.serializers import PartyStatementQuerySerializer, PartyStatementSerializer, SettlementCreateSerializer
 from pos.models import Customer, Supplier
-from pos.services.access import ACCESS_MANAGE, ACCESS_VIEW, user_can_access_module
+from pos.services.access import ACCESS_MANAGE, ACCESS_VIEW, user_can_access_module, user_requires_business_setup
+
+try:  # The licence/billing lock helper is newer than this module; fall back to the billing check.
+    from pos.services.access import workspace_is_locked
+except ImportError:  # pragma: no cover - depends on the deployed access module
+    from pos.services.access import workspace_requires_billing as workspace_is_locked
+
+
+# Session cookies only: the API is used by the app's own pages, and Basic auth would
+# hand attackers a password-guessing endpoint that skips the login lockout.
+API_AUTHENTICATION_CLASSES = [SessionAuthentication]
+
+
+class WorkspaceIsOpen(BasePermission):
+    """The same gate the HTML views apply: no API access while setup or billing/licence blocks the workspace."""
+
+    message = "This workspace is locked. Open the app to finish setup or renew access."
+
+    def has_permission(self, request, view):
+        user = request.user
+        if not (user and user.is_authenticated):
+            return False
+        if user_requires_business_setup(user):
+            return False
+        return not workspace_is_locked(user)
 
 
 class HasPartiesViewAccess(BasePermission):
@@ -28,37 +53,47 @@ class HasPartiesManageAccess(BasePermission):
 
 
 class PartyStatementAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasPartiesViewAccess]
+    authentication_classes = API_AUTHENTICATION_CLASSES
+    permission_classes = [IsAuthenticated, WorkspaceIsOpen, HasPartiesViewAccess]
 
     def get(self, request):
-        customer_id = request.query_params.get("customer_id")
-        supplier_id = request.query_params.get("supplier_id")
-        from_date = request.query_params.get("from")
-        to_date = request.query_params.get("to")
+        query = PartyStatementQuerySerializer(data=request.query_params)
+        if not query.is_valid():
+            if "from" in query.errors or "to" in query.errors:
+                return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
+            return Response({"error": "Invalid query parameters.", "details": query.errors}, status=status.HTTP_400_BAD_REQUEST)
+        params = query.validated_data
 
+        customer_id = params.get("customer_id")
+        supplier_id = params.get("supplier_id")
         customer = Customer.objects.filter(id=customer_id).first() if customer_id else None
         supplier = Supplier.objects.filter(id=supplier_id).first() if supplier_id else None
 
         if not customer and not supplier:
             return Response({"error": "customer_id or supplier_id is required"}, status=status.HTTP_400_BAD_REQUEST)
 
-        try:
-            from_date = date.fromisoformat(from_date) if from_date else None
-            to_date = date.fromisoformat(to_date) if to_date else None
-        except ValueError:
-            return Response({"error": "Invalid date format. Use YYYY-MM-DD."}, status=status.HTTP_400_BAD_REQUEST)
-
+        from_date = params.get("from")
+        to_date = params.get("to")
         if customer and supplier:
             data = get_unified_party_statement(customer=customer, supplier=supplier, from_date=from_date, to_date=to_date)
         else:
             data = get_party_statement(party=customer or supplier, from_date=from_date, to_date=to_date)
 
-        serializer = PartyStatementSerializer(data)
-        return Response(serializer.data)
+        payload = dict(PartyStatementSerializer(data).data)
+        limit = params.get("limit")
+        if limit is not None:
+            offset = params.get("offset", 0)
+            rows = payload["rows"]
+            payload["total_rows"] = len(rows)
+            payload["limit"] = limit
+            payload["offset"] = offset
+            payload["rows"] = rows[offset : offset + limit]
+        return Response(payload)
 
 
 class SettlementAPIView(APIView):
-    permission_classes = [IsAuthenticated, HasPartiesManageAccess]
+    authentication_classes = API_AUTHENTICATION_CLASSES
+    permission_classes = [IsAuthenticated, WorkspaceIsOpen, HasPartiesManageAccess]
 
     def post(self, request):
         serializer = SettlementCreateSerializer(data=request.data)
@@ -77,19 +112,36 @@ class SettlementAPIView(APIView):
             if bank_account is None:
                 return Response({"error": "Bank ledger not found"}, status=status.HTTP_404_NOT_FOUND)
 
-        if customer_id:
-            customer = Customer.objects.filter(id=customer_id).first()
-            if customer is None:
-                return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
-            voucher = create_receipt(party=customer, amount=amount, payment_method=payment_method, bank_account=bank_account)
-        else:
-            supplier = Supplier.objects.filter(id=supplier_id).first()
-            if supplier is None:
-                return Response({"error": "Supplier not found"}, status=status.HTTP_404_NOT_FOUND)
-            voucher = create_payment(party=supplier, amount=amount, payment_method=payment_method, bank_account=bank_account)
+        # The money posting and its audit trail succeed or fail together.
+        try:
+            with transaction.atomic():
+                if customer_id:
+                    party = Customer.objects.filter(id=customer_id).first()
+                    if party is None:
+                        return Response({"error": "Customer not found"}, status=status.HTTP_404_NOT_FOUND)
+                    voucher = create_receipt(party=party, amount=amount, payment_method=payment_method, bank_account=bank_account)
+                    action, verb = "settlement_receipt_created", "Receipt from"
+                else:
+                    party = Supplier.objects.filter(id=supplier_id).first()
+                    if party is None:
+                        return Response({"error": "Supplier not found"}, status=status.HTTP_404_NOT_FOUND)
+                    voucher = create_payment(party=party, amount=amount, payment_method=payment_method, bank_account=bank_account)
+                    action, verb = "settlement_payment_created", "Payment to"
 
+                record_audit(
+                    action=action,
+                    description=f"{verb} {party} recorded through the API.",
+                    actor=request.user,
+                    target=voucher,
+                    metadata={
+                        "source": "api",
+                        "party_type": party.__class__.__name__,
+                        "party_id": party.id,
+                        "amount": str(amount),
+                        "payment_method": payment_method,
+                        "bank_account_id": bank_account.id if bank_account else None,
+                    },
+                )
+        except ValueError as exc:
+            return Response({"error": str(exc)}, status=status.HTTP_400_BAD_REQUEST)
         return Response({"voucher_id": voucher.id, "status": "ok"}, status=status.HTTP_201_CREATED)
-
-
-
-

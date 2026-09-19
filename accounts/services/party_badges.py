@@ -1,23 +1,10 @@
 from decimal import Decimal
 
-from django.contrib.contenttypes.models import ContentType
-
-from accounts.models import PartyLedgerEntry
+from accounts.services.party_balance import get_party_balance
 
 
 def _get_raw_balance(party):
-    ct = ContentType.objects.get_for_model(party)
-
-    qs = PartyLedgerEntry.objects.filter(
-        content_type=ct,
-        object_id=party.id,
-    )
-
-    balance = Decimal("0.00")
-    for entry in qs:
-        balance += entry.debit - entry.credit
-
-    return balance
+    return get_party_balance(party)
 
 
 def get_customer_badge(customer):

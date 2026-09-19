@@ -1,0 +1,57 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Restore backup{% endblock %}
+{% block page_title %}Restore backup{% endblock %}
+{% block page_help %}Replace everything in the live workspace with the data saved in this snapshot.{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/settings.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="{% url 'settings_page' %}#backups" class="btn btn-outline-secondary">Cancel</a>{% endblock %}
+
+{% block content %}
+<div class="k-form set-confirm">
+    <section class="k-section">
+        <div class="k-section-head">
+            <h2 class="k-section-title">{{ snapshot.label }}</h2>
+            <span class="k-section-note">{{ snapshot.size_kb }} KB</span>
+        </div>
+        <dl class="set-facts">
+            <div><dt>Saved</dt><dd>{{ snapshot.created_at|date:"d M Y H:i" }}{% if snapshot.created_by %}<span class="set-sub">by {{ snapshot.created_by.get_full_name|default:snapshot.created_by.username }}</span>{% endif %}</dd></div>
+            {% if snapshot.notes %}<div><dt>Notes</dt><dd>{{ snapshot.notes }}</dd></div>{% endif %}
+        </dl>
+    </section>
+
+    <section class="k-section set-danger">
+        <div class="k-section-head">
+            <h2 class="k-section-title">What happens when you restore</h2>
+            <span class="k-badge k-badge--red">Replaces live data</span>
+        </div>
+        <ul class="set-danger-list">
+            <li>Sales, purchases, stock and ledger entries made after this snapshot are removed from the live workspace.</li>
+            <li>A safety backup of the current data is saved automatically first, so this can be undone from the backup list.</li>
+            <li>Other signed-in staff will have to sign in again. Ask them to stop working before you continue.</li>
+        </ul>
+
+        {% if has_usable_password %}
+        <form method="post" action="{% url 'settings_page' %}" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="action" value="restore_backup">
+            <input type="hidden" name="snapshot_id" value="{{ snapshot.id }}">
+            <div class="k-form-field set-tz-form">
+                <label class="form-label" for="confirm_password">Your password<span class="k-tip"><button type="button" class="k-tip-btn" aria-label="Why your password" aria-describedby="tipRestorePw" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipRestorePw" role="tooltip" hidden>Confirms that the account owner, not someone at an unlocked screen, is replacing the data.</span></span></label>
+                <input id="confirm_password" type="password" name="confirm_password" class="form-control{% if password_error %} is-invalid{% endif %}" autocomplete="current-password" autofocus required{% if password_error %} aria-describedby="confirm_password_error"{% endif %}>
+                {% if password_error %}<div class="k-error" id="confirm_password_error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ password_error }}</div>{% endif %}
+            </div>
+            <div class="k-form-actions">
+                <button class="btn btn-danger"><i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>Back Up Current Data and Restore</button>
+                <a href="{% url 'settings_page' %}#backups" class="btn btn-outline-secondary">Cancel</a>
+            </div>
+        </form>
+        {% else %}
+        <div class="alert alert-warning mb-0" role="note">
+            This account signs in with Google and has no password to confirm with.
+            <a href="{% url 'password_change' %}" class="fw-semibold">Add a password</a> first, then come back to restore.
+        </div>
+        {% endif %}
+    </section>
+</div>
+{% endblock %}

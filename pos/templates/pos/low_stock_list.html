@@ -1,58 +1,23 @@
-{% extends "pos/base.html" %}
-{% block title %}Low Stock{% endblock %}
+{% extends "pos/reports/table_report.html" %}
+{% block title %}Low stock{% endblock %}
 
-{% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon warning"><i class="bi bi-exclamation-triangle"></i></span>
-        <div>
-            <h1 class="page-title">Low Stock</h1>
-            <p class="page-subtitle">Products at or below their configured reorder threshold.</p>
-        </div>
-    </div>
-    <div class="page-actions">
-        <button class="btn btn-outline-secondary" onclick="window.print()"><i class="bi bi-printer"></i> Print</button>
-    </div>
-</div>
+{% block report_header_actions %}{% if manage_access.purchases %}<a href="{% url 'purchase_add' %}" class="btn btn-primary" data-k-key="F3" data-k-key-label="Record a purchase"><i class="bi bi-cart-plus" aria-hidden="true"></i> Record a purchase</a>{% endif %}{% endblock %}
 
-<div class="page-card p-0 overflow-hidden">
-    <div class="table-responsive">
-        <table class="table align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th class="ps-4">#</th>
-                    <th>Product</th>
-                    <th>Category</th>
-                    <th class="text-end">Stock</th>
-                    <th class="text-end">Threshold</th>
-                    <th class="pe-4">Location</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for p in products %}
-                <tr>
-                    <td class="ps-4">{{ forloop.counter }}</td>
-                    <td class="fw-semibold">{{ p.name }}</td>
-                    <td>{{ p.category|default:"-" }}</td>
-                    <td class="text-end text-danger fw-semibold">{{ p.stock }}</td>
-                    <td class="text-end">{{ p.low_stock_threshold }}</td>
-                    <td class="pe-4">{{ p.location|default:"-" }}</td>
-                </tr>
-                {% empty %}
-                <tr>
-                    <td colspan="6" class="text-center text-muted py-5">No low-stock products right now.</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
+{% block report_summary %}
+{% if report.cards %}
+<section class="k-section rp-sums" aria-label="Summary">
+    {% for card in report.cards %}
+    <div class="k-balance rp-sum{% if card.value and forloop.first %} k-balance--due{% endif %}">
+        <div class="k-balance-label">{{ card.label|lower|capfirst }}</div>
+        <div class="k-balance-figure">{{ card.value }}</div>
+        {% if card.meta %}<div class="k-balance-note">{{ card.meta }}</div>{% endif %}
     </div>
-</div>
+    {% endfor %}
+</section>
+{% endif %}
+{% endblock %}
 
-<style>
-@media print {
-    button {
-        display: none;
-    }
-}
-</style>
+{% block report_empty_help %}
+<p>Every product is above its reorder level. Set a reorder level on a product to be warned here before it runs out.</p>
+{% if nav_access.products %}<a href="{% url 'product_list' %}" class="btn btn-outline-secondary btn-sm">Open products</a>{% endif %}
 {% endblock %}

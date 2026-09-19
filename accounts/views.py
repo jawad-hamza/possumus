@@ -1,15 +1,20 @@
 from decimal import Decimal
 
 from django.contrib import messages
-from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
+from django.core.paginator import Paginator
 from django.db import transaction
-from django.db.models import F, Q, Sum
+from django.db.models import F, Sum
 from django.db.models.functions import Coalesce
-from django.shortcuts import get_object_or_404, redirect, render
+from django.http import JsonResponse
+from django.shortcuts import redirect, render
 from django.urls import reverse
 from django.utils import timezone
+from django.views.decorators.http import require_POST
 
 from accounts.forms import (
+    BankAccountForm,
+    BooksLockForm,
     CapitalEntryForm,
     ExpenseCategoryForm,
     ExpenseForm,
@@ -18,24 +23,29 @@ from accounts.forms import (
 )
 from accounts.models import (
     Account,
+    BankAccount,
     CapitalEntry,
     Expense,
     ExpenseCategory,
     ExpensePayment,
     MoneyTransfer,
-    PartyLedgerEntry,
     Voucher,
     VoucherLine,
 )
+from accounts.report_views import report_links
 from accounts.services.audit import record_audit
 from accounts.services.balance_sheet import get_balance_sheet
-from accounts.services.cash_bank import bank_account_queryset, total_bank_balance
+from accounts.services.books_lock import get_books_locked_until
+from accounts.services.cash_bank import total_bank_balance
+from accounts.services.cash_flow import money_accounts
 from accounts.services.expense_alerts import expense_initial_for_category, monthly_bill_alerts
 from accounts.services.expense_posting import post_expense
 from accounts.services.money_desk import post_capital_entry, post_expense_payment, post_money_transfer
 from accounts.services.profit_loss import get_profit_and_loss
+from accounts.services.report_utils import natural_balance, opening_sides, to_money
 from accounts.services.trial_balance import get_trial_balance
-from pos.services.access import module_access_required
+from pos.services.access import ACCESS_MANAGE, admin_required, is_admin, module_access_required
+from pos.services.quick_add import quick_add_context
 
 
 ZERO = Decimal("0.00")
@@ -63,51 +73,41 @@ def _ensure_default_expense_categories():
     return categories
 
 
-def _sum_account(title: str):
-    try:
-        acc = Account.objects.get(title=title, is_active=True)
-    except Account.DoesNotExist:
-        return ZERO
-
-    sums = VoucherLine.objects.filter(account=acc).aggregate(
-        debit=Sum("debit"),
-        credit=Sum("credit"),
-    )
-    debit = sums["debit"] or ZERO
-    credit = sums["credit"] or ZERO
-
-    if acc.type in (Account.ASSET, Account.EXPENSE):
-        return debit - credit
-    return credit - debit
-
-
-def _period_label(start, end):
-    if start and end:
-        return f"{start} to {end}"
-    if start:
-        return f"From {start} onward"
-    if end:
-        return f"Up to {end}"
-    return "All recorded transactions"
-
-
 def _account_balance(account: Account):
+    """Same figure the balance sheet shows: opening balance plus every posting."""
     sums = VoucherLine.objects.filter(account=account).aggregate(
         debit=Sum("debit"),
         credit=Sum("credit"),
     )
-    debit = sums["debit"] or ZERO
-    credit = sums["credit"] or ZERO
+    opening_debit, opening_credit = opening_sides(account)
+    return natural_balance(
+        account,
+        to_money(sums["debit"]) + opening_debit,
+        to_money(sums["credit"]) + opening_credit,
+    )
 
-    if account.type in (Account.ASSET, Account.EXPENSE):
-        return debit - credit
-    return credit - debit
+
+def _sum_account(title: str):
+    # An account that was switched off still carries its history.
+    account = Account.objects.filter(title=title).first()
+    return _account_balance(account) if account else ZERO
+
+
+def _paginate(request, object_list, per_page, param="page"):
+    page = Paginator(object_list, per_page).get_page(request.GET.get(param))
+    params = request.GET.copy()
+    params.pop(param, None)
+    page.param = param
+    page.base_query = params.urlencode()
+    return page
 
 
 def _bank_ledger_balances():
     ledgers = []
-    for bank in bank_account_queryset():
+    for bank in BankAccount.objects.select_related("account").order_by("name", "account_number"):
         balance = _account_balance(bank.account) if bank.account_id else ZERO
+        if not bank.is_active and balance == ZERO:
+            continue  # a closed bank only matters while money still sits in it
         ledgers.append(
             {
                 "bank": bank,
@@ -116,12 +116,7 @@ def _bank_ledger_balances():
             }
         )
 
-    try:
-        legacy_bank = Account.objects.get(title="Bank", is_active=True)
-    except Account.DoesNotExist:
-        legacy_balance = ZERO
-    else:
-        legacy_balance = _account_balance(legacy_bank)
+    legacy_balance = _sum_account("Bank")
 
     if legacy_balance != ZERO or not ledgers:
         ledgers.append({"bank": None, "label": "Legacy Bank", "balance": legacy_balance})
@@ -147,13 +142,16 @@ def _money_movement_rows():
     running_balances = {}
 
     lines = (
-        VoucherLine.objects.filter(
-            Q(account__title="Cash") | Q(account__title="Bank") | Q(account__bank_ledger__isnull=False),
-            account__is_active=True,
-        )
+        VoucherLine.objects.filter(account__in=money_accounts())
         .select_related("voucher", "account", "account__bank_ledger")
         .order_by("voucher__date", "voucher__id", "id")
     )
+
+    for account in money_accounts():
+        opening_debit, opening_credit = opening_sides(account)
+        if opening_debit or opening_credit:
+            bank = getattr(account, "bank_ledger", None)
+            running_balances[bank.display_name if bank else account.title] = opening_debit - opening_credit
 
     for line in lines:
         source_title = line.account.bank_ledger.display_name if getattr(line.account, "bank_ledger", None) else line.account.title
@@ -194,6 +192,7 @@ def accounts_home(request):
     net_profit = pl["net_profit"]
     net_worth = bs["total_assets"] - bs["total_liabilities"]
     recent_vouchers = Voucher.objects.all().order_by("-date", "-id")[:10]
+    books_locked_until = get_books_locked_until()
 
     context = {
         "trial_balance": tb,
@@ -214,37 +213,15 @@ def accounts_home(request):
         "recent_vouchers": recent_vouchers,
         "money_desk_url": reverse("money_desk"),
         "money_breakdown_url": reverse("money_breakdown"),
+        "report_links": report_links(),
+        "books_locked_until": books_locked_until,
+        "books_lock_form": BooksLockForm(initial={"books_locked_until": books_locked_until}),
+        "can_lock_books": is_admin(request.user),
+        "books_lock_url": reverse("books_lock_update"),
         "report_cards": [
             {
-                "title": "Internal Check",
-                "summary": "Trial Balance",
-                "description": "Confirms every debit is matched by a credit.",
-                "url": reverse("trial_balance"),
-                "cta": "Open check",
-                "icon": "bi-shield-check",
-                "accent": "primary",
-            },
-            {
-                "title": "Money Earned",
-                "summary": "Profit & Loss",
-                "description": "Shows sales income against business expenses.",
-                "url": reverse("profit_loss"),
-                "cta": "View profit",
-                "icon": "bi-graph-up-arrow",
-                "accent": "success",
-            },
-            {
-                "title": "What You Own vs Owe",
-                "summary": "Balance Sheet",
-                "description": "Summarizes assets, liabilities, and business worth.",
-                "url": reverse("balance_sheet"),
-                "cta": "View position",
-                "icon": "bi-bank",
-                "accent": "info",
-            },
-            {
-                "title": "Money Desk",
-                "summary": "Funding & Transfers",
+                "title": "Money desk",
+                "summary": "Funding and transfers",
                 "description": "Introduce opening cash, move money between cash and bank, and pay old expense bills.",
                 "url": reverse("money_desk"),
                 "cta": "Open money desk",
@@ -266,7 +243,7 @@ def accounts_home(request):
             {"term": "Customers owe you", "detail": "Open credit sales still waiting to be collected.", "icon": "bi-people"},
             {"term": "You owe suppliers", "detail": "Unpaid purchase balances still to be settled.", "icon": "bi-truck"},
             {"term": "Operating bills due", "detail": "Rent, utilities, and other running costs not paid yet.", "icon": "bi-lightning-charge"},
-            {"term": "Tax collected", "detail": "GST already collected from sales and currently sitting in Sales Tax Payable.", "icon": "bi-receipt"},
+            {"term": "Tax collected", "detail": "Sales tax already collected from customers and currently sitting in Sales Tax Payable.", "icon": "bi-receipt"},
             {"term": "Stock value", "detail": "Inventory valued at current cost price, not sale price.", "icon": "bi-box-seam"},
         ],
     }
@@ -279,7 +256,7 @@ def money_breakdown(request):
 
     context = {
         **money,
-        "movement_rows": movement_rows[:50],
+        "movement_rows": _paginate(request, movement_rows, 50),
         "movement_count": len(movement_rows),
         "cash_movements": sum(1 for row in movement_rows if row["source"] == "Cash"),
         "bank_movements": sum(1 for row in movement_rows if row["source"] != "Cash"),
@@ -351,7 +328,7 @@ def expense_list(request):
                 try:
                     with transaction.atomic():
                         payment = expense_payment_form.save()
-                        post_expense_payment(payment.id)
+                        post_expense_payment(payment.id, actor=request.user)
                         record_audit(
                             action="expense_paid",
                             description=f"Expense '{payment.expense.display_title}' paid from {payment.from_account_title}.",
@@ -370,7 +347,7 @@ def expense_list(request):
                 try:
                     with transaction.atomic():
                         expense = expense_form.save()
-                        post_expense(expense.id)
+                        post_expense(expense.id, actor=request.user)
                         record_audit(
                             action="expense_created",
                             description=f"Expense '{expense.display_title}' recorded for {expense.amount}.",
@@ -405,9 +382,9 @@ def expense_list(request):
         "category_form": category_form,
         "expense_form": expense_form,
         "expense_payment_form": expense_payment_form,
-        "expenses": expenses[:25],
-        "open_expenses": open_expenses[:12],
-        "recent_expense_payments": recent_expense_payments[:10],
+        "expenses": _paginate(request, expenses, 25, "page"),
+        "open_expenses": _paginate(request, open_expenses, 12, "open_page"),
+        "recent_expense_payments": _paginate(request, recent_expense_payments, 10, "pay_page"),
         "selected_expense": selected_expense,
         "selected_expense_id": str(selected_expense.id) if selected_expense else "",
         "selected_category": str(selected_category.id) if selected_category else "",
@@ -422,13 +399,14 @@ def expense_list(request):
         "expense_due_soon_count": expense_due_soon_count,
         "month_total": this_month.aggregate(total=Coalesce(Sum("amount"), ZERO))["total"],
         "month_paid": this_month.aggregate(total=Coalesce(Sum("paid_amount"), ZERO))["total"],
-        "outstanding_total": sum((expense.balance_due for expense in expenses), ZERO),
+        "outstanding_total": open_expenses.aggregate(total=Coalesce(Sum(F("amount") - F("paid_amount")), ZERO))["total"],
         "expense_type_count": expense_types.count(),
         "expense_payable_balance": _sum_account("Expense Payable"),
         "open_expense_count": open_expenses.count(),
         "cleared_expense_count": max(expenses.count() - open_expenses.count(), 0),
         "money_desk_url": reverse("money_desk"),
         "money_breakdown_url": reverse("money_breakdown"),
+        **quick_add_context(request, "expense_type", "bank"),
     }
     return render(request, "accounts/expenses.html", context)
 
@@ -454,7 +432,7 @@ def money_desk(request):
                 try:
                     with transaction.atomic():
                         entry = capital_form.save()
-                        post_capital_entry(entry.id)
+                        post_capital_entry(entry.id, actor=request.user)
                         record_audit(
                             action="capital_recorded",
                             description=f"Funds introduced into {entry.to_account_title}.",
@@ -473,7 +451,7 @@ def money_desk(request):
                 try:
                     with transaction.atomic():
                         transfer = transfer_form.save()
-                        post_money_transfer(transfer.id)
+                        post_money_transfer(transfer.id, actor=request.user)
                         record_audit(
                             action="money_transfer_recorded",
                             description=f"Money moved from {transfer.from_account_title} to {transfer.to_account_title}.",
@@ -492,7 +470,7 @@ def money_desk(request):
                 try:
                     with transaction.atomic():
                         payment = expense_payment_form.save()
-                        post_expense_payment(payment.id)
+                        post_expense_payment(payment.id, actor=request.user)
                         record_audit(
                             action="expense_paid",
                             description=f"Expense '{payment.expense.display_title}' paid from {payment.from_account_title} via Money Desk.",
@@ -517,149 +495,71 @@ def money_desk(request):
         "capital_form": capital_form,
         "transfer_form": transfer_form,
         "expense_payment_form": expense_payment_form,
-        "open_expenses": open_expenses[:12],
-        "recent_expense_payments": ExpensePayment.objects.select_related("expense", "voucher").order_by("-date", "-id")[:10],
-        "recent_capital_entries": CapitalEntry.objects.select_related("voucher").order_by("-date", "-id")[:10],
-        "recent_transfers": MoneyTransfer.objects.select_related("voucher").order_by("-date", "-id")[:10],
+        "open_expenses": _paginate(request, open_expenses, 12, "open_page"),
+        "recent_expense_payments": _paginate(request, ExpensePayment.objects.select_related("expense", "voucher").order_by("-date", "-id"), 10, "pay_page"),
+        "recent_capital_entries": _paginate(request, CapitalEntry.objects.select_related("voucher").order_by("-date", "-id"), 10, "capital_page"),
+        "recent_transfers": _paginate(request, MoneyTransfer.objects.select_related("voucher").order_by("-date", "-id"), 10, "transfer_page"),
         "selected_expense_id": selected_expense_id,
         **money,
     }
     return render(request, "accounts/money_desk.html", context)
 
 
-def trial_balance_view(request):
-    context = get_trial_balance()
-    context["difference"] = context["total_debit"] - context["total_credit"]
-    context["page_summary"] = "Use this as an internal control report. If totals do not match, some posting logic is broken."
-    return render(request, "accounts/trial_balance.html", context)
+def _json_errors(form):
+    return {
+        field: [entry["message"] for entry in entries]
+        for field, entries in form.errors.get_json_data().items()
+    }
 
 
-def profit_loss_view(request):
-    start = request.GET.get("start")
-    end = request.GET.get("end")
-    context = get_profit_and_loss(start_date=start or None, end_date=end or None)
-    context["period_label"] = _period_label(start, end)
-    context["status_label"] = "Net profit" if context["net_profit"] >= 0 else "Net loss"
-    return render(request, "accounts/profit_loss.html", context)
+@require_POST
+def quick_create_expense_type(request):
+    """The expense form's side panel: a new expense type, same checks as the Expense types form."""
+    # Asking again for a type that already exists (in any letter case) hands that one back, switched on.
+    requested_name = (request.POST.get("quick_expense_type-name") or "").strip()
+    existing = ExpenseCategory.objects.filter(name__iexact=requested_name).first() if requested_name else None
+    if existing is not None:
+        if not existing.is_active:
+            existing.is_active = True
+            existing.save(update_fields=["is_active"])
+        return JsonResponse({"status": "ok", "expense_type": {"id": existing.id, "name": existing.name}})
+    form = ExpenseCategoryForm(request.POST, prefix="quick_expense_type")
+    if form.is_valid():
+        category = form.save()
+        record_audit(
+            action="expense_category_created",
+            description=f"Expense type '{category.name}' saved from the expense form.",
+            actor=request.user,
+            target=category,
+        )
+        return JsonResponse({"status": "ok", "expense_type": {"id": category.id, "name": category.name}})
+    return JsonResponse({"status": "error", "errors": _json_errors(form)}, status=400)
 
 
-def balance_sheet_view(request):
-    as_of = request.GET.get("as_of")
-    context = get_balance_sheet(as_of_date=as_of or None)
-    context["as_of_label"] = as_of or "Today"
-    context["net_position"] = context["total_assets"] - context["total_liabilities"]
-    return render(request, "accounts/balance_sheet.html", context)
-
-
-def account_ledger(request, account_id):
-    account = get_object_or_404(Account, id=account_id)
-    lines = VoucherLine.objects.filter(account=account).select_related("voucher").order_by("voucher__date", "voucher__id")
-
-    running = ZERO
-    total_debit = ZERO
-    total_credit = ZERO
-    ledger = []
-
-    for line in lines:
-        debit = line.debit or ZERO
-        credit = line.credit or ZERO
-        total_debit += debit
-        total_credit += credit
-
-        if debit > 0:
-            running += debit
+@require_POST
+def quick_create_bank_account(request):
+    """A new bank ledger from a payment form's side panel; the same rules as Settings > Bank ledgers."""
+    form = BankAccountForm(request.POST, prefix="quick_bank")
+    if form.is_valid():
+        try:
+            bank = form.save()
+        except ValidationError as exc:
+            for field, problems in exc.message_dict.items():
+                form.add_error(field if field in form.fields else None, problems)
         else:
-            running -= credit
-
-        ledger.append(
-            {
-                "date": line.voucher.date,
-                "voucher": line.voucher,
-                "narration": line.voucher.narration,
-                "debit": debit,
-                "credit": credit,
-                "balance": abs(running),
-                "drcr": "Dr" if running >= 0 else "Cr",
-            }
-        )
-
-    closing_balance = ledger[-1]["balance"] if ledger else ZERO
-    closing_side = ledger[-1]["drcr"] if ledger else "Dr"
-
-    return render(
-        request,
-        "accounts/account_ledger.html",
-        {
-            "account": account,
-            "ledger": ledger,
-            "total_debit": total_debit,
-            "total_credit": total_credit,
-            "closing_balance": closing_balance,
-            "closing_side": closing_side,
-        },
-    )
-
-
-def party_statement(request, model, pk):
-    ct = get_object_or_404(ContentType, model=model)
-    entries = PartyLedgerEntry.objects.filter(content_type=ct, object_id=pk).select_related("voucher").order_by("voucher__date", "voucher__id")
-
-    running = ZERO
-    total_debit = ZERO
-    total_credit = ZERO
-    rows = []
-    party = entries.first().party if entries else None
-
-    for entry in entries:
-        debit = entry.debit or ZERO
-        credit = entry.credit or ZERO
-        total_debit += debit
-        total_credit += credit
-        running += debit
-        running -= credit
-
-        rows.append(
-            {
-                "date": entry.voucher.date,
-                "voucher": entry.voucher,
-                "debit": debit,
-                "credit": credit,
-                "balance": abs(running),
-                "drcr": "Dr" if running >= 0 else "Cr",
-            }
-        )
-
-    closing_balance = rows[-1]["balance"] if rows else ZERO
-    closing_side = rows[-1]["drcr"] if rows else "Dr"
-
-    return render(
-        request,
-        "accounts/party_ledger.html",
-        {
-            "party": party,
-            "rows": rows,
-            "total_debit": total_debit,
-            "total_credit": total_credit,
-            "closing_balance": closing_balance,
-            "closing_side": closing_side,
-        },
-    )
+            record_audit(
+                action="bank_ledger_created",
+                description=f"Bank ledger '{bank.display_name}' created.",
+                actor=request.user,
+                target=bank,
+            )
+            return JsonResponse({"status": "ok", "bank": {"id": bank.id, "name": str(bank)}})
+    return JsonResponse({"status": "error", "errors": _json_errors(form)}, status=400)
 
 
 accounts_home = module_access_required("accounts", minimum="view")(accounts_home)
+quick_create_expense_type = module_access_required("expenses", minimum=ACCESS_MANAGE)(quick_create_expense_type)
+quick_create_bank_account = admin_required(quick_create_bank_account)
 money_breakdown = module_access_required("accounts", minimum="view")(money_breakdown)
 expense_list = module_access_required("expenses", minimum="view")(expense_list)
 money_desk = module_access_required("accounts", minimum="view")(money_desk)
-trial_balance_view = module_access_required("accounts", minimum="view")(trial_balance_view)
-profit_loss_view = module_access_required("accounts", minimum="view")(profit_loss_view)
-balance_sheet_view = module_access_required("accounts", minimum="view")(balance_sheet_view)
-account_ledger = module_access_required("accounts", minimum="view")(account_ledger)
-party_statement = module_access_required("accounts", minimum="view")(party_statement)
-
-
-
-
-
-
-
-

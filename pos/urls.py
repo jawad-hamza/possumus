@@ -1,12 +1,16 @@
-from django.conf import settings
-from django.conf.urls.static import static
 from django.urls import include, path
 
 from . import views
+from .views import billing as billing_views
+from .views import pos_views as till_views
+from .views import products as product_views
+from .views import public as public_views
+from .views.health import health_check
 
 
 urlpatterns = [
     path("", views.home, name="home"),
+    path("healthz/", health_check, name="health_check"),
     path("pricing/<slug:plan_code>/", views.landing_plan_checkout, name="landing_plan_checkout"),
     path("start-trial/", views.start_trial, name="start_trial"),
     path("signup/", views.signup_view, name="signup"),
@@ -17,18 +21,25 @@ urlpatterns = [
     path("billing/", views.billing_page, name="billing_page"),
     path("billing/checkout/<slug:plan_code>/", views.billing_checkout, name="billing_checkout"),
     path("billing/manage/", views.billing_portal_redirect, name="billing_portal_redirect"),
+    path("license/", billing_views.license_page, name="license_page"),
     path("webhooks/lemonsqueezy/", views.lemonsqueezy_webhook, name="lemonsqueezy_webhook"),
     path("login/", views.login_view, name="login"),
     path("logout/", views.logout_view, name="logout"),
+    path("password/reset/", public_views.password_reset_request, name="password_reset"),
+    path("password/reset/sent/", public_views.password_reset_done, name="password_reset_done"),
+    path("password/reset/<uidb64>/<token>/", public_views.password_reset_confirm, name="password_reset_confirm"),
+    path("password/change/", public_views.password_change, name="password_change"),
     path("setup/admin/", views.setup_admin, name="setup_admin"),
     path("session/timezone/", views.set_client_time_zone, name="set_client_time_zone"),
     path("settings/", views.settings_page, name="settings_page"),
     path("settings/backups/<int:snapshot_id>/download/", views.download_backup_snapshot, name="download_backup_snapshot"),
-    path("test/", views.test, name="test"),
     path("dashboard/", views.dashboard, name="dashboard"),
     path("pos/", views.pos_screen, name="pos_screen"),
     path("pos/ajax/scan/<str:sku>/", views.scan_barcode, name="scan_barcode"),
     path("pos/ajax/category/<int:category_id>/products/", views.products_by_category, name="products_by_category"),
+    path("pos/ajax/till/catalogue/", till_views.till_catalogue, name="till_catalogue"),
+    path("pos/ajax/till/customer/", till_views.till_customer_add, name="till_customer_add"),
+    path("pos/ajax/till/<slug:action>/", till_views.till_action, name="till_action"),
     path("ajax/quick/brands/", views.quick_create_brand, name="quick_create_brand"),
     path("ajax/quick/categories/", views.quick_create_category, name="quick_create_category"),
     path("ajax/quick/suppliers/", views.quick_create_supplier, name="quick_create_supplier"),
@@ -42,9 +53,12 @@ urlpatterns = [
     path("reports/expiry-alerts/", views.expiry_alert_report, name="expiry_alert_report"),
     path("reports/employees/", views.employee_report_list, name="employee_report_list"),
     path("reports/employees/<int:user_id>/", views.employee_report_detail, name="employee_report_detail"),
-    path("reports/low-stock/", views.low_stock_list, name="low_stock_list"),
+    path("reports/", include("pos.report_urls")),
     path("products/", views.product_list, name="product_list"),
     path("products/add/", views.product_add, name="product_add"),
+    path("products/import/", product_views.product_import, name="product_import"),
+    path("products/import/template/", product_views.product_import_template, name="product_import_template"),
+    path("products/export/", product_views.product_export, name="product_export"),
     path("products/<int:pk>/", views.product_view, name="product_view"),
     path("products/<int:pk>/edit/", views.product_edit, name="product_edit"),
     path("products/<int:pk>/delete/", views.product_delete, name="product_delete"),
@@ -69,6 +83,3 @@ urlpatterns = [
     path("parties/statement/", views.party_statement_page, name="party_statement_page"),
     path("accounts/", include("accounts.urls")),
 ]
-
-if settings.DEBUG:
-    urlpatterns += static(settings.MEDIA_URL, document_root=settings.MEDIA_ROOT)

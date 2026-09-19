@@ -3,6 +3,7 @@ from decimal import Decimal
 from django.db.models import Q, Sum
 
 from accounts.models import Account, BankAccount, VoucherLine
+from pos.models import quantize_money
 
 
 ZERO = Decimal("0.00")
@@ -43,8 +44,9 @@ def bank_account_queryset():
 
 
 def total_bank_balance() -> Decimal:
-    totals = VoucherLine.objects.filter(
-        Q(account__title="Bank") | Q(account__bank_ledger__isnull=False),
-        account__is_active=True,
-    ).aggregate(debit=Sum("debit"), credit=Sum("credit"))
-    return (totals["debit"] or ZERO) - (totals["credit"] or ZERO)
+    # Deactivated bank ledgers still hold their history, and an opening
+    # balance counts, so this matches what the balance sheet shows.
+    bank_accounts = Account.objects.filter(Q(title="Bank") | Q(bank_ledger__isnull=False)).distinct()
+    totals = VoucherLine.objects.filter(account__in=bank_accounts).aggregate(debit=Sum("debit"), credit=Sum("credit"))
+    opening = bank_accounts.aggregate(total=Sum("opening_balance"))["total"] or ZERO
+    return quantize_money((totals["debit"] or ZERO) - (totals["credit"] or ZERO) + opening)

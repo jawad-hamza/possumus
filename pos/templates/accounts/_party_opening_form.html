@@ -1,0 +1,29 @@
+{% comment %}Opening balance form, used inline on the party statement and on its own page.{% endcomment %}
+<form method="post" action="{{ opening_action }}">
+    {% csrf_token %}
+    <input type="hidden" name="next" value="{{ opening_next }}">
+    {% if opening_form.non_field_errors %}
+    <div class="alert alert-danger">{{ opening_form.non_field_errors }}</div>
+    {% endif %}
+    <div class="k-form-grid">
+        <div class="k-form-field">
+            <label class="form-label" for="{{ opening_form.amount.id_for_label }}">{{ opening_form.amount.label }} <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About {{ opening_form.amount.label }}" aria-describedby="tipOpeningWhat" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipOpeningWhat" role="tooltip" hidden><strong>What it is:</strong> what {{ party }} owed (or was owed) before you started using the system. It is posted against Opening Balance Equity and appears as the first line of the statement.<br><strong>What saving changes:</strong> the balance of {{ party }}, the aging report and the balance sheet move by this amount from the date you give.<br><strong>Saving again replaces it.</strong> There is only ever one opening balance per party. {{ opening_form.amount.help_text }}<br><strong>Locked books:</strong> a date on or before the books lock is refused. Reopen the books first or use a later date.</span></span></label>
+            {{ opening_form.amount }}
+            {% for error in opening_form.amount.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ error }}</div>{% endfor %}
+        </div>
+        <div class="k-form-field">
+            <label class="form-label" for="{{ opening_form.direction.id_for_label }}">{{ opening_form.direction.label }}</label>
+            {{ opening_form.direction }}
+            {% for error in opening_form.direction.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ error }}</div>{% endfor %}
+        </div>
+        <div class="k-form-field">
+            <label class="form-label" for="{{ opening_form.date.id_for_label }}">{{ opening_form.date.label }}</label>
+            {{ opening_form.date }}
+            {% for error in opening_form.date.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ error }}</div>{% endfor %}
+        </div>
+    </div>
+    <p class="b-warn"><i class="bi bi-exclamation-triangle" aria-hidden="true"></i><span>Saving replaces any earlier opening balance and moves this party's balance from the date you give.</span></p>
+    <div class="k-form-actions">
+        <button class="btn btn-primary"><i class="bi bi-check2" aria-hidden="true"></i> Save opening balance</button>
+    </div>
+</form>

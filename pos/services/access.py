@@ -4,11 +4,19 @@ from django.contrib import messages
 from django.contrib.auth import get_user_model
 from django.contrib.auth.models import Group
 from django.contrib.auth.views import redirect_to_login
+from django.http import JsonResponse
 from django.shortcuts import redirect
 from django.urls import reverse
 from django.utils import timezone
 
 from pos.services.billing import workspace_owner_onboarding, workspace_requires_billing
+from pos.services.modules import (
+    access_module_enabled,
+    module_disabled_message,
+    module_enabled,
+    module_for_access_key,
+    module_within_ceiling,
+)
 
 
 ADMIN_ROLE = "admin"
@@ -48,7 +56,7 @@ MODULE_DEFINITIONS = (
     },
     {
         "key": "stock_control",
-        "label": "Stock Control",
+        "label": "Stock control",
         "description": "Stock corrections and stock take.",
         "url_name": "stock_adjustments",
     },
@@ -105,7 +113,15 @@ def ensure_role_groups():
 
 
 def is_first_user_setup_required():
-    return not get_user_model().objects.exists()
+    # Unverified signups are inactive, so a junk signup can never lock the real owner out.
+    return not get_user_model().objects.filter(is_active=True).exists()
+
+
+def is_workspace_owner(user):
+    """The registered owner (or a superuser) can never be demoted or disabled by other admins."""
+    if user is None:
+        return False
+    return bool(user.is_superuser or getattr(user, "owner_onboarding", None) is not None)
 
 
 def get_owner_onboarding(user):
@@ -294,6 +310,9 @@ def get_user_module_level(user, module_key):
 
 
 def user_can_access_module(user, module_key, minimum=ACCESS_VIEW):
+    # A module outside the licence, or switched off by the owner, is closed to everyone, admins included.
+    if not access_module_enabled(module_key):
+        return False
     current_level = get_user_module_level(user, module_key)
     return ACCESS_RANK[current_level] >= ACCESS_RANK[_normalize_access_level(minimum)]
 
@@ -363,10 +382,10 @@ def assign_role(user, role):
 
 
 def _client_ip(request):
-    forwarded = (request.META.get("HTTP_X_FORWARDED_FOR") or "").strip()
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return (request.META.get("REMOTE_ADDR") or "").strip() or None
+    # X-Forwarded-For is only believed behind a proxy we were told to trust.
+    from pos.services.throttling import client_ip
+
+    return client_ip(request, default=None)
 
 
 def open_user_session(request, user):
@@ -400,13 +419,91 @@ def close_user_session(request):
     request.session.modified = True
 
 
-def _billing_access_message(user):
+def workspace_is_locked(user=None):
+    """True when the trial is over and no licence key or subscription is in force.
+
+    Every entry point (page decorators below, the DRF API, anything added later) must ask
+    this one function, so there is exactly one place that decides access.
+    """
+    return workspace_requires_billing(user)
+
+
+def workspace_lock_message(user=None):
     onboarding = workspace_owner_onboarding(user)
-    if onboarding is not None and onboarding.trial_is_active:
-        return "Billing checkout was started, but the workspace is still using its free access period for now."
-    if is_admin(user):
-        return "The 3 free days have ended. Open Billing to activate or update the subscription."
-    return "This workspace is locked until the owner updates billing."
+    if onboarding is not None and onboarding.clock_rolled_back:
+        return "This computer's date and time look wrong. Correct them to continue, or enter a licence key."
+    if user is None or is_admin(user):
+        return "The free trial has ended. Enter a licence key or choose a plan to keep working."
+    return "This workspace is locked until the owner activates it."
+
+
+def _wants_json(request):
+    return request.headers.get("x-requested-with") == "XMLHttpRequest" or "application/json" in request.headers.get("accept", "")
+
+
+def workspace_gate_response(request):
+    """The single gate in front of every protected view. None means: carry on."""
+    if is_first_user_setup_required():
+        return redirect("signup")
+
+    if not request.user.is_authenticated:
+        return redirect_to_login(request.get_full_path(), reverse("login"))
+
+    if user_requires_business_setup(request.user):
+        return redirect("setup_admin")
+
+    if workspace_is_locked(request.user):
+        message = workspace_lock_message(request.user)
+        if _wants_json(request):
+            # The POS screen talks JSON; a redirect to an HTML page would just look like a broken scan.
+            return JsonResponse(
+                {"status": "error", "message": message, "redirect": reverse("billing_page")},
+                status=402,
+            )
+        messages.warning(request, message)
+        return redirect("billing_page")
+
+    return None
+
+
+def module_disabled_response(request, module_key):
+    """Friendly refusal for a feature module that is off: JSON 403 for the till's ajax, otherwise a redirect."""
+    message = module_disabled_message(module_key)
+    if _wants_json(request):
+        return JsonResponse({"status": "error", "message": message, "module": module_key}, status=403)
+    messages.info(request, message)
+    return redirect(default_home_url(request.user))
+
+
+def _closed_access_module(module_keys):
+    """The feature module to blame when every one of these access areas is switched off, else None."""
+    closed = None
+    for module_key in module_keys:
+        if access_module_enabled(module_key):
+            return None
+        closed = closed or module_for_access_key(module_key)
+    return closed
+
+
+def feature_required(feature_key, ceiling_only=False):
+    """Gate for a sub-feature that is not a whole access area (returns, CSV import, hold sale...).
+
+    Put it UNDER the access decorator, so the workspace gate and the role check run first.
+    ceiling_only=True refuses only when the edition leaves the module out: for pages that
+    already explain themselves while the owner's own switch is off (the expiry report).
+    """
+    is_open = module_within_ceiling if ceiling_only else module_enabled
+
+    def decorator(view_func):
+        @wraps(view_func)
+        def wrapped(request, *args, **kwargs):
+            if not is_open(feature_key):
+                return module_disabled_response(request, feature_key)
+            return view_func(request, *args, **kwargs)
+
+        return wrapped
+
+    return decorator
 
 
 def user_can_access_sale(user, sale):
@@ -423,18 +520,9 @@ def role_required(*allowed_roles):
     def decorator(view_func):
         @wraps(view_func)
         def wrapped(request, *args, **kwargs):
-            if is_first_user_setup_required():
-                return redirect("signup")
-
-            if not request.user.is_authenticated:
-                return redirect_to_login(request.get_full_path(), reverse("login"))
-
-            if user_requires_business_setup(request.user):
-                return redirect("setup_admin")
-
-            if workspace_requires_billing(request.user):
-                messages.warning(request, _billing_access_message(request.user))
-                return redirect("billing_page")
+            blocked = workspace_gate_response(request)
+            if blocked is not None:
+                return blocked
 
             if is_admin(request.user) and ADMIN_ROLE in normalized_roles:
                 return view_func(request, *args, **kwargs)
@@ -458,18 +546,13 @@ def module_access_required(module_key, minimum=ACCESS_VIEW, write_level=ACCESS_M
     def decorator(view_func):
         @wraps(view_func)
         def wrapped(request, *args, **kwargs):
-            if is_first_user_setup_required():
-                return redirect("signup")
+            blocked = workspace_gate_response(request)
+            if blocked is not None:
+                return blocked
 
-            if not request.user.is_authenticated:
-                return redirect_to_login(request.get_full_path(), reverse("login"))
-
-            if user_requires_business_setup(request.user):
-                return redirect("setup_admin")
-
-            if workspace_requires_billing(request.user):
-                messages.warning(request, _billing_access_message(request.user))
-                return redirect("billing_page")
+            closed = _closed_access_module((module_key,))
+            if closed is not None:
+                return module_disabled_response(request, closed.key)
 
             required_level = write_level if request.method.upper() in write_methods else minimum
             if user_can_access_module(request.user, module_key, required_level):
@@ -497,18 +580,13 @@ def any_module_access_required(module_keys, minimum=ACCESS_VIEW, write_level=ACC
     def decorator(view_func):
         @wraps(view_func)
         def wrapped(request, *args, **kwargs):
-            if is_first_user_setup_required():
-                return redirect("signup")
+            blocked = workspace_gate_response(request)
+            if blocked is not None:
+                return blocked
 
-            if not request.user.is_authenticated:
-                return redirect_to_login(request.get_full_path(), reverse("login"))
-
-            if user_requires_business_setup(request.user):
-                return redirect("setup_admin")
-
-            if workspace_requires_billing(request.user):
-                messages.warning(request, _billing_access_message(request.user))
-                return redirect("billing_page")
+            closed = _closed_access_module(module_keys)
+            if closed is not None:
+                return module_disabled_response(request, closed.key)
 
             required_level = write_level if request.method.upper() in write_methods else minimum
             if any(user_can_access_module(request.user, module_key, required_level) for module_key in module_keys):
@@ -527,7 +605,7 @@ def any_module_access_required(module_keys, minimum=ACCESS_VIEW, write_level=ACC
         return wrapped
 
     return decorator
+
+
 admin_required = role_required(ADMIN_ROLE)
 pos_access_required = role_required(ADMIN_ROLE, CASHIER_ROLE)
-
-

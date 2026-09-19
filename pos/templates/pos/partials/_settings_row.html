@@ -1,0 +1,15 @@
+{% if field.field.widget.input_type == 'checkbox' %}
+<div class="set-toggle k-span-2">
+    <div class="set-toggle-text">
+        <label class="set-toggle-name" for="{{ field.id_for_label }}">{{ field.label }}</label>{% if field.help_text or extra_help %}<span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About {{ field.label }}" aria-describedby="{{ field.auto_id }}_helptext" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="{{ field.auto_id }}_helptext" role="tooltip" hidden>{{ field.help_text }}{% if extra_help %} {{ extra_help }}{% endif %}</span></span>{% endif %}
+        {% if field.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ field.errors|striptags }}</div>{% endif %}
+    </div>
+    <div class="form-check form-switch">{{ field }}</div>
+</div>
+{% else %}
+<div class="k-form-field{% if wide %} k-span-2{% endif %}">
+    <label class="form-label" for="{{ field.id_for_label }}">{{ field.label }}{% if field.help_text or extra_help %}<span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About {{ field.label }}" aria-describedby="{{ field.auto_id }}_helptext" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="{{ field.auto_id }}_helptext" role="tooltip" hidden>{{ field.help_text }}{% if extra_help %} {{ extra_help }}{% endif %}</span></span>{% endif %}</label>
+    {{ field }}
+    {% if field.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ field.errors|striptags }}</div>{% endif %}
+</div>
+{% endif %}

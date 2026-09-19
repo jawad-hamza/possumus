@@ -1,6 +1,6 @@
 from decimal import Decimal
 
-from pos.models import Customer, Supplier
+from pos.models import Supplier
 from accounts.services.party_overview import (
     get_customer_overview,
     get_supplier_overview,

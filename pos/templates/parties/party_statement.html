@@ -1,46 +1,73 @@
 {% extends "pos/base.html" %}
+{% load static %}
 
-{% block title %}Party Statement{% endblock %}
+{% block title %}Party statement{% endblock %}
+{% block page_title %}Party statement{% endblock %}
+{% block page_help %}Inspect customer, supplier, or combined statements with opening and closing balances. Give both numbers when the same party buys from you and sells to you, and the two ledgers are netted into one.{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="{% url 'customer_list' %}" class="btn btn-outline-secondary">Customers</a><a href="{% url 'supplier_list' %}" class="btn btn-outline-secondary">Suppliers</a>{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="mb-1">Party Statement</h2>
-        <p class="text-muted mb-0">Inspect customer, supplier, or combined statements with opening and closing balances.</p>
+<section class="k-section">
+<form class="b-period" onsubmit="loadStatement(); return false;">
+    <div class="b-period-fields">
+        <div>
+            <label class="form-label" for="customer_id">Customer number {% include "pos/partials/_help_tip.html" with tip_id="tipStmtNumber" tip_name="Customer number" tip_text="The number is shown in the address of the party's ledger page." %}</label>
+            <input type="number" id="customer_id" class="form-control" placeholder="Customer ID" min="1" inputmode="numeric">
+        </div>
+        <div>
+            <label class="form-label" for="supplier_id">Supplier number</label>
+            <input type="number" id="supplier_id" class="form-control" placeholder="Supplier ID" min="1" inputmode="numeric">
+        </div>
+        <div>
+            <label class="form-label" for="from_date">From</label>
+            <input type="date" id="from_date" class="form-control">
+        </div>
+        <div>
+            <label class="form-label" for="to_date">To</label>
+            <input type="date" id="to_date" class="form-control">
+        </div>
+        <button type="submit" class="btn btn-primary">Load</button>
+    </div>
+</form>
+
+<div id="summary" aria-live="polite">
+    <div class="k-empty">
+        <p class="k-empty-title">No statement loaded</p>
+        <p>Enter a customer number, a supplier number, or both, then Load. The number is shown in the address of the party's ledger page.</p>
     </div>
 </div>
 
-<div class="page-card p-4">
-    <div class="row g-3 mb-4">
-        <div class="col-md-3"><input type="number" id="customer_id" class="form-control" placeholder="Customer ID"></div>
-        <div class="col-md-3"><input type="number" id="supplier_id" class="form-control" placeholder="Supplier ID"></div>
-        <div class="col-md-2"><input type="date" id="from_date" class="form-control"></div>
-        <div class="col-md-2"><input type="date" id="to_date" class="form-control"></div>
-        <div class="col-md-2 d-grid"><button class="btn btn-dark" onclick="loadStatement()">Load</button></div>
-    </div>
-
-    <div id="summary" class="mb-4"></div>
-
-    <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0" id="table" style="display:none;">
-            <thead>
-                <tr>
-                    <th>Date</th>
-                    <th>Voucher</th>
-                    <th>Ref</th>
-                    <th class="text-end">Debit</th>
-                    <th class="text-end">Credit</th>
-                    <th class="text-end">Balance</th>
-                </tr>
-            </thead>
-            <tbody></tbody>
-        </table>
-    </div>
+<div class="table-responsive">
+    <table class="k-table k-ledger--stack b-bahi" id="table" style="display:none;">
+        <thead>
+            <tr>
+                <th scope="col" data-k="meta">Date</th>
+                <th scope="col" data-k="what">Entry</th>
+                <th scope="col" class="k-num" data-k="amount">Debit</th>
+                <th scope="col" class="k-num" data-k="amount">Credit</th>
+                <th scope="col" class="k-num" data-k="balance">Balance</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+        <tfoot></tfoot>
+    </table>
 </div>
+<div class="b-pager" id="statement_pager" hidden></div>
+</section>
 {% endblock %}
 
 {% block extra_js %}
+<script src="{% static 'zehnms/js/books.js' %}"></script>
 <script>
+var statementTable = document.getElementById('table');
+var statementLedger = ZehnBooks.ledger({
+    body: statementTable.querySelector('tbody'),
+    foot: statementTable.querySelector('tfoot'),
+    pager: document.getElementById('statement_pager'),
+    empty: 'Nothing was posted for this party in these dates.'
+});
+
 function loadStatement() {
     const customer = document.getElementById('customer_id').value;
     const supplier = document.getElementById('supplier_id').value;
@@ -53,40 +80,62 @@ function loadStatement() {
     if (from) url += `from=${from}&`;
     if (to) url += `to=${to}&`;
 
-    fetch(url)
-        .then(response => response.json())
-        .then(renderStatement);
+    statementTable.style.display = '';
+    if (window.ZehnShell && ZehnShell.dressLedgers) ZehnShell.dressLedgers();
+    ZehnBooks.load(url, statementLedger).then(function (data) {
+        if (data) {
+            renderStatement(data, customer && supplier ? 'unified' : (supplier ? 'supplier' : 'customer'));
+        } else {
+            document.getElementById('summary').textContent = '';
+        }
+    });
 }
 
-function renderStatement(data) {
+function renderStatement(data, role) {
     const summary = document.getElementById('summary');
-    const table = document.getElementById('table');
-    const body = table.querySelector('tbody');
+    summary.textContent = '';
 
-    body.innerHTML = '';
-    table.style.display = 'table';
+    const leaf = document.createElement('header');
+    leaf.className = 'b-leaf b-leaf--inline';
+    const left = document.createElement('div');
+    const name = document.createElement('h2');
+    name.className = 'b-leaf-name';
+    name.textContent = data.party;
+    const meta = document.createElement('ul');
+    meta.className = 'b-leaf-meta';
+    const opening = document.createElement('li');
+    opening.textContent = 'Opening ' + ZehnBooks.amount(Math.abs(Number(data.opening_balance) || 0)) + (Number(data.opening_balance) > 0 ? ' Dr' : Number(data.opening_balance) < 0 ? ' Cr' : '');
+    meta.appendChild(opening);
+    left.appendChild(name);
+    left.appendChild(meta);
 
-    summary.innerHTML = `
-        <div class="d-flex flex-wrap gap-3 align-items-center">
-            <div><strong>Party:</strong> ${data.party}</div>
-            <div><strong>Opening:</strong> ${data.opening_balance}</div>
-            <div><strong>Closing:</strong> ${data.closing_balance}</div>
-            <span class="status-chip ${data.balance_type}">${data.balance_type.toUpperCase()}</span>
-        </div>
-    `;
-
-    data.rows.forEach(row => {
-        const tr = document.createElement('tr');
-        tr.innerHTML = `
-            <td>${row.date}</td>
-            <td>${row.voucher_type} #${row.voucher_id}</td>
-            <td>${row.ref}</td>
-            <td class="text-end">${row.debit}</td>
-            <td class="text-end">${row.credit}</td>
-            <td class="text-end">${row.display_balance}</td>
-        `;
-        body.appendChild(tr);
+    const right = document.createElement('div');
+    right.className = 'b-leaf-balance';
+    const label = document.createElement('div');
+    label.className = 'b-leaf-label';
+    label.textContent = 'Closing balance';
+    const figure = document.createElement('div');
+    figure.className = 'b-leaf-figure';
+    const wordsWrap = document.createElement('div');
+    wordsWrap.className = 'b-leaf-words';
+    const words = document.createElement('span');
+    words.className = 'k-badge';
+    wordsWrap.appendChild(words);
+    right.appendChild(label);
+    right.appendChild(figure);
+    right.appendChild(wordsWrap);
+    ZehnBooks.paintBalance({
+        figure: figure,
+        words: words,
+        symbol: '{{ currency_symbol|escapejs }}',
+        amount: data.closing_balance,
+        type: data.balance_type,
+        role: role
     });
+
+    leaf.appendChild(left);
+    leaf.appendChild(right);
+    summary.appendChild(leaf);
 }
 </script>
 {% endblock %}

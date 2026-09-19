@@ -1,5 +1,5 @@
-<div>
-    <label for="{{ field.id_for_label }}" class="form-label fw-semibold">{{ field.label }}</label>
+<div class="k-form-field">
+    <label for="{{ field.id_for_label }}" class="form-label">{{ field.label }}{% if field.help_text %}{% include "pos/partials/_help_tip.html" with tip_id=field.auto_id|add:"_helptext" tip_name=field.label tip_text=field.help_text %}{% endif %}</label>
     {% if field.field.widget.input_type == 'checkbox' %}
     <div class="form-check form-switch mt-2">
         {{ field }}
@@ -7,10 +7,7 @@
     {% else %}
         {{ field }}
     {% endif %}
-    {% if field.help_text %}
-    <div class="form-text">{{ field.help_text }}</div>
-    {% endif %}
     {% if field.errors %}
-    <div class="text-danger small mt-1">{{ field.errors|join:', ' }}</div>
+    <div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ field.errors|join:', ' }}</div>
     {% endif %}
 </div>

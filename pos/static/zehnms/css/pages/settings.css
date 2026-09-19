@@ -1,0 +1,666 @@
+/* settings, billing and licence pages */
+
+/* ---------- section list and the open section ---------- */
+
+.set {
+    display: grid;
+    grid-template-columns: 200px minmax(0, 1fr);
+    gap: 0 var(--k-6);
+    align-items: start;
+    max-width: 1180px;
+}
+
+.set-index-wrap {
+    position: sticky;
+    top: 0;
+    min-width: 0;
+}
+
+/* a section opened by its #link lands below the section list, which sticks to the top on a phone */
+.set .tab-pane > [id] {
+    scroll-margin-top: calc(var(--k-control-h) + var(--k-5));
+}
+
+.set-index.nav {
+    flex-direction: column;
+    flex-wrap: nowrap;
+    gap: 2px;
+    margin: 0;
+    padding: 0;
+}
+
+.set-index .nav-link {
+    display: flex;
+    align-items: center;
+    gap: var(--k-2);
+    width: 100%;
+    min-height: 38px;
+    padding: 0 var(--k-3);
+    color: var(--k-ink);
+    text-align: left;
+    transition: background-color var(--k-dur) var(--k-ease-out), color var(--k-dur) var(--k-ease-out);
+}
+
+.set-index-name {
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.set-index-fig {
+    flex: none;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-xs);
+    font-variant-numeric: tabular-nums;
+}
+
+.set-index .nav-link.active .set-index-fig {
+    color: var(--k-accent-ink);
+}
+
+.set-body {
+    min-width: 0;
+}
+
+.set-pane-title {
+    display: flex;
+    align-items: center;
+    margin: 0 0 var(--k-4);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-xl);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+    line-height: 1.25;
+}
+
+.set-pane-title:has(+ .set-pane-note) {
+    margin-bottom: 2px;
+}
+
+.set-pane-note {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    margin: 0 0 var(--k-4);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-variant-numeric: tabular-nums;
+}
+
+.set-body .k-section {
+    margin-bottom: var(--k-5);
+}
+
+.set-body .k-section:last-child {
+    margin-bottom: 0;
+}
+
+.set-body .k-form-grid .form-control,
+.set-body .k-form-grid .form-select {
+    width: 100%;
+}
+
+.set-body textarea.form-control {
+    height: 76px;
+    min-height: 56px;
+    resize: vertical;
+}
+
+/* ---------- a switch row: name and its tooltip on the left, the switch on the right ---------- */
+
+.set-toggles {
+    display: grid;
+}
+
+.set-toggle {
+    display: flex;
+    align-items: center;
+    gap: var(--k-3);
+    min-width: 0;
+    padding: var(--k-3) 0;
+}
+
+.set-toggles > .set-toggle + .set-toggle {
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+
+.set-toggles > .set-toggle:first-child {
+    padding-top: 0;
+}
+
+.set-toggles > .set-toggle:last-child {
+    padding-bottom: 0;
+}
+
+.k-form-grid > .set-toggle {
+    padding: 0;
+    min-height: var(--k-control-h);
+}
+
+.set-toggle-icon {
+    flex: none;
+    width: 20px;
+    color: var(--k-ink-soft);
+    font-size: 1.05rem;
+    text-align: center;
+}
+
+.set-toggle-text {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.set-toggle-name {
+    color: var(--k-ink-title);
+    font-weight: 500;
+    cursor: pointer;
+}
+
+.set-toggle-note {
+    margin: 2px 0 0;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.set-toggle .form-switch {
+    flex: none;
+    margin: 0;
+    min-height: 0;
+    padding-left: 2.25rem;
+}
+
+.set-toggle .form-switch .form-check-input {
+    margin-top: 0;
+    margin-left: -2.25rem;
+    cursor: pointer;
+}
+
+.set-toggle.is-locked .set-toggle-name,
+.set-toggle.is-locked .set-toggle-icon {
+    color: var(--k-ink-soft);
+    cursor: default;
+}
+
+.set-lock {
+    margin-left: var(--k-2);
+    vertical-align: middle;
+}
+
+.set-lock > .bi {
+    margin-right: 4px;
+}
+
+/* ---------- the save bar stays in reach while its form is on screen ---------- */
+
+.set-save {
+    position: sticky;
+    bottom: var(--k-3);
+    z-index: 3;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-2) var(--k-4);
+    margin-top: var(--k-5);
+    padding: var(--k-3) var(--k-panel-pad);
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius);
+    background: var(--k-panel);
+    box-shadow: var(--k-shadow-pop);
+}
+
+.k-section .set-save {
+    margin: var(--k-5) 0 0;
+    padding: var(--k-3) 0 0;
+    border: 0;
+    border-top: var(--k-hair) solid var(--k-divider);
+    border-radius: 0;
+    box-shadow: none;
+    position: static;
+}
+
+.set-save-note {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.set-save-note[data-set-dirty] {
+    display: none;
+    color: var(--k-due-ink);
+    font-weight: 500;
+}
+
+form.is-dirty .set-save-note[data-set-dirty] {
+    display: inline;
+}
+
+form.is-dirty .set-save-note[data-set-clean] {
+    display: none;
+}
+
+.set-after-save {
+    margin-top: var(--k-6);
+}
+
+/* ---------- small groups inside a panel ---------- */
+
+.set-group {
+    margin-top: var(--k-5);
+    padding-top: var(--k-4);
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+
+.set-group-title {
+    display: flex;
+    align-items: center;
+    margin: 0 0 var(--k-2);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-md);
+    font-weight: 600;
+}
+
+.set-group-title--gap {
+    margin: var(--k-5) 0 var(--k-3);
+}
+
+.set-perm-grid {
+    gap: var(--k-3) var(--k-5);
+}
+
+.set-url {
+    display: block;
+    color: var(--k-ink-title);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: anywhere;
+    -webkit-user-select: all;
+    user-select: all;
+}
+
+/* ---------- facts: a label over its value ---------- */
+
+.set-facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+    gap: var(--k-4) var(--k-5);
+    margin: 0 0 var(--k-5);
+}
+
+.set-facts dt {
+    margin: 0 0 4px;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 400;
+}
+
+.set-facts dd {
+    margin: 0;
+    color: var(--k-ink-title);
+    font-weight: 500;
+    overflow-wrap: anywhere;
+}
+
+.set-facts .set-sub {
+    font-weight: 400;
+}
+
+/* ---------- table cells ---------- */
+
+.set-cell-main {
+    display: block;
+    color: var(--k-ink-title);
+    font-weight: 500;
+}
+
+.set-sub {
+    display: block;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 400;
+}
+
+.set-sub--due {
+    color: var(--k-due-ink);
+}
+
+.set-muted {
+    color: var(--k-ink-soft);
+}
+
+.set-tabular {
+    font-variant-numeric: tabular-nums;
+}
+
+.set-nowrap {
+    white-space: nowrap;
+}
+
+.set-desc {
+    max-width: 48ch;
+}
+
+.set-perms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 2px var(--k-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--k-text-sm);
+}
+
+.set-perms li > i {
+    margin-right: 4px;
+    color: var(--k-ink-soft);
+}
+
+/* ---------- managing one login, from its row's menu ---------- */
+
+.set-kebab {
+    display: inline-block;
+}
+
+.set-manage.dropdown-menu {
+    width: 300px;
+    max-width: calc(100vw - 32px);
+    padding: var(--k-3) var(--k-4);
+}
+
+.set-manage .dropdown-item {
+    margin: 0 calc(-1 * var(--k-4));
+    width: auto;
+    padding-left: var(--k-4);
+    padding-right: var(--k-4);
+}
+
+.set-manage-form + .set-manage-form {
+    margin-top: var(--k-3);
+    padding-top: var(--k-3);
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+
+.set-manage-form .form-label {
+    margin-bottom: 4px;
+    font-size: var(--k-text-sm);
+}
+
+.set-manage-line {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: var(--k-2);
+}
+
+.set-manage-note {
+    margin: 0 0 var(--k-2);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    white-space: normal;
+}
+
+.k-row-actions:has(.show) {
+    opacity: 1;
+}
+
+/* ---------- restore: set apart as the one step that cannot be taken back ---------- */
+
+.set-danger.k-section {
+    border-color: var(--k-out-wash);
+}
+
+.set-danger-list {
+    max-width: 72ch;
+    margin: 0 0 var(--k-4);
+    padding-left: 1.1rem;
+    color: var(--k-ink);
+    font-size: var(--k-text-sm);
+}
+
+.set-danger-list li + li {
+    margin-top: 4px;
+}
+
+.set-restore {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--k-3);
+}
+
+.set-restore .k-form-field {
+    flex: 1 1 280px;
+    max-width: 440px;
+}
+
+.set-tz-form {
+    max-width: 440px;
+}
+
+/* ---------- billing and licence ---------- */
+
+.bill {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(320px, 5fr);
+    gap: var(--k-5);
+    align-items: start;
+    max-width: 1180px;
+}
+
+.bill-stats {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--k-5);
+    margin-bottom: var(--k-5);
+}
+
+.bill-stats .k-balance-figure {
+    font-size: var(--k-text-3xl);
+}
+
+.bill-plans {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+    gap: var(--k-5);
+    max-width: 1180px;
+}
+
+.bill-plan {
+    display: flex;
+    flex-direction: column;
+    gap: var(--k-3);
+}
+
+.bill-plan.is-current {
+    border-color: var(--k-accent);
+}
+
+.bill-plan-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--k-2);
+}
+
+.bill-plan-name {
+    margin: 0;
+    color: var(--k-ink-title);
+    font-size: var(--k-text-lg);
+    font-weight: 600;
+}
+
+.bill-plan-price {
+    color: var(--k-ink-title);
+    font-size: var(--k-text-2xl);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    line-height: 1.1;
+}
+
+.bill-plan-price small {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 400;
+}
+
+.bill-plan p {
+    margin: 0;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.bill-plan ul {
+    display: grid;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--k-text-sm);
+}
+
+.bill-plan li {
+    display: grid;
+    grid-template-columns: 20px minmax(0, 1fr);
+}
+
+.bill-plan li > i {
+    color: var(--k-accent-ink);
+}
+
+.bill-plan-cta {
+    margin-top: auto;
+    padding-top: var(--k-2);
+}
+
+.lic {
+    max-width: 640px;
+}
+
+.lic-key {
+    font-family: var(--k-font-mono);
+    font-size: var(--k-text-sm);
+    line-height: 1.45;
+    overflow-wrap: anywhere;
+}
+
+.lic-form .form-label {
+    display: flex;
+    align-items: center;
+}
+
+/* the licence page shows its messages beside the key field instead of in the corner */
+.k-lic-page .k-flash {
+    display: none;
+}
+
+/* ---------- narrower windows and phones ---------- */
+
+@media (max-width: 1199.98px) {
+    .bill {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 991.98px) {
+    .set {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--k-4) 0;
+    }
+
+    .set-index-wrap {
+        z-index: 4;
+        margin: 0 calc(-1 * var(--k-gutter));
+        padding: var(--k-2) var(--k-gutter);
+        border-bottom: var(--k-hair) solid var(--k-border);
+        background: var(--k-ground);
+    }
+
+    .set-index.nav {
+        flex-direction: row;
+        gap: 4px;
+        overflow-x: auto;
+        overflow-y: hidden;
+        scrollbar-width: none;
+    }
+
+    .set-index.nav::-webkit-scrollbar {
+        display: none;
+    }
+
+    .set-index .nav-item {
+        flex: none;
+    }
+
+    .set-index .nav-link {
+        min-height: 36px;
+    }
+
+    .set-index-fig {
+        display: none;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .set-save {
+        bottom: var(--k-2);
+        padding: var(--k-2) var(--k-3);
+    }
+
+    .set-save .btn {
+        flex: 1 1 auto;
+    }
+
+    .set-save-note[data-set-clean] {
+        display: none;
+    }
+
+    form.is-dirty .set-save-note[data-set-dirty] {
+        flex-basis: 100%;
+        order: -1;
+    }
+
+    .set-facts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .bill-stats {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--k-3);
+    }
+
+    .set-desc {
+        max-width: none;
+    }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .set-index .nav-link {
+        transition: none;
+    }
+}
+
+/* ---------- one-task pages: password change, restore confirmation ---------- */
+
+.set-narrow {
+    max-width: 520px;
+}
+
+.set-confirm {
+    max-width: 720px;
+}
+
+/* a label with its info icon keeps the same height as one without, so fields side by side line up */
+:is(.set-body, .set-narrow, .set-confirm, .lic) .form-label {
+    display: flex;
+    align-items: center;
+    min-height: 20px;
+}
+
+.bill-stats > .k-section {
+    margin: 0;
+}
+
+#plans {
+    max-width: 1180px;
+    margin-top: var(--k-6);
+}

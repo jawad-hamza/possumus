@@ -1,0 +1,222 @@
+/* sign in, first run and password pages: the pieces the centred panel needs beyond auth.css */
+
+/* a form with two short fields per line gets a little more width */
+.k-auth-sheet--form,
+.k-auth-page:has(.k-auth-sheet--form) .k-auth-brand,
+.k-auth-page:has(.k-auth-sheet--form) .k-auth-aside {
+    max-width: 520px;
+}
+
+.k-auth-field {
+    margin-bottom: var(--k-4);
+}
+
+.k-auth-field .form-label {
+    display: flex;
+    align-items: center;
+}
+
+.k-auth-label-row {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--k-3);
+    margin-bottom: 6px;
+}
+
+.k-auth-label-row .form-label {
+    margin-bottom: 0;
+}
+
+.k-auth-small-link {
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+.k-auth-sheet .btn-primary.w-100 {
+    margin-top: var(--k-1);
+}
+
+/* the two steps of opening a new register */
+.k-steps {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--k-3);
+    margin: 0 0 var(--k-5);
+    padding: 0;
+    list-style: none;
+    counter-reset: k-step;
+}
+
+.k-steps li {
+    display: flex;
+    align-items: center;
+    gap: var(--k-2);
+    min-width: 0;
+    padding-top: var(--k-2);
+    border-top: 3px solid var(--k-border);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+    counter-increment: k-step;
+}
+
+.k-steps li::before {
+    content: counter(k-step);
+    flex: none;
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--k-radius-pill);
+    background: var(--k-sunk);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-xs);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+    line-height: 1;
+}
+
+.k-steps li[aria-current="step"] {
+    border-top-color: var(--k-accent);
+    color: var(--k-ink-title);
+}
+
+.k-steps li[aria-current="step"]::before {
+    background: var(--k-accent);
+    color: var(--k-on-accent);
+}
+
+.k-steps li.is-done {
+    border-top-color: var(--k-accent);
+    color: var(--k-ink);
+}
+
+.k-steps li.is-done::before {
+    background: var(--k-accent-tint);
+    color: var(--k-accent-ink);
+}
+
+.k-steps li.is-done > i {
+    color: var(--k-accent-ink);
+}
+
+/* a short list: what happens next, or how to get back in */
+.k-auth-block-title {
+    margin: var(--k-4) 0 var(--k-2);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-md);
+    font-weight: 600;
+}
+
+.k-auth-text {
+    margin: 0 0 var(--k-3);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-md);
+}
+
+.k-auth-list {
+    display: grid;
+    gap: var(--k-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: k-line;
+}
+
+.k-auth-list li {
+    display: grid;
+    grid-template-columns: 30px minmax(0, 1fr);
+    align-items: baseline;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-md);
+    counter-increment: k-line;
+}
+
+.k-auth-list li::before {
+    content: counter(k-line);
+    display: inline-grid;
+    place-items: center;
+    width: 22px;
+    height: 22px;
+    border-radius: var(--k-radius-pill);
+    background: var(--k-sunk);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-xs);
+    font-variant-numeric: tabular-nums;
+    font-weight: 600;
+}
+
+.k-auth-list strong {
+    color: var(--k-ink-title);
+    font-weight: 600;
+}
+
+.k-auth-list code {
+    color: var(--k-ink-title);
+    font-size: 0.95em;
+}
+
+.k-auth-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--k-2);
+    margin-top: var(--k-5);
+}
+
+.k-auth-actions form {
+    display: contents;
+}
+
+.k-auth-under {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    margin: var(--k-3) 0 0;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.k-auth-foot--links {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: space-between;
+    gap: var(--k-2) var(--k-5);
+    color: var(--k-ink-soft);
+}
+
+.k-auth-link-wrap {
+    overflow-wrap: anywhere;
+}
+
+/* short fields share a line so first run fits a 768px window without scrolling */
+.k-auth-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0 var(--k-4);
+}
+
+.k-auth-grid > .k-auth-field {
+    grid-column: 1 / -1;
+}
+
+.k-auth-grid > .k-auth-field--first_name,
+.k-auth-grid > .k-auth-field--last_name,
+.k-auth-grid > .k-auth-field--password1,
+.k-auth-grid > .k-auth-field--password2,
+.k-auth-grid--setup > .k-auth-field--phone,
+.k-auth-grid--setup > .k-auth-field--email {
+    grid-column: auto;
+}
+
+.k-auth-sheet textarea.form-control {
+    height: 76px;
+    min-height: 60px;
+    resize: vertical;
+}
+
+@media (max-width: 575.98px) {
+    .k-auth-grid > .k-auth-field[class] {
+        grid-column: 1 / -1;
+    }
+}

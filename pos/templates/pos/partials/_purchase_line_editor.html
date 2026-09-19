@@ -1,36 +1,34 @@
-﻿<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-    <div>
-        <h5 class="mb-1">Purchase Lines</h5>
-        <p class="text-muted mb-0">Enter quantity received, landed cost, and the sale price you want active in POS.</p>
-    </div>
-    <button type="button" class="btn btn-outline-dark" id="addPurchaseLineBtn">
-        <i class="bi bi-plus-circle"></i> Add Another Line
-    </button>
-</div>
-
-<div class="table-responsive">
-    <table class="table align-middle">
-        <thead>
-            <tr>
-                <th style="min-width: 260px;">Product</th>
-                <th style="width: 120px;">Qty</th>
-                <th style="width: 180px;">Unit Cost</th>
-                <th style="width: 180px;">Sale Price</th>
-                <th style="width: 130px;" class="text-end">Actions</th>
-            </tr>
-        </thead>
-        <tbody id="purchaseLinesBody">
-            {% for form in formset %}
-                {% include "pos/partials/_purchase_line_row.html" with form=form %}
-            {% endfor %}
-        </tbody>
-    </table>
-</div>
+<table class="k-ledger st-lines" id="purchaseLines">
+    <thead>
+        <tr>
+            <th scope="col">Product</th>
+            <th scope="col" class="st-col-qty text-end">Qty / weight</th>
+            <th scope="col" class="st-col-money text-end">Unit cost</th>
+            <th scope="col" class="st-col-money text-end">Sale price</th>
+            <th scope="col" class="st-col-amount text-end">Amount</th>
+            <th scope="col" class="st-col-x"><span class="visually-hidden">Remove</span></th>
+        </tr>
+    </thead>
+    <tbody id="purchaseLinesBody">
+        {% for form in formset %}
+            {% include "pos/partials/_purchase_line_row.html" with form=form %}
+        {% endfor %}
+    </tbody>
+    <tfoot>
+        <tr>
+            <td colspan="4">Total <span class="st-sum-unit" data-lines-count></span></td>
+            <td class="k-num text-end st-lines-total" data-lines-total>0.00</td>
+            <td></td>
+        </tr>
+    </tfoot>
+</table>
 
 <template id="purchaseLineTemplate">
     {% include "pos/partials/_purchase_line_row.html" with form=formset.empty_form %}
 </template>
 
-<div class="small text-muted mt-3">
-    If a product is missing, create it in Quick Setup above and it will immediately appear in these line dropdowns.
+<div class="st-lines-tools">
+    <button type="button" class="btn btn-outline-secondary" id="addPurchaseLineBtn" data-k-key="F4" data-k-key-label="Add a purchase line" data-tip="Enter moves to the next box and, on the last one, starts a new line. Products priced by markup fill the sale price from the cost.">
+        <i class="bi bi-plus-lg" aria-hidden="true"></i> Add line
+    </button>
 </div>

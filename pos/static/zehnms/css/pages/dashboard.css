@@ -1,0 +1,347 @@
+/* Dashboard. Tokens only. */
+
+.db-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--k-2);
+    margin: 0 0 var(--k-5);
+}
+
+.db-actions .btn {
+    flex: none;
+}
+
+/* ---------- four summary figures ---------- */
+
+.db-figures {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--k-5);
+    margin-bottom: var(--k-panel-gap);
+}
+
+.db-figure {
+    min-width: 0;
+}
+
+.db-figure + .db-figure {
+    padding-left: var(--k-5);
+    border-left: var(--k-hair) solid var(--k-divider);
+}
+
+.db-figure .k-balance-label a {
+    color: inherit;
+    text-decoration: none;
+}
+
+.db-figure .k-balance-label a:hover {
+    color: var(--k-accent-ink);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+.db-figure .k-balance-figure {
+    margin: 2px 0;
+    font-size: var(--k-text-3xl);
+}
+
+.db-move {
+    display: inline-flex;
+    align-items: center;
+    font-weight: 600;
+}
+
+.db-move:not(:empty) {
+    margin-right: var(--k-2);
+}
+
+.db-move--up { color: var(--k-in-ink, var(--k-in)); }
+.db-move--down { color: var(--k-out-ink, var(--k-out)); }
+
+/* ---------- two columns ---------- */
+
+.db-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 360px);
+    gap: var(--k-panel-gap);
+    align-items: start;
+}
+
+.db-main,
+.db-aside {
+    display: grid;
+    gap: var(--k-panel-gap);
+    min-width: 0;
+}
+
+.db-grid .k-section {
+    margin: 0;
+}
+
+/* ---------- today statement ---------- */
+
+.db-statement td:first-child {
+    white-space: nowrap;
+}
+
+.db-statement .db-then {
+    color: var(--k-ink-soft);
+}
+
+.db-statement tr.db-strong > td {
+    color: var(--k-ink-title);
+    font-weight: 600;
+}
+
+.db-statement tfoot td:nth-child(2) {
+    font-size: var(--k-text-lg);
+}
+
+.db-muted {
+    margin-left: var(--k-1);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 400;
+}
+
+.db-facts {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--k-3) var(--k-4);
+    margin: var(--k-4) 0 0;
+    padding-top: var(--k-4);
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+
+.db-facts dt {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+.db-facts dt a {
+    color: inherit;
+}
+
+.db-facts dd {
+    margin: 2px 0 0;
+    color: var(--k-ink-title);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* ---------- chart ---------- */
+
+.db-chart {
+    position: relative;
+    height: 240px;
+}
+
+/* ---------- lists ---------- */
+
+.db-list .db-name {
+    max-width: 0;
+    width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.db-list td a {
+    font-weight: 600;
+    text-decoration: none;
+}
+
+.db-list td a:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+}
+
+.db-list td.k-empty {
+    padding-top: var(--k-5);
+    padding-bottom: var(--k-5);
+}
+
+/* ---------- needs attention ---------- */
+
+.db-attention {
+    margin: calc(-1 * var(--k-2)) 0 calc(-1 * var(--k-2));
+    padding: 0;
+    list-style: none;
+}
+
+.db-alert {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: var(--k-3);
+    margin: 0 calc(-1 * var(--k-2));
+    padding: var(--k-3) var(--k-2);
+    border-radius: var(--k-radius-sm);
+    color: var(--k-ink);
+    text-decoration: none;
+    transition: background-color var(--k-dur) var(--k-ease-out);
+}
+
+.db-attention-row + .db-attention-row .db-alert {
+    border-top: var(--k-hair) solid var(--k-divider);
+    border-radius: 0;
+}
+
+a.db-alert:hover {
+    background: var(--k-row-hover);
+    color: var(--k-ink);
+}
+
+a.db-alert:focus-visible {
+    outline: var(--k-focus-ring);
+    outline-offset: 0;
+}
+
+.db-alert-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: var(--k-radius-sm);
+    background: var(--k-sunk);
+    color: var(--k-ink-soft);
+}
+
+.db-alert-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.db-alert-label {
+    color: var(--k-ink-title);
+    font-weight: 600;
+}
+
+.db-alert-note {
+    overflow: hidden;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    text-overflow: ellipsis;
+}
+
+.db-alert-figure {
+    font-weight: 600;
+    font-variant-numeric: tabular-nums lining-nums;
+    white-space: nowrap;
+}
+
+.db-alert-go {
+    color: var(--k-ink-faint);
+}
+
+.db-attention-none {
+    display: flex;
+    align-items: center;
+    gap: var(--k-2);
+    padding: var(--k-2) 0;
+    color: var(--k-ink-soft);
+}
+
+.db-attention-row ~ .db-attention-none {
+    display: none;
+}
+
+/* ---------- narrower windows ---------- */
+
+@media (max-width: 1199.98px) {
+    .db-figures {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .db-figure:nth-child(3) {
+        padding-left: 0;
+        border-left: 0;
+    }
+
+    .db-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    /* the columns dissolve: what needs attention first, then today, then the lists */
+    .db-main,
+    .db-aside {
+        display: contents;
+    }
+
+    .db-attention-panel {
+        order: -1;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .db-facts {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+
+@media (max-width: 575.98px) {
+    .db-actions {
+        flex-wrap: nowrap;
+        overflow: hidden;
+        margin-bottom: var(--k-4);
+    }
+
+    .db-actions.is-fitted {
+        overflow: visible;
+    }
+
+    .db-figures {
+        gap: var(--k-4);
+    }
+
+    .db-figure + .db-figure {
+        padding-left: 0;
+        border-left: 0;
+    }
+
+    .db-figure:nth-child(even) {
+        padding-left: var(--k-4);
+        border-left: var(--k-hair) solid var(--k-divider);
+    }
+
+    .db-figure .k-balance-figure {
+        font-size: var(--k-text-xl);
+    }
+
+    .db-figure .k-balance-note {
+        font-size: var(--k-text-xs);
+    }
+
+    .db-chart {
+        height: 200px;
+    }
+
+    /* three columns of money in 358px: the labels wrap, the figures keep one line */
+    .db-statement > * > tr > :is(th, td) {
+        padding-left: var(--k-2);
+        padding-right: var(--k-2);
+        font-size: var(--k-text-sm);
+    }
+
+    .db-statement > * > tr > :is(th, td):first-child {
+        padding-left: var(--k-panel-pad);
+        white-space: normal;
+    }
+
+    .db-statement > * > tr > :is(th, td):last-child {
+        padding-right: var(--k-panel-pad);
+    }
+}
+
+@media print {
+    .db-actions {
+        display: none !important;
+    }
+
+    .db-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}

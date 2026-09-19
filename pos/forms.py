@@ -1,7 +1,15 @@
 from decimal import Decimal
 from django import forms
+from django.conf import settings
 from django.contrib.auth import authenticate, get_user_model
-from django.contrib.auth.forms import AuthenticationForm, UserCreationForm
+from django.contrib.auth.forms import (
+    AuthenticationForm,
+    PasswordChangeForm,
+    PasswordResetForm,
+    SetPasswordForm,
+    UserCreationForm,
+)
+from django.db import transaction
 from django.forms import BaseModelFormSet, modelformset_factory
 
 from .models import (
@@ -12,6 +20,7 @@ from .models import (
     Customer,
     OwnerOnboarding,
     Product,
+    ProductGroup,
     UserPreference,
     Purchase,
     PurchaseItem,
@@ -20,6 +29,8 @@ from .models import (
     StockAdjustment,
     Supplier,
     SystemSettings,
+    format_qty,
+    quantize_money,
 )
 from accounts.services.cash_bank import bank_account_queryset
 from .services.access import (
@@ -28,11 +39,53 @@ from .services.access import (
     MODULE_DEFINITIONS,
     get_role_choices,
 )
+from .services.modules import allowed_unit_choices, locked_settings_flags, module_enabled, module_within_ceiling
 from .services.user_timezones import normalize_time_zone_name, time_zone_choices
+
+
+DASHES = "---------"
+
+# What an empty dropdown means, in the shop's words. Anything not named here gets "Choose a <label>"
+# when a choice is required and "No <label>" when it may stay empty.
+EMPTY_CHOICE_WORDS = {
+    "brand": ("Choose a brand", "No brand"),
+    "category": ("Choose a category", "No category"),
+    "supplier": ("Choose a supplier", "Choose a supplier"),
+    "customer": ("Choose a customer", "Walk-in customer"),
+    "product": ("Choose a product", "No product"),
+    "bank_account": ("Choose a bank account", "No bank account"),
+}
+
+
+def _empty_words(name, field):
+    required_words, optional_words = EMPTY_CHOICE_WORDS.get(name, (None, None))
+    if field.required and required_words:
+        return required_words
+    if not field.required and optional_words:
+        return optional_words
+    label = str(field.label or name.replace("_", " ")).strip().lower()
+    if field.required:
+        article = "an" if label[:1] in "aeiou" else "a"
+        return f"Choose {article} {label}"
+    return f"No {label}"
+
+
+def plain_empty_choices(fields):
+    """Replace Django's "---------" empty option with words that say what an empty choice means."""
+    for name, field in fields.items():
+        if isinstance(field, forms.ModelChoiceField) and not isinstance(field, forms.ModelMultipleChoiceField):
+            if field.empty_label == DASHES:
+                field.empty_label = _empty_words(name, field)
+        elif isinstance(field, forms.ChoiceField) and not isinstance(field.widget, forms.HiddenInput):
+            choices = list(field.choices)
+            if any(value in ("", None) and label == DASHES for value, label in choices):
+                words = _empty_words(name, field)
+                field.choices = [(value, words if value in ("", None) and label == DASHES else label) for value, label in choices]
 
 
 class StyledFieldsMixin:
     def _apply_bootstrap(self):
+        plain_empty_choices(self.fields)
         for field in self.fields.values():
             widget = field.widget
             if isinstance(widget, forms.CheckboxInput):
@@ -53,10 +106,11 @@ class StyledModelForm(StyledFieldsMixin, forms.ModelForm):
 
 
 class LoginForm(StyledFieldsMixin, AuthenticationForm):
-    username = forms.CharField(label="Email or Login ID")
+    username = forms.CharField(label="Email or login ID")
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.pending_verification_user = None
         self._apply_bootstrap()
         self.fields["username"].widget.attrs.setdefault("autofocus", True)
         self.fields["username"].widget.attrs.setdefault("placeholder", "Enter email or login ID")
@@ -76,19 +130,29 @@ class LoginForm(StyledFieldsMixin, AuthenticationForm):
     def clean(self):
         identifier = (self.cleaned_data.get("username") or "").strip()
         password = self.cleaned_data.get("password")
+        self.pending_verification_user = None
 
         if identifier and password:
             matched_user = self._find_user(identifier)
+            if matched_user is not None and not matched_user.is_active:
+                # The auth backend rejects inactive users outright, so the password is
+                # checked here. Only someone who proves the password learns that the
+                # account is waiting for email verification; everyone else gets the
+                # same generic error as for an unknown login.
+                # Hashed unconditionally so every path costs one password check.
+                password_proven = matched_user.check_password(password)
+                onboarding = getattr(matched_user, "owner_onboarding", None)
+                if password_proven and onboarding is not None and not onboarding.email_verified:
+                    self.pending_verification_user = matched_user
+                    raise forms.ValidationError(
+                        "Verify your email before signing in. Check your inbox for the confirmation link.",
+                        code="unverified",
+                    )
+                raise self.get_invalid_login_error()
+
             auth_username = matched_user.get_username() if matched_user is not None else identifier
             self.user_cache = authenticate(self.request, username=auth_username, password=password)
             if self.user_cache is None:
-                pending_user = matched_user
-                onboarding = getattr(pending_user, "owner_onboarding", None) if pending_user is not None else None
-                if pending_user is not None and not pending_user.is_active and onboarding and not onboarding.email_verified:
-                    raise forms.ValidationError(
-                        "Verify your email before signing in. Check your inbox for the confirmation link.",
-                        code="inactive",
-                    )
                 raise self.get_invalid_login_error()
             self.confirm_login_allowed(self.user_cache)
 
@@ -119,9 +183,8 @@ class OwnerSignupForm(StyledFieldsMixin, UserCreationForm):
         if not email:
             raise forms.ValidationError("Email is required.")
 
-        user_model = get_user_model()
-        if user_model._default_manager.filter(email__iexact=email).exists() or user_model._default_manager.filter(username__iexact=email).exists():
-            raise forms.ValidationError("An account with this email already exists.")
+        # Deliberately no "already registered" error here: the signup view answers
+        # every address the same way so the form cannot be used to probe for accounts.
         return email
 
     def clean_selected_plan(self):
@@ -157,7 +220,7 @@ class FirstAdminSetupForm(StyledFieldsMixin, UserCreationForm):
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
-        self.fields["username"].label = "Admin Login ID"
+        self.fields["username"].label = "Admin login ID"
         self.fields["username"].help_text = "Use this ID to sign in as the business owner or administrator."
 
     def save(self, commit=True):
@@ -177,8 +240,8 @@ class OwnerBusinessSetupForm(StyledModelForm):
         model = CompanyProfile
         fields = ["name", "phone", "email", "address", "tax_registration_number"]
         labels = {
-            "name": "Business Name",
-            "tax_registration_number": "GST / Tax Number",
+            "name": "Business name",
+            "tax_registration_number": "Tax registration number",
         }
         help_texts = {
             "name": "This is the business name shown across the dashboard, invoices, and receipts.",
@@ -190,7 +253,7 @@ class OwnerBusinessSetupForm(StyledModelForm):
         self._apply_bootstrap()
         self.fields["name"].widget.attrs.setdefault("autofocus", True)
         self.fields["name"].widget.attrs.setdefault("placeholder", "Your business name")
-        self.fields["phone"].widget.attrs.setdefault("placeholder", "+92 300 0000000")
+        self.fields["phone"].widget.attrs.setdefault("placeholder", "Business phone number")
         self.fields["email"].widget.attrs.setdefault("placeholder", "billing@yourstore.com")
         self.fields["address"].widget.attrs.setdefault("rows", 3)
 
@@ -247,6 +310,30 @@ class TeamUserForm(StyledFieldsMixin, UserCreationForm):
         self.fields['role'].help_text = 'Choose Admin, Cashier, or a custom role created below. Custom roles follow the page permissions configured in Settings.'
         self.fields["password1"].help_text = "Use a strong password with at least 8 characters."
 
+    # Sign-in accepts either a login ID or an email, so both must stay unambiguous
+    # across every account (case-insensitively).
+    def clean_username(self):
+        username = (self.cleaned_data.get("username") or "").strip()
+        user_model = get_user_model()
+        if (
+            user_model._default_manager.filter(username__iexact=username).exists()
+            or user_model._default_manager.filter(email__iexact=username).exists()
+        ):
+            raise forms.ValidationError("That login ID is already in use. Choose a different one.")
+        return username
+
+    def clean_email(self):
+        email = (self.cleaned_data.get("email") or "").strip().lower()
+        if not email:
+            return ""
+        user_model = get_user_model()
+        if (
+            user_model._default_manager.filter(email__iexact=email).exists()
+            or user_model._default_manager.filter(username__iexact=email).exists()
+        ):
+            raise forms.ValidationError("Another account already uses this email address.")
+        return email
+
     def save(self, commit=True):
         user = super().save(commit=False)
         user.first_name = self.cleaned_data.get("first_name", "")
@@ -256,6 +343,29 @@ class TeamUserForm(StyledFieldsMixin, UserCreationForm):
         if commit:
             user.save()
         return user
+
+
+class AccountPasswordResetForm(StyledFieldsMixin, PasswordResetForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+        self.fields["email"].label = "Account email"
+        self.fields["email"].widget.attrs.setdefault("autofocus", True)
+        self.fields["email"].widget.attrs.setdefault("placeholder", "you@yourstore.com")
+
+
+class AccountSetPasswordForm(StyledFieldsMixin, SetPasswordForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+        self.fields["new_password1"].widget.attrs.setdefault("autofocus", True)
+
+
+class AccountPasswordChangeForm(StyledFieldsMixin, PasswordChangeForm):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._apply_bootstrap()
+        self.fields["old_password"].label = "Current password"
 
 
 class CustomRoleForm(StyledModelForm):
@@ -321,11 +431,11 @@ class CompanyProfileForm(StyledModelForm):
             "qr_note",
         ]
         labels = {
-            "name": "Business Name",
-            "tax_registration_number": "GST / Tax Number",
-            "invoice_footer": "Receipt Footer",
+            "name": "Business name",
+            "tax_registration_number": "Tax registration number",
+            "invoice_footer": "Receipt footer",
             "show_qr": "Show QR",
-            "qr_note": "QR Note",
+            "qr_note": "QR note",
         }
         help_texts = {
             "tax_registration_number": "Optional registration shown on receipts and invoices.",
@@ -337,6 +447,25 @@ class CompanyProfileForm(StyledModelForm):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
         self.fields["logo"].widget.attrs.setdefault("class", "form-control")
+        self.fields["logo"].widget.attrs.setdefault("accept", "image/*")
+        limit_mb = self._logo_limit_bytes() / (1024 * 1024)
+        self.fields["logo"].help_text = f"Image up to {limit_mb:g} MB. It appears on the sign-in page and receipts."
+        if getattr(settings, "ON_VERCEL", False) and not getattr(settings, "USE_S3_MEDIA", False):
+            self.fields["logo"].help_text += (
+                " This hosting has no permanent disk, so the logo disappears after a redeploy until media storage is configured."
+            )
+
+    @staticmethod
+    def _logo_limit_bytes():
+        return int(getattr(settings, "MAX_LOGO_UPLOAD_BYTES", 2 * 1024 * 1024))
+
+    def clean_logo(self):
+        logo = self.cleaned_data.get("logo")
+        # Only a newly uploaded file has a content type; the stored logo is left alone.
+        if logo and hasattr(logo, "content_type") and logo.size > self._logo_limit_bytes():
+            limit_mb = self._logo_limit_bytes() / (1024 * 1024)
+            raise forms.ValidationError(f"The logo is too large. Choose an image under {limit_mb:g} MB.")
+        return logo
 
 
 class SystemSettingsForm(StyledModelForm):
@@ -354,33 +483,47 @@ class SystemSettingsForm(StyledModelForm):
             "allow_credit_sales",
             "allow_price_override",
             "allow_line_discount",
+            "allow_zero_total_sales",
             "default_sale_payment_method",
             "thermal_printer_width_mm",
+            "currency_symbol",
+            "currency_code",
+            "default_markup_percent",
+            "invoice_prefix",
         ]
         labels = {
-            "gst_enabled": "Enable GST / Tax",
-            "tax_mode": "Tax Mode",
-            "tax_label": "Tax Label",
-            "use_payment_method_gst": "Use Payment Method GST",
-            "cash_gst_rate": "Cash GST Rate (%)",
-            "bank_gst_rate": "Bank GST Rate (%)",
-            "enable_product_expiry": "Enable Product Expiry Tracking",
-            "expiry_alert_days": "Expiry Alert Window (days)",
-            "allow_credit_sales": "Allow Credit Sales",
-            "allow_price_override": "Allow Price Override",
-            "allow_line_discount": "Allow Line Discount",
-            "default_sale_payment_method": "Default Payment Method",
-            "thermal_printer_width_mm": "Thermal Printer Width (mm)",
+            "gst_enabled": "Charge tax on sales",
+            "tax_mode": "Tax mode",
+            "tax_label": "Tax label",
+            "use_payment_method_gst": "Different tax rate for cash and bank",
+            "cash_gst_rate": "Cash tax rate (%)",
+            "bank_gst_rate": "Bank tax rate (%)",
+            "enable_product_expiry": "Enable product expiry tracking",
+            "expiry_alert_days": "Expiry alert window (days)",
+            "allow_credit_sales": "Allow credit sales",
+            "allow_price_override": "Allow price override",
+            "allow_line_discount": "Allow line discount",
+            "allow_zero_total_sales": "Allow zero-total sales",
+            "default_sale_payment_method": "Default payment method",
+            "thermal_printer_width_mm": "Thermal printer width (mm)",
+            "currency_symbol": "Currency symbol",
+            "currency_code": "Currency code",
+            "default_markup_percent": "Default markup on cost (%)",
+            "invoice_prefix": "Invoice number prefix",
         }
         help_texts = {
-            "tax_mode": "Use category GST to tax each product line from its category. Manual cart tax keeps the old cart-level tax box.",
+            "tax_mode": "Category tax applies each product line's rate from its category. Manual cart tax lets the cashier type one rate for the whole sale.",
             "tax_label": "Examples: GST, VAT, Sales Tax.",
-            "use_payment_method_gst": "When enabled, Cash and Bank use the GST rates configured below and the POS tax box becomes automatic.",
+            "use_payment_method_gst": "When enabled, Cash and Bank sales use the two rates below and the POS tax box becomes automatic.",
             "cash_gst_rate": "Applied when the sale is completed as a cash sale.",
             "bank_gst_rate": "Applied when the sale is completed as a bank sale.",
             "enable_product_expiry": "Show expiry date fields across products and purchases.",
+            "allow_zero_total_sales": "Off by default. When on, a sale discounted to zero (a giveaway) can be completed; the stock still leaves and its cost is recorded.",
             "expiry_alert_days": "How many days before expiry the dashboard should start warning you.",
             "thermal_printer_width_mm": "50mm is standard for small thermal receipt printers.",
+            "currency_symbol": "Shown before every amount on screens, receipts and reports.",
+            "currency_code": "Three-letter ISO code of the currency you trade in.",
+            "default_markup_percent": "Pre-filled on new products so the sale price is cost plus this %. Leave blank to price by hand.",
         }
 
     def __init__(self, *args, **kwargs):
@@ -391,9 +534,45 @@ class SystemSettingsForm(StyledModelForm):
         self.fields["bank_gst_rate"].required = False
         self.fields["enable_product_expiry"].required = False
         self.fields["expiry_alert_days"].required = False
+        # Optional so a settings POST that predates these fields keeps the stored values.
+        self.fields["currency_symbol"].required = False
+        self.fields["currency_code"].required = False
+        self.fields["default_markup_percent"].required = False
+        self.fields["default_markup_percent"].widget.attrs.update({"min": "0", "step": "0.01"})
+        self.fields["currency_code"].widget.attrs.update({"maxlength": "3", "style": "text-transform: uppercase;"})
+        # Switches of modules the shop cannot use are read-only: a disabled field ignores the POST,
+        # so nobody can turn one on by hand-crafting a request.
+        self.locked_flags = locked_settings_flags()
+        for flag in self.locked_flags:
+            if flag in self.fields:
+                self.fields[flag].disabled = True
+        if not module_enabled("markup"):
+            self.fields["default_markup_percent"].disabled = True
 
     def clean_tax_label(self):
         return (self.cleaned_data.get("tax_label") or "GST").strip() or "GST"
+
+    def clean_currency_symbol(self):
+        symbol = (self.cleaned_data.get("currency_symbol") or "").strip()
+        if not symbol and "currency_symbol" not in self.data:
+            return self.instance.currency_symbol
+        return symbol
+
+    def clean_currency_code(self):
+        code = (self.cleaned_data.get("currency_code") or "").strip().upper()
+        if not code:
+            return self.instance.currency_code
+        if len(code) != 3 or not code.isalpha():
+            raise forms.ValidationError("Use the three-letter currency code, for example USD or AED.")
+        return code
+
+    def clean_default_markup_percent(self):
+        markup = self.cleaned_data.get("default_markup_percent")
+        if markup is None and "default_markup_percent" not in self.data:
+            return self.instance.default_markup_percent
+        if markup is not None and markup < 0:
+            raise forms.ValidationError("Markup cannot be negative.")
+        return markup
 
     def clean(self):
         cleaned_data = super().clean()
@@ -426,49 +605,266 @@ class SupplierForm(StyledModelForm):
         self._apply_bootstrap()
 
 
+def _existing_model_fields(model, names):
+    available = {field.name for field in model._meta.get_fields()}
+    return [name for name in names if name in available]
+
+
+# Services and other non-stock items: the switch appears once Product has a track_stock column.
+PRODUCT_STOCK_SWITCH_FIELDS = _existing_model_fields(Product, ("track_stock",))
+
+
+def _apply_feature_modules_to_product_form(form):
+    """Product forms shrink with the shop's feature modules (pos.services.modules)."""
+    if "unit" in form.fields:
+        # Whole-number units only while Weights & Measures is off; the choices also validate the POST.
+        form.fields["unit"].choices = allowed_unit_choices(getattr(form.instance, "unit", None) if form.instance.pk else None)
+    if not module_enabled("markup"):
+        # Only "type the price" is left: no chooser, no markup inputs.
+        for name in ("price_by", "markup_percent", "markup_amount"):
+            form.fields.pop(name, None)
+    # Expiry dates stay editable while tracking is merely switched off (only the alerts go quiet);
+    # the field disappears when the edition does not include expiry tracking at all.
+    if not module_within_ceiling("expiry"):
+        form.fields.pop("expiry_date", None)
+
+
 class ProductForm(StyledModelForm):
+    # Stock is never edited here: a stale form would overwrite sales made meanwhile.
+    # New products take an opening quantity; later changes go through Stock Adjustments.
+    opening_stock = forms.DecimalField(
+        label="Opening stock",
+        required=False,
+        min_value=0,
+        max_digits=12,
+        decimal_places=3,
+        help_text="What is on the shelf today.",
+    )
+    # A select, not a checkbox: a POST without the field must mean "keep counting stock",
+    # and an unticked checkbox cannot be told apart from a missing one.
+    track_stock = forms.TypedChoiceField(
+        label="Item type",
+        choices=(("1", "Stocked item"), ("0", "Service (no stock)")),
+        coerce=lambda value: value == "1",
+        required=False,
+        empty_value=None,
+        help_text="Service: labour, delivery, repairs.",
+    )
+    PRICE_BY_CHOICES = (
+        (Product.PRICE_BY_HAND, "Type the price"),
+        (Product.PRICE_BY_PERCENT, "Percentage on cost"),
+        (Product.PRICE_BY_AMOUNT, "Amount on cost"),
+    )
+    price_by = forms.ChoiceField(
+        label="Price by",
+        choices=PRICE_BY_CHOICES,
+        required=False,
+        help_text="Type the sale price yourself, or let it follow the cost: cost + 25%, or cost + 20.",
+    )
+    # Asked once, when a second size turns a plain product into a family of sizes.
+    source_variant_label = forms.CharField(
+        label="Size of the first one",
+        max_length=40,
+        required=False,
+        help_text="What the item you started from is called, such as Small.",
+    )
+
     class Meta:
         model = Product
         fields = [
             "name",
+            "variant_label",
             "brand",
             "sku",
             "barcode",
             "category",
             "supplier",
+            "unit",
             "cost_price",
+            "markup_percent",
+            "markup_amount",
             "price",
             "minimum_margin_percent",
-            "stock",
             "low_stock_threshold",
             "location",
             "expiry_date",
             "is_active",
+            *PRODUCT_STOCK_SWITCH_FIELDS,
         ]
         labels = {
-            "price": "Sale Price",
-            "cost_price": "Current Cost",
-            "minimum_margin_percent": "Minimum Margin (%)",
-            "location": "Storage Location",
-            "expiry_date": "Expiry Date",
+            "sku": "SKU",
+            "unit": "Sold by",
+            "price": "Sale price",
+            "cost_price": "Current cost",
+            "markup_percent": "Markup on cost (%)",
+            "markup_amount": "Amount on cost",
+            "variant_label": "Size",
+            "minimum_margin_percent": "Minimum margin (%)",
+            "location": "Storage location",
+            "expiry_date": "Expiry date",
         }
         help_texts = {
-            "barcode": "Optional. If blank, SKU can still be scanned.",
-            "cost_price": "Used for inventory valuation and gross profit.",
-            "price": "Current selling price used on POS checkout.",
-            "minimum_margin_percent": "Purchase updates must keep this margin or higher.",
-            "location": "Example: Warehouse A / Rack 3",
-            "expiry_date": "Optional. Leave blank for products that do not expire.",
+            "barcode": "Optional. The SKU scans too.",
+            "unit": "Loose goods: kg, g, L or m.",
+            "cost_price": "What one unit costs you.",
+            "markup_percent": "Sale price = cost + this %.",
+            "markup_amount": "Sale price = cost + this amount.",
+            "variant_label": "Such as Small, 500 g or Pack of 6.",
+            "price": "Price per unit at the till.",
+            "minimum_margin_percent": "No sale price goes below it.",
+            "location": "Such as Rack 3 or Shelf A.",
+            "expiry_date": "Leave blank if it does not expire.",
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, variant_source=None, **kwargs):
         super().__init__(*args, **kwargs)
+        self.fields["price"].required = False
+        self.fields["unit"].required = False
+        self.initial["track_stock"] = "1" if self.instance.track_stock else "0"
+        self.initial["price_by"] = self.instance.price_by
+        if self.instance.pk:
+            del self.fields["opening_stock"]
+            self.initial["low_stock_threshold"] = format_qty(self.instance.low_stock_threshold)
+        elif module_enabled("markup"):
+            if self.initial.get("markup_amount") is not None:
+                self.initial["price_by"] = Product.PRICE_BY_AMOUNT
+            elif self.initial.get("markup_percent") is not None:
+                self.initial["price_by"] = Product.PRICE_BY_PERCENT
+            else:
+                default_markup = SystemSettings.load().default_markup_percent
+                if default_markup is not None:
+                    self.fields["markup_percent"].initial = default_markup
+                    self.initial["price_by"] = Product.PRICE_BY_PERCENT
+        self.fields["markup_amount"].widget.attrs.update({"min": "0", "step": "0.01"})
+
+        # Sizes: the label shows on a product that belongs to a family, and on a size being added.
+        self.variant_source = variant_source if (variant_source is not None and module_enabled("variants")) else None
+        grouped = bool(self.instance.pk and self.instance.variant_group_id)
+        if self.variant_source is not None:
+            self.fields["variant_label"].required = True
+            self.fields["variant_label"].label = "This size"
+            if self.variant_source.variant_group_id:
+                del self.fields["source_variant_label"]
+            else:
+                self.fields["source_variant_label"].required = True
+                self.fields["source_variant_label"].label = f"Size of the first one ({self.variant_source.sku})"
+        else:
+            del self.fields["source_variant_label"]
+            if grouped and module_enabled("variants"):
+                self.fields["variant_label"].required = True
+            else:
+                del self.fields["variant_label"]
+        if self.variant_source is not None or grouped:
+            self.fields["name"].help_text = "Shared by every size of this item."
         self._apply_bootstrap()
         self.fields["brand"].queryset = Brand.objects.filter(is_active=True).order_by("name")
         self.fields["category"].queryset = Category.objects.filter(is_active=True).order_by("name")
         self.fields["supplier"].queryset = Supplier.objects.filter(is_active=True).order_by("name")
         self.fields["expiry_date"].required = False
         self.fields["expiry_date"].widget = forms.DateInput(attrs={"type": "date", "class": "form-control"})
+        _apply_feature_modules_to_product_form(self)
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get("unit"):
+            cleaned["unit"] = self.instance.unit or Product.UNIT_PIECE
+            self.instance.unit = cleaned["unit"]
+        if "markup_percent" not in self.fields:
+            # Markup Pricing is off: the typed price is the price, so a stored markup must not overrule it.
+            self.instance.markup_percent = None
+            self.instance.markup_amount = None
+        self._clean_price_by(cleaned)
+        markup = cleaned.get("markup_percent")
+        markup_amount = cleaned.get("markup_amount")
+        cost = cleaned.get("cost_price")
+        if markup is not None and cost:
+            cleaned["price"] = quantize_money(cost * (Decimal("1") + markup / Decimal("100")))
+            self.instance.price = cleaned["price"]
+        elif markup_amount is not None and cost:
+            cleaned["price"] = quantize_money(cost + markup_amount)
+            self.instance.price = cleaned["price"]
+        elif not cleaned.get("price"):
+            self.add_error("price", "Enter a sale price, or set a cost and markup to calculate it.")
+        self._clean_variant(cleaned)
+
+        track_stock = cleaned.get("track_stock")
+        if track_stock is None:
+            track_stock = cleaned["track_stock"] = self.instance.track_stock
+        if not track_stock:
+            if cleaned.get("opening_stock"):
+                self.add_error("opening_stock", "A service has no stock. Leave this empty, or choose Stocked item.")
+            if self.instance.pk and Product.objects.filter(pk=self.instance.pk, track_stock=True, stock__gt=0).exists():
+                self.add_error(
+                    "track_stock",
+                    "This item still has stock on the books. Bring it to zero with a stock adjustment first.",
+                )
+
+        opening_stock = cleaned.get("opening_stock")
+        unit = cleaned.get("unit")
+        if opening_stock and unit not in Product.FRACTIONAL_UNITS and opening_stock != opening_stock.to_integral_value():
+            self.add_error("opening_stock", "This unit is counted in whole numbers.")
+        return cleaned
+
+    def _clean_price_by(self, cleaned):
+        """One way of pricing at a time. Without the chooser in the POST the filled markup decides."""
+        if "price_by" not in self.fields:
+            return
+        price_by = cleaned.get("price_by") or ""
+        if not price_by:
+            if cleaned.get("markup_percent") is not None and cleaned.get("markup_amount") is not None:
+                self.add_error("markup_amount", "Use a percentage or an amount on cost, not both.")
+            return
+        if price_by == Product.PRICE_BY_PERCENT:
+            cleaned["markup_amount"] = None
+            if cleaned.get("markup_percent") is None and "markup_percent" not in self.errors:
+                self.add_error("markup_percent", "Enter the percentage to add on cost.")
+        elif price_by == Product.PRICE_BY_AMOUNT:
+            cleaned["markup_percent"] = None
+            if cleaned.get("markup_amount") is None and "markup_amount" not in self.errors:
+                self.add_error("markup_amount", "Enter the amount to add on cost.")
+        else:
+            cleaned["markup_percent"] = None
+            cleaned["markup_amount"] = None
+        # construct_instance skips nothing here, but keep the instance in step for Product.clean().
+        self.instance.markup_percent = cleaned.get("markup_percent")
+        self.instance.markup_amount = cleaned.get("markup_amount")
+
+    def _clean_variant(self, cleaned):
+        source = self.variant_source
+        if source is None:
+            return
+        label = (cleaned.get("variant_label") or "").strip()
+        if source.variant_group_id:
+            # Product.clean() checks the label against the sizes this family already has.
+            self.instance.variant_group_id = source.variant_group_id
+            return
+        source_label = (cleaned.get("source_variant_label") or "").strip()
+        if label and source_label and label.lower() == source_label.lower():
+            self.add_error("variant_label", "Give the two sizes different names.")
+
+    def save(self, commit=True):
+        source = self.variant_source
+        if not commit:
+            return super().save(commit=False)
+        with transaction.atomic():
+            if source is not None:
+                group = source.variant_group
+                if group is None:
+                    group = ProductGroup.objects.create(
+                        name=self.cleaned_data["name"], category=source.category, brand=source.brand
+                    )
+                    source.variant_group = group
+                    source.variant_label = self.cleaned_data["source_variant_label"].strip()
+                    source.name = group.name
+                    source.save(update_fields=["variant_group", "variant_label", "name"])
+                self.instance.variant_group = group
+            product = super().save(commit=True)
+            group = product.variant_group
+            if group is not None and group.name != product.name:
+                # The name is the family's: renaming one size renames them all.
+                group.name = product.name
+                group.save()
+        return product
 
 
 class QuickProductForm(StyledModelForm):
@@ -481,6 +877,9 @@ class QuickProductForm(StyledModelForm):
             "brand",
             "category",
             "supplier",
+            "unit",
+            "markup_percent",
+            "markup_amount",
             "price",
             "minimum_margin_percent",
             "low_stock_threshold",
@@ -488,13 +887,20 @@ class QuickProductForm(StyledModelForm):
             "expiry_date",
         ]
         labels = {
-            "price": "Opening Sale Price",
-            "minimum_margin_percent": "Minimum Margin (%)",
-            "low_stock_threshold": "Low Stock Alert",
-            "expiry_date": "Expiry Date",
+            "sku": "SKU",
+            "unit": "Sold by",
+            "markup_percent": "Markup on cost (%)",
+            "markup_amount": "Or amount on cost",
+            "price": "Opening sale price",
+            "minimum_margin_percent": "Minimum margin (%)",
+            "low_stock_threshold": "Low stock alert",
+            "expiry_date": "Expiry date",
         }
         help_texts = {
-            "price": "Use the intended retail price. Purchase will update it later if needed.",
+            "unit": "Pick kg, g, L or m for items sold by weight or length.",
+            "markup_percent": "Fill this and the purchase line prices the item as cost + this %.",
+            "markup_amount": "Or fill this: the purchase line prices the item as cost + this amount.",
+            "price": "Use the intended retail price. Leave blank when a markup is set.",
             "barcode": "Optional. Leave blank if you only use SKU.",
             "expiry_date": "Optional. Leave blank for non-expiring products.",
         }
@@ -514,6 +920,32 @@ class QuickProductForm(StyledModelForm):
         self.fields["minimum_margin_percent"].initial = 0
         self.fields["low_stock_threshold"].initial = 5
         self.fields["expiry_date"].widget = forms.DateInput(attrs={"type": "date", "class": "form-control"})
+        self.fields["unit"].required = False
+        self.fields["price"].required = False
+        if module_enabled("markup"):
+            default_markup = SystemSettings.load().default_markup_percent
+            if default_markup is not None:
+                self.fields["markup_percent"].initial = default_markup
+        _apply_feature_modules_to_product_form(self)
+
+    def clean(self):
+        cleaned = super().clean()
+        if not cleaned.get("unit"):
+            cleaned["unit"] = Product.UNIT_PIECE
+            self.instance.unit = cleaned["unit"]
+        if cleaned.get("markup_percent") is not None and cleaned.get("markup_amount") is not None:
+            self.add_error("markup_amount", "Use a percentage or an amount on cost, not both.")
+        if cleaned.get("price") in (None, ""):
+            if cleaned.get("markup_percent") is None and cleaned.get("markup_amount") is None:
+                if "markup_percent" in self.fields:
+                    self.add_error("price", "Enter a sale price, or set a markup so purchases can price it.")
+                else:
+                    self.add_error("price", "Enter a sale price.")
+            else:
+                # No cost yet: the first purchase line sets the price from the markup.
+                cleaned["price"] = Decimal("0")
+                self.instance.price = cleaned["price"]
+        return cleaned
 
     def save(self, commit=True):
         product = super().save(commit=False)
@@ -525,15 +957,21 @@ class QuickProductForm(StyledModelForm):
         return product
 
 
+# The supplier's own bill reference: shown on the purchase form as soon as the Purchase model carries these columns.
+PURCHASE_BILL_FIELDS = _existing_model_fields(Purchase, ("supplier_invoice_number", "bill_date"))
+
+
 class PurchaseForm(StyledModelForm):
     class Meta:
         model = Purchase
-        fields = ["supplier", "payment_method", "bank_account", "paid_amount"]
+        fields = ["supplier", *PURCHASE_BILL_FIELDS, "payment_method", "bank_account", "paid_amount"]
         labels = {
+            "supplier_invoice_number": "Supplier bill no.",
+            "bill_date": "Bill date",
             "supplier": "Supplier",
-            "payment_method": "Payment Method",
-            "bank_account": "Bank Ledger",
-            "paid_amount": "Paid Now",
+            "payment_method": "Payment method",
+            "bank_account": "Bank ledger",
+            "paid_amount": "Paid now",
         }
         help_texts = {
             "supplier": "Keep blank only for a pure cash purchase with no party tracking.",
@@ -548,6 +986,10 @@ class PurchaseForm(StyledModelForm):
         self.fields["supplier"].queryset = Supplier.objects.filter(is_active=True).order_by("name")
         self.fields["bank_account"].required = False
         self.fields["bank_account"].queryset = bank_account_queryset()
+        for name in PURCHASE_BILL_FIELDS:
+            self.fields[name].required = False
+        if "bill_date" in self.fields:
+            self.fields["bill_date"].widget = forms.DateInput(attrs={"type": "date", "class": "form-control"})
 
     def clean_paid_amount(self):
         paid_amount = self.cleaned_data["paid_amount"]
@@ -563,23 +1005,53 @@ class PurchaseForm(StyledModelForm):
         return cleaned_data
 
 
+class PurchaseProductSelect(forms.Select):
+    """Product dropdown whose options carry unit and pricing rules for the purchase line script."""
+
+    def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
+        option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
+        product = getattr(value, "instance", None)
+        if product is not None:
+            option["attrs"].update(
+                {
+                    "data-unit": product.unit,
+                    "data-step": product.quantity_step,
+                    "data-markup": "" if product.markup_percent is None else str(product.markup_percent),
+                    "data-markup-amount": "" if product.markup_amount is None else str(product.markup_amount),
+                    "data-min-margin": str(product.minimum_margin_percent or 0),
+                    "data-price": str(product.price or ""),
+                }
+            )
+        return option
+
+
 class PurchaseItemForm(StyledModelForm):
     class Meta:
         model = PurchaseItem
         fields = ["product", "quantity", "cost_price", "sale_price"]
         labels = {
-            "cost_price": "Unit Cost",
-            "sale_price": "Sale Price",
+            "cost_price": "Unit cost",
+            "sale_price": "Sale price",
         }
         help_texts = {
             "sale_price": "The purchase will update the product's active sale price.",
+        }
+        widgets = {
+            "product": PurchaseProductSelect,
         }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
         self.empty_permitted = True
-        self.fields["product"].queryset = Product.objects.filter(is_active=True).order_by("name")
+        # Each size is its own choice, named "Bread - Small".
+        self.fields["product"].queryset = Product.objects.filter(is_active=True).order_by("name", "variant_label")
+        self.fields["quantity"].widget.attrs.update({"min": "0", "inputmode": "decimal"})
+        self.fields["sale_price"].required = False
+        if self.instance.pk and self.instance.product_id:
+            # New rows get their step from the chosen option in the browser.
+            self.fields["quantity"].widget.attrs["step"] = self.instance.product.quantity_step
+            self.initial["quantity"] = format_qty(self.instance.quantity)
 
 
 class BrandForm(StyledModelForm):
@@ -607,16 +1079,16 @@ class CategoryForm(StyledModelForm):
         model = Category
         fields = ["name", "tax_status", "gst_rate", "cash_gst_rate", "bank_gst_rate", "is_active"]
         labels = {
-            "tax_status": "GST Status",
-            "gst_rate": "Default GST Rate (%)",
-            "cash_gst_rate": "Cash GST Rate (%)",
-            "bank_gst_rate": "Bank GST Rate (%)",
+            "tax_status": "Tax status",
+            "gst_rate": "Default tax rate (%)",
+            "cash_gst_rate": "Cash tax rate (%)",
+            "bank_gst_rate": "Bank tax rate (%)",
         }
         help_texts = {
-            "tax_status": "Taxable categories will apply GST automatically in POS when category GST mode is enabled.",
-            "gst_rate": "Used as the base category GST and as the default when cash/bank rates are left blank.",
-            "cash_gst_rate": "Applied automatically when this category is sold as a cash sale in Category GST mode.",
-            "bank_gst_rate": "Applied automatically when this category is sold as a bank sale in Category GST mode.",
+            "tax_status": "Taxable categories are taxed automatically in POS when category tax mode is on.",
+            "gst_rate": "The category's base rate, also used when the cash and bank rates are left blank.",
+            "cash_gst_rate": "Applied automatically when this category is sold as a cash sale in category tax mode.",
+            "bank_gst_rate": "Applied automatically when this category is sold as a bank sale in category tax mode.",
         }
 
     def __init__(self, *args, **kwargs):
@@ -696,10 +1168,10 @@ class StockAdjustmentForm(StyledFieldsMixin, forms.Form):
 
     product = forms.ModelChoiceField(queryset=Product.objects.none())
     adjustment_mode = forms.ChoiceField(choices=StockAdjustment.MODE_CHOICES)
-    quantity_delta = forms.IntegerField(required=False, label="Adjustment Quantity")
-    quantity_after = forms.IntegerField(required=False, min_value=0, label="Counted Stock")
+    quantity_delta = forms.DecimalField(required=False, max_digits=12, decimal_places=3, label="Adjustment quantity")
+    quantity_after = forms.DecimalField(required=False, min_value=0, max_digits=12, decimal_places=3, label="Counted stock")
     reason_preset = forms.ChoiceField(choices=REASON_CHOICES, label="Reason")
-    custom_reason = forms.CharField(required=False, max_length=150, label="Custom Reason")
+    custom_reason = forms.CharField(required=False, max_length=150, label="Custom reason")
     reason = forms.CharField(max_length=150, widget=forms.HiddenInput())
     notes = forms.CharField(required=False, widget=forms.Textarea)
 

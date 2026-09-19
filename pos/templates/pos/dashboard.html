@@ -1,439 +1,237 @@
-﻿{% extends "pos/base.html" %}
+{% extends "pos/base.html" %}
+{% load static currency_tags %}
 {% block title %}Dashboard{% endblock %}
+{% block page_title %}Dashboard{% endblock %}
+{% block page_help %}{{ today|date:"l, j F Y" }}. Amounts in {{ currency_symbol }}, after returns.{% endblock %}
 
 {% block extra_css %}
-<style>
-    .dashboard-kpi {
-        text-decoration: none;
-        color: inherit;
-        display: block;
-    }
-
-    .dashboard-kpi .metric-card {
-        padding: 1.1rem;
-    }
-
-    .dashboard-kpi .kpi-hint {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        color: var(--metric-accent, var(--accent-primary));
-        font-size: 0.86rem;
-        font-weight: 600;
-        margin-top: 0.9rem;
-    }
-
-    .snapshot-tile {
-        border: 1px solid #e2e8f0;
-        border-radius: 18px;
-        padding: 18px;
-        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-    }
-
-    .snapshot-tile.primary {
-        background: linear-gradient(180deg, #f8fbff 0%, #eef4ff 100%);
-    }
-
-    .snapshot-tile.success {
-        background: linear-gradient(180deg, #f5fcf7 0%, #ecfdf3 100%);
-    }
-
-    .snapshot-tile.warning {
-        background: linear-gradient(180deg, #fffaf1 0%, #fff4dd 100%);
-    }
-
-    .snapshot-tile .snapshot-icon {
-        width: 42px;
-        height: 42px;
-        border-radius: 14px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        font-size: 1rem;
-        margin-bottom: 14px;
-    }
-
-    .snapshot-tile.primary .snapshot-icon {
-        background: rgba(37, 99, 235, 0.14);
-        color: #2563eb;
-    }
-
-    .snapshot-tile.success .snapshot-icon {
-        background: rgba(22, 163, 74, 0.14);
-        color: #15803d;
-    }
-
-    .snapshot-tile.warning .snapshot-icon {
-        background: rgba(245, 158, 11, 0.16);
-        color: #b45309;
-    }
-
-    .snapshot-tile strong {
-        display: block;
-        font-size: 1.15rem;
-        margin-top: 6px;
-    }
-
-    .table-panel {
-        height: 100%;
-    }
-
-    .table-panel .table td,
-    .table-panel .table th {
-        vertical-align: middle;
-    }
-
-    .section-icon-success {
-        background: #e9f9ef;
-        color: #15803d;
-    }
-
-    .section-icon-warning {
-        background: #fff2df;
-        color: #b45309;
-    }
-
-    .section-icon-danger {
-        background: #fdecec;
-        color: #dc2626;
-    }
-</style>
+<link rel="stylesheet" href="{% static 'zehnms/css/pages/dashboard.css' %}">
 {% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon"><i class="bi bi-speedometer2"></i></span>
-        <div>
-            <h1 class="page-title">Dashboard</h1>
-            <p class="page-subtitle">Fast commercial view of sales, profit, stock pressure, purchases, and dues.</p>
-        </div>
-    </div>
-    <div class="page-actions">
-        <a href="{% url 'pos_screen' %}" class="btn btn-dark"><i class="bi bi-cart4"></i> Open POS</a>
-        <a href="{{ reports_center_url }}" class="btn btn-outline-secondary"><i class="bi bi-graph-up-arrow"></i> Reports Centre</a>
-    </div>
-</div>
+<nav class="db-actions k-fit" aria-label="Quick actions">
+    <a href="{% url 'pos_screen' %}" class="btn btn-primary" data-k-key="F2" data-k-key-label="New sale"><i class="bi bi-cart4" aria-hidden="true"></i> New sale</a>
+    {% if manage_access.purchases %}<a href="{% url 'purchase_add' %}" class="btn btn-outline-secondary" data-k-key="F3" data-k-key-label="Record a purchase"><i class="bi bi-truck" aria-hidden="true"></i> Record purchase</a>{% endif %}
+    {% if manage_access.products %}<a href="{% url 'product_add' %}" class="btn btn-outline-secondary" data-k-key="F7" data-k-key-label="Add a product"><i class="bi bi-box-seam" aria-hidden="true"></i> Add product</a>{% endif %}
+    {% if nav_access.expenses %}<a href="{% url 'expense_list' %}" class="btn btn-outline-secondary" data-k-key="F4" data-k-key-label="Expenses"><i class="bi bi-receipt-cutoff" aria-hidden="true"></i> Expenses</a>{% endif %}
+    {% if nav_access.accounts %}<a href="{% url 'money_desk' %}" class="btn btn-outline-secondary" data-k-key="F6" data-k-key-label="Money desk"><i class="bi bi-cash-coin" aria-hidden="true"></i> Money desk</a>{% endif %}
+    {% if nav_access.reports %}<a href="{{ reports_center_url }}" class="btn btn-outline-secondary" data-k-key="F8" data-k-key-label="Reports"><i class="bi bi-graph-up-arrow" aria-hidden="true"></i> Reports</a>{% endif %}
+</nav>
 
-<div class="row g-3 mb-4">
-    {% for kpi in dashboard_kpis %}
-    <div class="col-sm-6 col-xl-3">
-        <a href="{{ kpi.url }}" class="dashboard-kpi">
-            <div class="metric-card {{ kpi.accent|default:'primary' }}">
-                <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div>
-                        <div class="metric-label">{{ kpi.title }}</div>
-                        <div class="metric-value">
-                            {% if kpi.kind == 'money' %}
-                            Rs {{ kpi.value|floatformat:2 }}
-                            {% else %}
-                            {{ kpi.value }}
-                            {% endif %}
-                        </div>
-                        <div class="metric-meta">{{ kpi.meta }}</div>
-                    </div>
-                    <span class="metric-icon"><i class="bi {{ kpi.icon|default:'bi-arrow-up-right' }}"></i></span>
-                </div>
-                <div class="kpi-hint">Open details <i class="bi bi-arrow-right"></i></div>
-            </div>
-        </a>
+<section class="k-section db-figures" aria-label="Today at a glance">
+    <div class="k-balance db-figure">
+        <div class="k-balance-label">{% for kpi in dashboard_kpis %}{% if kpi.title == "Today Net Sales" %}{% if kpi.url %}<a href="{{ kpi.url }}">Net sales today</a>{% else %}Net sales today{% endif %}{% endif %}{% endfor %}</div>
+        <div class="k-balance-figure">{{ today_sales.net_sales|money }}</div>
+        <div class="k-balance-note"><span class="db-move" data-db-move data-now="{{ today_sales.net_sales|stringformat:'.2f' }}" data-then="{{ sales_trend.net_sales.5|stringformat:'.2f' }}"></span>Yesterday {{ sales_trend.net_sales.5|money }}</div>
     </div>
-    {% endfor %}
-</div>
+    <div class="k-balance db-figure{% if today_sales.paid > 0 %} k-balance--in{% endif %}">
+        <div class="k-balance-label">Received today</div>
+        <div class="k-balance-figure">{{ today_sales.paid|money }}</div>
+        <div class="k-balance-note">{{ today_sales.invoices }} invoice{{ today_sales.invoices|pluralize }}, collection rate {{ today_collection_rate|floatformat:2 }}%</div>
+    </div>
+    {% if feature_modules.parties %}
+    {% for kpi in dashboard_kpis %}{% if kpi.title == "Customers Owe You" %}
+    <div class="k-balance db-figure{% if kpi.value > 0 %} k-balance--due{% endif %}">
+        <div class="k-balance-label">{% if kpi.url %}<a href="{{ kpi.url }}">To receive</a>{% else %}To receive{% endif %}</div>
+        <div class="k-balance-figure">{{ kpi.value|money }}</div>
+        <div class="k-balance-note">{{ kpi.meta }}</div>
+    </div>
+    {% elif kpi.title == "You Owe Suppliers" %}
+    <div class="k-balance db-figure{% if kpi.value > 0 %} k-balance--out{% endif %}">
+        <div class="k-balance-label">{% if kpi.url %}<a href="{{ kpi.url }}">To pay</a>{% else %}To pay{% endif %}</div>
+        <div class="k-balance-figure">{{ kpi.value|money }}</div>
+        <div class="k-balance-note">{{ kpi.meta }}</div>
+    </div>
+    {% endif %}{% endfor %}
+    {% else %}
+    <div class="k-balance db-figure{% if today_sales.gross_profit < 0 %} k-balance--out{% elif today_sales.gross_profit > 0 %} k-balance--in{% endif %}">
+        <div class="k-balance-label">Gross profit today</div>
+        <div class="k-balance-figure">{{ today_sales.gross_profit|money }}</div>
+        <div class="k-balance-note">Yesterday {{ sales_trend.gross_profit.5|money }}</div>
+    </div>
+    <div class="k-balance db-figure{% if today_sales.due > 0 %} k-balance--due{% endif %}">
+        <div class="k-balance-label">Left on credit today</div>
+        <div class="k-balance-figure">{{ today_sales.due|money }}</div>
+        <div class="k-balance-note">This month {{ month_sales.due|money }}</div>
+    </div>
+    {% endif %}
+</section>
 
-<div class="row g-4 mb-4 align-items-stretch">
-    <div class="col-xl-8">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon"><i class="bi bi-graph-up-arrow"></i></span>
-                    <div>
-                        <h2 class="section-title">7 Day Sales Trend</h2>
-                        <p class="section-copy">Net sales and gross profit across the last seven business days.</p>
-                    </div>
-                </div>
-                <a href="{{ reports_center_url }}" class="section-link">Open reports</a>
+<div class="db-grid">
+    <div class="db-main">
+        <section class="k-section" aria-labelledby="db-today-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="db-today-title">Today <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Today" aria-describedby="tipDbToday" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipDbToday" role="tooltip" hidden>Sales after returns, what they cost you and the profit left. Margin {{ month_margin_percent|floatformat:2 }}% this month.</span></span></h2>
+                {% if nav_access.reports %}{% for kpi in dashboard_kpis %}{% if kpi.title == "Today Net Sales" and kpi.url %}<a href="{{ kpi.url }}" class="section-link">Sales by invoice</a>{% endif %}{% endfor %}{% endif %}
             </div>
-            <div class="chart-shell">
-                <canvas id="salesTrendChart"></canvas>
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-4">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-success"><i class="bi bi-stars"></i></span>
-                    <div>
-                        <h2 class="section-title">Business Snapshot</h2>
-                        <p class="section-copy">Plain-language highlights for today and this month.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="d-grid gap-3">
-                <div class="snapshot-tile primary">
-                    <span class="snapshot-icon"><i class="bi bi-cash-coin"></i></span>
-                    <div class="text-muted small">Today Counter</div>
-                    <strong>Rs {{ today_sales.net_sales|floatformat:2 }}</strong>
-                    <div class="small text-muted mt-2">{{ today_sales.invoices }} invoices, paid Rs {{ today_sales.paid|floatformat:2 }}, due Rs {{ today_sales.due|floatformat:2 }}</div>
-                </div>
-                <div class="snapshot-tile success">
-                    <span class="snapshot-icon"><i class="bi bi-trophy"></i></span>
-                    <div class="text-muted small">Month Performance</div>
-                    <strong>Rs {{ month_sales.gross_profit|floatformat:2 }}</strong>
-                    <div class="small text-muted mt-2">Gross profit on Rs {{ month_sales.net_sales|floatformat:2 }} net sales. Margin {{ month_margin_percent|floatformat:2 }}%</div>
-                </div>
-                <div class="snapshot-tile warning">
-                    <span class="snapshot-icon"><i class="bi bi-bell"></i></span>
-                    <div class="text-muted small">Attention Needed</div>
-                    <strong>{{ low_stock_count }} stock alerts</strong>
-                    <div class="small text-muted mt-2">Expense bills due Rs {{ expense_due_total|floatformat:2 }}, {{ expense_alert_count|default:0 }} recurring bills to record, and monthly purchases Rs {{ month_purchase_total|floatformat:2 }}</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+            <table class="k-table db-statement">
+                <thead>
+                    <tr>
+                        <th scope="col">Item</th>
+                        <th scope="col" class="k-num">Today</th>
+                        <th scope="col" class="k-num">This month</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <td>Sales before returns</td>
+                        <td class="k-num">{{ today_sales.gross_sales|amount }}</td>
+                        <td class="k-num db-then">{{ month_sales.gross_sales|amount }}</td>
+                    </tr>
+                    <tr>
+                        <td>Returns <span class="db-muted">{{ today_sales.returns_count }} today</span></td>
+                        <td class="k-num{% if today_sales.returns_net %} k-out{% endif %}">{% if today_sales.returns_net %}-{% endif %}{{ today_sales.returns_net|amount }}</td>
+                        <td class="k-num db-then">{% if month_sales.returns_net %}-{% endif %}{{ month_sales.returns_net|amount }}</td>
+                    </tr>
+                    <tr class="db-strong">
+                        <td>Net sales</td>
+                        <td class="k-num">{{ today_sales.net_sales|amount }}</td>
+                        <td class="k-num">{{ month_sales.net_sales|amount }}</td>
+                    </tr>
+                    <tr>
+                        <td>Cost of goods sold</td>
+                        <td class="k-num">{{ today_sales.cost|amount }}</td>
+                        <td class="k-num db-then">{{ month_sales.cost|amount }}</td>
+                    </tr>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td>Gross profit</td>
+                        <td class="k-num{% if today_sales.gross_profit < 0 %} k-out{% elif today_sales.gross_profit > 0 %} k-in{% endif %}">{{ today_sales.gross_profit|amount }}</td>
+                        <td class="k-num{% if month_sales.gross_profit < 0 %} k-out{% endif %}">{{ month_sales.gross_profit|amount }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+            <dl class="db-facts">
+                <div><dt>Billed with {{ system_settings.tax_label|default:"tax" }}</dt><dd>{{ today_sales.total|money }}</dd></div>
+                <div><dt>Left on credit</dt><dd{% if today_sales.due > 0 %} class="k-due"{% endif %}>{{ today_sales.due|money }}</dd></div>
+                <div><dt>Average invoice</dt><dd>{{ today_sales.avg_invoice|money }}</dd></div>
+                {% if feature_modules.purchases %}<div><dt>{% if nav_access.purchases %}<a href="{% url 'purchase_list' %}">Bought this month</a>{% else %}Bought this month{% endif %}</dt><dd>{{ month_purchase_total|money }}</dd></div>{% endif %}
+            </dl>
+        </section>
 
-<div class="row g-4 mb-4">
-    <div class="col-xl-6">
-        <div class="page-card p-4 table-panel">
-            <div class="section-heading">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon"><i class="bi bi-receipt"></i></span>
-                    <div>
-                        <h2 class="section-title">Recent Sales</h2>
-                        <p class="section-copy">Latest invoices flowing through the counter.</p>
-                    </div>
-                </div>
-                <a href="{{ reports_center_url }}" class="section-link">More reports</a>
+        <section class="k-section" aria-labelledby="db-trend-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="db-trend-title">Last 7 days</h2>
+                {% for kpi in dashboard_kpis %}{% if kpi.title == "Last 7 Days Sales" %}<span class="k-section-note">Net sales {{ kpi.value|money }}. {{ kpi.meta }}</span>{% if kpi.url %}<a href="{{ kpi.url }}" class="section-link">Open the week</a>{% endif %}{% endif %}{% endfor %}
             </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>Invoice</th>
-                            <th>Customer</th>
-                            <th class="text-end">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for sale in recent_sales %}
-                        <tr>
-                            <td><a href="{% url 'invoice' sale.id %}" class="fw-semibold text-decoration-none">#{{ sale.id }}</a></td>
-                            <td>{% if sale.customer %}{{ sale.customer.name }}{% else %}Walk-in{% endif %}</td>
-                            <td class="text-end">Rs {{ sale.total_amount|floatformat:2 }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="3" class="text-center text-muted py-4">No sales recorded yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            {% if week_sales.invoices or week_sales.returns_count %}
+            <div class="db-chart">
+                <canvas id="salesTrendChart" role="img" aria-label="Net sales and gross profit for each of the last seven days. The figures are also listed in the table that follows." data-currency="{{ currency_symbol }}"></canvas>
             </div>
-        </div>
-    </div>
-    <div class="col-xl-6">
-        <div class="page-card p-4 table-panel">
-            <div class="section-heading">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-warning"><i class="bi bi-truck"></i></span>
-                    <div>
-                        <h2 class="section-title">Recent Purchases</h2>
-                        <p class="section-copy">Latest stock receipts and supplier buying activity.</p>
-                    </div>
-                </div>
-                <a href="{% url 'purchase_list' %}" class="section-link">Open purchases</a>
+            <table class="visually-hidden">
+                <caption>Last 7 days</caption>
+                <thead><tr><th scope="col">Day</th><th scope="col">Net sales</th><th scope="col">Gross profit</th></tr></thead>
+                <tbody>
+                    <tr><td>{{ sales_trend.labels.0 }}</td><td>{{ sales_trend.net_sales.0|amount }}</td><td>{{ sales_trend.gross_profit.0|amount }}</td></tr>
+                    <tr><td>{{ sales_trend.labels.1 }}</td><td>{{ sales_trend.net_sales.1|amount }}</td><td>{{ sales_trend.gross_profit.1|amount }}</td></tr>
+                    <tr><td>{{ sales_trend.labels.2 }}</td><td>{{ sales_trend.net_sales.2|amount }}</td><td>{{ sales_trend.gross_profit.2|amount }}</td></tr>
+                    <tr><td>{{ sales_trend.labels.3 }}</td><td>{{ sales_trend.net_sales.3|amount }}</td><td>{{ sales_trend.gross_profit.3|amount }}</td></tr>
+                    <tr><td>{{ sales_trend.labels.4 }}</td><td>{{ sales_trend.net_sales.4|amount }}</td><td>{{ sales_trend.gross_profit.4|amount }}</td></tr>
+                    <tr><td>{{ sales_trend.labels.5 }}</td><td>{{ sales_trend.net_sales.5|amount }}</td><td>{{ sales_trend.gross_profit.5|amount }}</td></tr>
+                    <tr><td>{{ sales_trend.labels.6 }}</td><td>{{ sales_trend.net_sales.6|amount }}</td><td>{{ sales_trend.gross_profit.6|amount }}</td></tr>
+                </tbody>
+            </table>
+            {{ sales_trend|json_script:"db-trend-data" }}
+            {% else %}
+            <div class="k-empty">
+                <p class="k-empty-title">No sales in the last 7 days</p>
+                <p>Each day's sales and profit are drawn here after the first sale.</p>
+                <a href="{% url 'pos_screen' %}" class="btn btn-primary">New sale</a>
             </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>Purchase</th>
-                            <th>Supplier</th>
-                            <th class="text-end">Total</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for purchase in recent_purchases %}
-                        <tr>
-                            <td><a href="{% url 'purchase_detail' purchase.id %}" class="fw-semibold text-decoration-none">#{{ purchase.id }}</a></td>
-                            <td>{% if purchase.supplier %}{{ purchase.supplier.name }}{% else %}Cash Purchase{% endif %}</td>
-                            <td class="text-end">Rs {{ purchase.total_amount|floatformat:2 }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="3" class="text-center text-muted py-4">No purchases recorded yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
+            {% endif %}
+        </section>
 
-<div class="row g-4">
-    <div class="col-xl-4">
-        <div class="page-card p-4 table-panel">
-            <div class="section-heading">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-success"><i class="bi bi-bag-check"></i></span>
-                    <div>
-                        <h2 class="section-title">Top Products</h2>
-                        <p class="section-copy">Best-selling catalogue items overall.</p>
-                    </div>
-                </div>
+        <section class="k-section" aria-labelledby="db-recent-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="db-recent-title">Recent sales</h2>
+                {% if nav_access.reports %}{% for kpi in dashboard_kpis %}{% if kpi.title == "Last 7 Days Sales" and kpi.url %}<a href="{{ kpi.url }}" class="section-link">View all</a>{% endif %}{% endfor %}{% endif %}
             </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr><th>Product</th><th class="text-end">Qty Sold</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for item in best_selling %}
-                        <tr>
-                            <td>{{ item.product__name }}</td>
-                            <td class="text-end">{{ item.total_qty }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="2" class="text-center text-muted py-4">No sales data yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+            <table class="k-table k-ledger--stack db-list">
+                <thead>
+                    <tr><th scope="col" data-k="what">Invoice</th><th scope="col" data-k="meta">Customer</th><th scope="col" class="k-num" data-k="amount">Total</th><th scope="col" data-k="flag"><span class="visually-hidden">Status</span></th></tr>
+                </thead>
+                <tbody>
+                    {% for sale in recent_sales|slice:":6" %}
+                    <tr>
+                        <td class="text-nowrap"><a href="{% url 'invoice' sale.id %}">{{ sale.display_number|default:sale.id }}</a> <span class="db-muted">{{ sale.created_at|date:"j M, H:i" }}</span></td>
+                        <td class="db-name">{% if sale.customer %}{{ sale.customer.name }}{% else %}Walk-in{% endif %}</td>
+                        <td class="k-num">{{ sale.total_amount|money }}</td>
+                        <td class="text-end">{% if sale.is_credit %}<span class="k-badge k-badge--amber">Credit</span>{% else %}<span class="k-badge k-badge--green">Paid</span>{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="k-empty"><p class="k-empty-title">No sales yet</p><p>The latest invoices from the till show here.</p></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
     </div>
-    <div class="col-xl-4">
-        <div class="page-card p-4 table-panel">
-            <div class="section-heading">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon"><i class="bi bi-people"></i></span>
-                    <div>
-                        <h2 class="section-title">Top Customers</h2>
-                        <p class="section-copy">Customers generating the highest billed value.</p>
-                    </div>
-                </div>
-                <a href="{% url 'customer_list' %}" class="section-link">Open parties</a>
+
+    <div class="db-aside">
+        <section class="k-section db-attention-panel" aria-labelledby="db-attention-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="db-attention-title">Needs attention</h2>
             </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr><th>Customer</th><th class="text-end">Spent</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for customer in top_customers %}
-                        <tr>
-                            <td>{{ customer.customer__name|default:"Walk-in" }}</td>
-                            <td class="text-end">Rs {{ customer.total_spent|floatformat:2 }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="2" class="text-center text-muted py-4">No customer sales yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <ul class="db-attention">
+                {% for kpi in dashboard_kpis %}{% if kpi.title == "Low Stock Alerts" or kpi.title == "Expiry Alerts" or kpi.title == "Expense Bills Due" %}{% if kpi.value or kpi.title == "Expiry Alerts" and expired_count or kpi.title == "Expense Bills Due" and expense_alert_count %}
+                <li class="db-attention-row">
+                    {% if kpi.url %}<a href="{{ kpi.url }}" {% else %}<div {% endif %}class="db-alert">
+                        <span class="db-alert-icon" aria-hidden="true"><i class="bi {{ kpi.icon }}"></i></span>
+                        <span class="db-alert-text">
+                            <span class="db-alert-label">{% if kpi.title == "Low Stock Alerts" %}Low stock{% elif kpi.title == "Expiry Alerts" %}Expiring soon{% else %}Bills to pay{% endif %}</span>
+                            <span class="db-alert-note">{{ kpi.meta }}{% if kpi.title == "Expense Bills Due" and expense_alert_count %}. {{ expense_alert_count }} recurring bill{{ expense_alert_count|pluralize }} to record{% endif %}</span>
+                        </span>
+                        <span class="db-alert-figure {% if kpi.title == 'Expense Bills Due' %}k-out{% else %}k-due{% endif %}">{% if kpi.kind == 'money' %}{{ kpi.value|money }}{% else %}{{ kpi.value }}{% endif %}</span>
+                        {% if kpi.url %}<i class="bi bi-chevron-right db-alert-go" aria-hidden="true"></i>{% endif %}
+                    {% if kpi.url %}</a>{% else %}</div>{% endif %}
+                </li>
+                {% endif %}{% endif %}{% endfor %}
+                <li class="db-attention-none"><i class="bi bi-check2-circle" aria-hidden="true"></i> Nothing needs attention today.</li>
+            </ul>
+        </section>
+
+        <section class="k-section" aria-labelledby="db-low-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="db-low-title">Low stock</h2>
+                {% if nav_access.reports %}<a href="{% url 'low_stock_list' %}" class="section-link">View all</a>{% endif %}
             </div>
-        </div>
-    </div>
-    <div class="col-xl-4">
-        <div class="page-card p-4 table-panel">
-            <div class="section-heading">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-danger"><i class="bi bi-exclamation-triangle"></i></span>
-                    <div>
-                        <h2 class="section-title">Low Stock Snapshot</h2>
-                        <p class="section-copy">Items already at or below reorder point.</p>
-                    </div>
-                </div>
-                <a href="{% url 'low_stock_list' %}" class="section-link">Open low stock</a>
+            <table class="k-table db-list">
+                <thead><tr><th scope="col">Product</th><th scope="col" class="k-num">In stock</th></tr></thead>
+                <tbody>
+                    {% for product in top_low_stock|slice:":6" %}
+                    <tr>
+                        <td class="db-name">{{ product.display_name }}</td>
+                        <td class="k-num">{% if product.stock <= 0 %}<span class="k-badge k-badge--red">Out</span>{% else %}<span class="k-due">{{ product.stock_display }}</span>{% endif %}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="2" class="k-empty"><p class="k-empty-title">All stocked up</p><p>Products at or below their reorder level show here.</p></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <section class="k-section" aria-labelledby="db-top-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="db-top-title">Top products {% include "pos/partials/_help_tip.html" with tip_id="tipDbTop" tip_name="Top products" tip_text="Best sellers overall, ranked by quantity sold." %}</h2>
             </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr><th>Product</th><th class="text-end">Stock</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for product in top_low_stock %}
-                        <tr>
-                            <td>{{ product.name }}</td>
-                            <td class="text-end text-danger fw-semibold">{{ product.stock }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="2" class="text-center text-muted py-4">No low stock alerts.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+            <table class="k-table db-list">
+                <thead><tr><th scope="col">Product</th><th scope="col" class="k-num">Sold</th></tr></thead>
+                <tbody>
+                    {% for item in best_selling|slice:":6" %}
+                    <tr>
+                        <td class="db-name">{{ item.product__name }}</td>
+                        <td class="k-num">{{ item.total_qty|qty_short:item.product__unit }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="2" class="k-empty"><p class="k-empty-title">No sales yet</p><p>Products are ranked here by quantity sold.</p></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
     </div>
 </div>
 {% endblock %}
 
 {% block extra_js %}
-<script>
-(function () {
-    const canvas = document.getElementById('salesTrendChart');
-    if (!canvas) {
-        return;
-    }
-
-    new Chart(canvas.getContext('2d'), {
-        type: 'line',
-        data: {
-            labels: [{% for label in sales_trend.labels %}'{{ label }}'{% if not forloop.last %}, {% endif %}{% endfor %}],
-            datasets: [
-                {
-                    label: 'Net Sales',
-                    data: [{% for value in sales_trend.net_sales %}{{ value }}{% if not forloop.last %}, {% endif %}{% endfor %}],
-                    borderColor: 'rgba(37, 99, 235, 1)',
-                    backgroundColor: 'rgba(37, 99, 235, 0.14)',
-                    fill: true,
-                    tension: 0.35,
-                    borderWidth: 3,
-                    pointRadius: 3,
-                    pointHoverRadius: 5,
-                },
-                {
-                    label: 'Gross Profit',
-                    data: [{% for value in sales_trend.gross_profit %}{{ value }}{% if not forloop.last %}, {% endif %}{% endfor %}],
-                    borderColor: 'rgba(22, 163, 74, 1)',
-                    backgroundColor: 'rgba(22, 163, 74, 0.10)',
-                    fill: false,
-                    tension: 0.35,
-                    borderWidth: 3,
-                    pointRadius: 3,
-                    pointHoverRadius: 5,
-                }
-            ]
-        },
-        options: {
-            responsive: true,
-            maintainAspectRatio: false,
-            interaction: { mode: 'index', intersect: false },
-            layout: {
-                padding: { top: 8, right: 8, left: 0, bottom: 0 }
-            },
-            plugins: {
-                legend: {
-                    position: 'bottom',
-                    labels: { usePointStyle: true, boxWidth: 10 }
-                }
-            },
-            scales: {
-                x: {
-                    grid: { display: false }
-                },
-                y: {
-                    beginAtZero: true,
-                    grid: { color: 'rgba(148, 163, 184, 0.18)' },
-                    ticks: {
-                        maxTicksLimit: 6,
-                        callback: function(value) {
-                            return 'Rs ' + value;
-                        }
-                    }
-                }
-            }
-        }
-    });
-})();
-</script>
+<script src="{% static 'zehnms/js/pages/dashboard.js' %}"></script>
 {% endblock %}
-
-

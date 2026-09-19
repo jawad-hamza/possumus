@@ -1,0 +1,32 @@
+{% load currency_tags %}
+<tr data-rf-row="{{ product.id }}"{% if family_id %} class="st-variant" data-family-of="{{ family_id }}"{% endif %}>
+    <td class="st-cell-title st-wrap" data-k="what">
+        <a href="{% url 'product_view' product.id %}?next={{ request.get_full_path|urlencode }}" class="st-name">{% if family_id %}{{ product.variant_label }}{% else %}{{ product.display_name }}{% endif %}</a>{% if not product.is_active %}<span class="k-badge st-inline-badge">Inactive</span>{% endif %}
+        <span class="st-sub" data-k="meta">SKU {{ product.sku }}{% if product.barcode and product.barcode != product.sku %} &middot; {{ product.barcode }}{% endif %}</span>
+    </td>
+    <td data-k="more" data-label="Category">{% if product.category %}{{ product.category }}{% else %}<span class="st-dim">&ndash;</span>{% endif %}</td>
+    <td data-k="more" data-label="Brand" class="st-opt st-opt-brand">{% if product.brand %}{{ product.brand }}{% endif %}</td>
+    <td data-k="more" data-label="Supplier" class="st-opt st-opt-supplier">{% if product.supplier %}{{ product.supplier }}{% endif %}</td>
+    <td data-k="more" data-label="Location" class="st-opt st-opt-location">{% if product.location %}{{ product.location }}{% endif %}</td>
+    {% if expiry_tracking_enabled %}
+    <td data-k="more" data-label="Expiry">{% if product.expiry_date %}{{ product.expiry_date|date:"d M Y" }}{% if product.expiry_status_tone == 'below' %} <span class="k-badge k-badge--red" data-tip="{{ product.expiry_status_label }}">Expired</span>{% elif product.expiry_status_tone == 'advance' %}<span class="st-sub k-due">{{ product.expiry_status_label }}</span>{% endif %}{% endif %}</td>
+    {% endif %}
+    <td class="k-num text-end st-opt st-opt-cost" data-k="more" data-label="Cost">{{ product.cost_price|money }}</td>
+    <td class="k-num text-end" data-k="amount" data-label="Sale price">{{ product.price|money }}{% if product|per_unit %}<span class="st-sub">per {{ product.unit }}</span>{% endif %}</td>
+    <td class="k-num text-end st-opt st-opt-margin" data-k="more" data-label="Margin">{% if product.current_margin_percent or product.current_margin_percent == 0 %}<span class="{% if product.margin_status == 'below' %}k-due{% endif %}"{% if product.margin_status == 'below' %} data-tip="Below the minimum margin of {{ product.minimum_margin_percent|floatformat:2 }}%"{% endif %}>{{ product.current_margin_percent|floatformat:2 }}%</span>{% else %}<span class="st-dim">No cost</span>{% endif %}</td>
+    <td class="k-num text-end" data-k="balance" data-label="Stock">{% if not product.track_stock %}<span class="st-dim">{{ product.stock_display }}</span>{% else %}<span class="st-stock-line">{% if product.stock <= 0 %}<span class="k-badge k-badge--red">Out</span>{% elif product.stock <= product.low_stock_threshold %}<span class="k-badge k-badge--amber" data-tip="Low at {{ product.low_stock_threshold|qty }}">Low</span>{% endif %}<span class="{% if product.stock <= 0 %}k-out{% elif product.stock <= product.low_stock_threshold %}k-due{% endif %}">{{ product.stock_display }}</span></span>{% endif %}</td>
+    <td class="text-end st-cell-actions" data-k="more">
+        <span class="k-row-actions">
+            <a href="{% url 'product_edit' product.id %}?next={{ request.get_full_path|urlencode }}" class="k-icon-btn" data-tip="Edit" aria-label="Edit {{ product.display_name }}"><i class="bi bi-pencil" aria-hidden="true"></i></a>
+            <span class="dropdown">
+                <button type="button" class="btn k-icon-btn k-kebab" data-bs-toggle="dropdown" aria-expanded="false" aria-label="More for {{ product.display_name }}"><i class="bi bi-three-dots-vertical" aria-hidden="true"></i></button>
+                <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="{% url 'product_view' product.id %}?next={{ request.get_full_path|urlencode }}" aria-label="Open {{ product.display_name }}"><i class="bi bi-eye" aria-hidden="true"></i> Open</a></li>
+                    {% if feature_modules.variants %}<li><a class="dropdown-item" href="{% url 'product_add' %}?copy={{ product.id }}&amp;next={{ request.get_full_path|urlencode }}" aria-label="Add another size of {{ product.name }}"><i class="bi bi-copy" aria-hidden="true"></i> Add another size</a></li>{% endif %}
+                    <li><hr class="dropdown-divider"></li>
+                    <li><a class="dropdown-item text-danger" href="{% url 'product_delete' product.id %}?next={{ request.get_full_path|urlencode }}" aria-label="Delete {{ product.display_name }}"><i class="bi bi-trash" aria-hidden="true"></i> Delete</a></li>
+                </ul>
+            </span>
+        </span>
+    </td>
+</tr>

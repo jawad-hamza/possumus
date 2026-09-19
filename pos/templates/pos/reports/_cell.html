@@ -1,0 +1,18 @@
+{% load currency_tags %}{% spaceless %}
+{% if cell.value is None or cell.value == "" %}
+<span class="rp-none">-</span>
+{% elif cell.kind == "money" %}
+{{ cell.value|money }}
+{% elif cell.kind == "qty" %}
+{{ cell.value|qty_unit:cell.unit }}
+{% elif cell.kind == "percent" %}
+{{ cell.value|floatformat:2 }}%
+{% elif cell.kind == "datetime" %}
+{{ cell.value|date:"d M Y H:i" }}
+{% elif cell.url %}
+<a href="{{ cell.url }}" class="rp-link">{{ cell.value }}</a>
+{% else %}
+{{ cell.value }}
+{% endif %}
+{% if cell.note %}<div class="rp-cell-note">{{ cell.note }}</div>{% endif %}
+{% endspaceless %}

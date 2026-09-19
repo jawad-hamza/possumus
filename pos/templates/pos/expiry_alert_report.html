@@ -1,96 +1,89 @@
-﻿{% extends "pos/base.html" %}
-{% block title %}Expiry Alerts{% endblock %}
+{% extends "pos/reports/_shell.html" %}
+{% load currency_tags %}
+{% block title %}Expiry alerts{% endblock %}
 
-{% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon warning"><i class="bi bi-hourglass-split"></i></span>
-        <div>
-            <h1 class="page-title">Expiry Alerts</h1>
-            <p class="page-subtitle">See products that are near expiry or already expired before they become a margin loss.</p>
-        </div>
-    </div>
-    <div class="page-actions">
-        <a href="{% url 'reports_home' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Reports Centre</a>
-    </div>
-</div>
-
+{% block report_body %}
 {% if not expiry_tracking_enabled %}
-<div class="alert alert-light border">Expiry tracking is currently off in Settings. Products can still store expiry dates, but alerts will stay hidden until the feature is enabled.</div>
+<div class="alert alert-info">Expiry tracking is currently off in Settings. Products can still store expiry dates, but alerts will stay hidden until the feature is enabled.</div>
 {% endif %}
 
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="metric-card warning"><div class="metric-label">Near Expiry</div><div class="metric-value">{{ near_expiry_products|length }}</div><div class="metric-meta">Within {{ expiry_alert_days }} days.</div></div>
+<section class="k-section rp-sums" aria-label="Summary">
+    <div class="k-balance rp-sum{% if expired_products %} k-balance--out{% endif %}">
+        <div class="k-balance-label">Expired</div>
+        <div class="k-balance-figure">{{ expired_products|length }}</div>
+        <div class="k-balance-note">Stock value {{ expired_value|money }}</div>
     </div>
-    <div class="col-md-4">
-        <div class="metric-card danger"><div class="metric-label">Expired</div><div class="metric-value">{{ expired_products|length }}</div><div class="metric-meta">Already past expiry date.</div></div>
+    <div class="k-balance rp-sum{% if near_expiry_products %} k-balance--due{% endif %}">
+        <div class="k-balance-label">Near expiry {% include "pos/partials/_help_tip.html" with tip_id="tipRpNear" tip_name="Near expiry" tip_text="Expiring within the alert window set in Settings, counted from today." %}</div>
+        <div class="k-balance-figure">{{ near_expiry_products|length }}</div>
+        <div class="k-balance-note">Within {{ expiry_alert_days }} days, stock value {{ near_expiry_value|money }}</div>
     </div>
-    <div class="col-md-4">
-        <div class="metric-card slate"><div class="metric-label">Today</div><div class="metric-value">{{ today|date:"d M Y" }}</div><div class="metric-meta">Alert window measured from today.</div></div>
+    <div class="k-balance rp-sum">
+        <div class="k-balance-label">Today</div>
+        <div class="k-balance-figure">{{ today|date:"d M Y" }}</div>
     </div>
-</div>
+</section>
 
-<div class="row g-4">
-    <div class="col-xl-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-warning"><i class="bi bi-clock-history"></i></span>
-                    <div>
-                        <h2 class="section-title">Near Expiry Products</h2>
-                        <p class="section-copy">Move, discount, or return these items while they are still saleable.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead><tr><th>Product</th><th>Location</th><th>Expiry</th><th class="text-end">Days Left</th></tr></thead>
-                    <tbody>
-                        {% for product in near_expiry_products %}
-                        <tr>
-                            <td><a href="{% url 'product_view' product.id %}" class="fw-semibold text-decoration-none">{{ product.name }}</a><div class="small text-muted">SKU {{ product.sku }}</div></td>
-                            <td>{{ product.location|default:"-" }}</td>
-                            <td>{{ product.expiry_date|date:"d M Y" }}</td>
-                            <td class="text-end text-warning fw-semibold">{{ product.days_to_expiry }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="4" class="text-center text-muted py-4">No products are close to expiry.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+<section class="k-section" aria-labelledby="rp-expired-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="rp-expired-title">Expired products {% include "pos/partials/_help_tip.html" with tip_id="tipRpExpired" tip_name="Expired products" tip_text="These items need immediate stock action, write-off, or supplier return." %}</h2>
+        <span class="k-section-note">{{ expired_products|length }} item{{ expired_products|length|pluralize }}</span>
     </div>
-    <div class="col-xl-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-danger"><i class="bi bi-exclamation-octagon"></i></span>
-                    <div>
-                        <h2 class="section-title">Expired Products</h2>
-                        <p class="section-copy">These items need immediate stock action, write-off, or supplier return.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead><tr><th>Product</th><th>Location</th><th>Expiry</th><th class="text-end">Days Over</th></tr></thead>
-                    <tbody>
-                        {% for product in expired_products %}
-                        <tr>
-                            <td><a href="{% url 'product_view' product.id %}" class="fw-semibold text-decoration-none">{{ product.name }}</a><div class="small text-muted">SKU {{ product.sku }}</div></td>
-                            <td>{{ product.location|default:"-" }}</td>
-                            <td>{{ product.expiry_date|date:"d M Y" }}</td>
-                            <td class="text-end text-danger fw-semibold">{{ product.days_overdue }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="4" class="text-center text-muted py-4">No expired products right now.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    <div class="k-ledger-scroll rp-table">
+        <table class="k-table k-ledger--stack">
+            <thead><tr><th scope="col" data-k="what">Product</th><th scope="col" data-k="meta">Location</th><th scope="col" class="k-num" data-k="balance">On hand</th><th scope="col" class="k-num" data-k="amount">Stock value</th><th scope="col" data-k="meta">Expiry</th><th scope="col" class="k-num" data-k="flag">Days over</th></tr></thead>
+            <tbody>
+                {% for product in expired_products %}
+                <tr>
+                    <td class="rp-lead"><a href="{% url 'product_view' product.id %}">{{ product.display_name }}</a><div class="rp-cell-note">SKU {{ product.sku }}</div></td>
+                    <td data-label="Location">{{ product.location|default:"-" }}</td>
+                    <td class="k-num" data-label="On hand">{{ product.stock|qty_unit:product.unit }}</td>
+                    <td class="k-num k-out" data-label="Stock value">{{ product.stock_value_at_risk|money }}</td>
+                    <td class="text-nowrap" data-label="Expiry">{{ product.expiry_date|date:"d M Y" }}</td>
+                    <td class="k-num" data-label="Days over"><span class="k-badge k-badge--red">{{ product.days_overdue }} day{{ product.days_overdue|pluralize }}</span></td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="k-empty">
+                        <p class="k-empty-title">No expired products</p>
+                        <p>Stock with an expiry date that has passed is listed here until it is sold, written off or returned.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
     </div>
-</div>
+</section>
+
+<section class="k-section" aria-labelledby="rp-near-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="rp-near-title">Near expiry products {% include "pos/partials/_help_tip.html" with tip_id="tipRpNearList" tip_name="Near expiry products" tip_text="Move, discount, or return these items while they are still saleable." %}</h2>
+        <span class="k-section-note">{{ near_expiry_products|length }} item{{ near_expiry_products|length|pluralize }}</span>
+    </div>
+    <div class="k-ledger-scroll rp-table">
+        <table class="k-table k-ledger--stack">
+            <thead><tr><th scope="col" data-k="what">Product</th><th scope="col" data-k="meta">Location</th><th scope="col" class="k-num" data-k="balance">On hand</th><th scope="col" class="k-num" data-k="amount">Stock value</th><th scope="col" data-k="meta">Expiry</th><th scope="col" class="k-num" data-k="flag">Days left</th></tr></thead>
+            <tbody>
+                {% for product in near_expiry_products %}
+                <tr>
+                    <td class="rp-lead"><a href="{% url 'product_view' product.id %}">{{ product.display_name }}</a><div class="rp-cell-note">SKU {{ product.sku }}</div></td>
+                    <td data-label="Location">{{ product.location|default:"-" }}</td>
+                    <td class="k-num" data-label="On hand">{{ product.stock|qty_unit:product.unit }}</td>
+                    <td class="k-num" data-label="Stock value">{{ product.stock_value_at_risk|money }}</td>
+                    <td class="text-nowrap" data-label="Expiry">{{ product.expiry_date|date:"d M Y" }}</td>
+                    <td class="k-num" data-label="Days left"><span class="k-badge k-badge--amber">{{ product.days_to_expiry }} day{{ product.days_to_expiry|pluralize }}</span></td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="k-empty">
+                        <p class="k-empty-title">Nothing close to expiry</p>
+                        <p>Products appear here {{ expiry_alert_days }} days before the expiry date saved on them.</p>
+                        {% if nav_access.products %}<a href="{% url 'product_list' %}" class="btn btn-outline-secondary btn-sm">Open products</a>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
 {% endblock %}

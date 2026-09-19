@@ -1,0 +1,80 @@
+{% load currency_tags %}
+<div class="st-work" id="purchaseWork">
+    <form method="post" id="purchaseForm" data-st-entry data-back-url="{{ back_url }}" data-rf-draft="purchase" data-rf-grow="#addPurchaseLineBtn"{% if purchase_form.is_bound %} data-rf-bound{% endif %}>
+        {% csrf_token %}
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+        {{ formset.management_form }}
+
+        {% if purchase_form.non_field_errors %}
+        <div class="alert alert-danger">{{ purchase_form.non_field_errors }}</div>
+        {% endif %}
+        {% if formset.non_form_errors %}
+        <div class="alert alert-danger">{{ formset.non_form_errors }}</div>
+        {% endif %}
+
+        <section class="k-section" aria-labelledby="group-bill">
+            <div class="k-section-head"><h2 class="k-section-title" id="group-bill">Supplier bill</h2></div>
+            <div class="k-form-grid">
+                <div class="k-span-2">
+                    {% include "pos/partials/_entry_field.html" with field=purchase_form.supplier %}
+                    <div class="rf-add-row"><a class="rf-add" href="{{ supplier_add_url }}" data-quick-open="supplier" aria-controls="quickSetup"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add supplier</a><a class="rf-add" href="#quickSetup" data-quick-open="product" aria-controls="quickSetup"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add product</a></div>
+                </div>
+                {% if purchase_form.supplier_invoice_number %}<div>{% include "pos/partials/_entry_field.html" with field=purchase_form.supplier_invoice_number %}</div>{% endif %}
+                {% if purchase_form.bill_date %}<div>{% include "pos/partials/_entry_field.html" with field=purchase_form.bill_date %}</div>{% endif %}
+            </div>
+        </section>
+
+        <section class="k-section" aria-labelledby="group-lines">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="group-lines">Items {% include "pos/partials/_help_tip.html" with tip_id="tipLines" tip_name="Items" tip_text="Enter quantity or weight received, landed cost per unit, and the sale price you want active at the till." %}</h2>
+            </div>
+            {% include "pos/partials/_purchase_line_editor.html" with formset=formset %}
+        </section>
+
+        <section class="k-section" aria-labelledby="group-payment">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="group-payment">Payment {% include "pos/partials/_help_tip.html" with tip_id="tipPayment" tip_name="Payment" tip_text="Business rule: if any balance remains unpaid, choose a supplier so Accounts Payable and the supplier statement stay correct." %}</h2>
+            </div>
+            <div class="row g-4">
+                <div class="col-lg-7">
+                    <div class="k-form-grid">
+                        <div>{% include "pos/partials/_entry_field.html" with field=purchase_form.payment_method %}</div>
+                        <div>{% include "pos/partials/_entry_field.html" with field=purchase_form.bank_account %}</div>
+                        {% if purchase %}
+                        <div class="k-span-2 k-form-field">
+                            <label for="reason" class="form-label">Reason for edit<span class="st-req" title="Required">*</span>{% include "pos/partials/_help_tip.html" with tip_id="tipEditReason" tip_name="Reason for edit" tip_text="Editing a purchase will restate stock value, supplier balance, and accounting vouchers for this document." %}</label>
+                            <textarea id="reason" name="reason" class="form-control" rows="3" required placeholder="Explain why this purchase is being edited.">{{ purchase.edit_reason }}</textarea>
+                        </div>
+                        {% endif %}
+                    </div>
+                </div>
+                <div class="col-lg-5">
+                    <div class="st-summary">
+                        <dl class="st-sum" aria-live="polite">
+                            <div><dt>Purchase total</dt><dd data-sum-total>0.00</dd></div>
+                            <div class="st-sum-field{% if purchase_form.paid_amount.errors %} st-field--error{% endif %}">
+                                <dt><label for="{{ purchase_form.paid_amount.id_for_label }}">{{ purchase_form.paid_amount.label }}</label></dt>
+                                <dd>{{ purchase_form.paid_amount }}</dd>
+                            </div>
+                            <div class="st-sum-total"><dt>Balance after this payment</dt><dd data-sum-balance>0.00</dd></div>
+                        </dl>
+                        {% if purchase_form.paid_amount.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ purchase_form.paid_amount.errors|join:', ' }}</div>{% endif %}
+                        <div class="st-summary-foot">
+                            <span class="form-text" data-sum-note>{{ purchase_form.paid_amount.help_text }}</span>
+                            <button type="button" class="btn btn-outline-secondary btn-sm" data-pay-full>Paid in full</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <div class="st-actionbar">
+            <span class="st-actionbar-note">Total <strong data-bar-total>0.00</strong><span class="d-none d-sm-inline"> &middot; After this payment</span><br class="d-sm-none"><span class="d-sm-none">Balance</span> <strong data-bar-balance>0.00</strong></span>
+            <a href="{{ back_url }}" class="btn btn-outline-secondary" data-tip="Go back without saving (Esc)">Cancel</a>
+            <button type="submit" class="btn btn-primary" data-k-key="Ctrl+S" data-k-key-label="{{ save_label }}">{{ save_label }}</button>
+        </div>
+    </form>
+
+    {% include "pos/partials/_purchase_quick_setup.html" %}
+</div>
+<script id="purchaseConfig" type="application/json">{"fractionalUnits": {% fractional_units_json %}, "pieceUnit": "{% piece_unit %}", "currency": "{{ currency_symbol|escapejs }}", "ids": {"supplier": "{{ purchase_form.supplier.id_for_label }}", "quickBrand": "{{ quick_product_form.brand.id_for_label }}", "quickCategory": "{{ quick_product_form.category.id_for_label }}", "quickSupplier": "{{ quick_product_form.supplier.id_for_label }}"}}</script>

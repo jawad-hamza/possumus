@@ -5,6 +5,7 @@ from datetime import timezone as dt_timezone
 from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 from django.conf import settings
+from django.db import transaction
 from django.utils import timezone
 from django.utils.dateparse import parse_datetime
 
@@ -63,8 +64,12 @@ def workspace_owner_onboarding(user=None):
 
 
 def workspace_requires_billing(user=None):
+    """THE access gate: locked unless the trial, a paid subscription, or a licence key is in force."""
     onboarding = workspace_owner_onboarding(user)
-    return bool(onboarding and onboarding.requires_payment_setup)
+    if onboarding is None:
+        return False
+    onboarding.touch_last_seen()
+    return bool(onboarding.requires_payment_setup)
 
 
 def user_can_manage_billing(user, onboarding=None):
@@ -145,7 +150,8 @@ def verify_lemon_squeezy_signature(raw_body, signature):
     if not secret or not signature:
         return False
     expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
-    return hmac.compare_digest(expected, signature)
+    # Bytes, not str: compare_digest raises TypeError on a non-ASCII str, which would be a 500.
+    return hmac.compare_digest(expected.encode("ascii"), str(signature).encode("utf-8", "replace"))
 
 
 def _payload_hash(raw_body, payload):
@@ -246,6 +252,45 @@ def _resolve_onboarding_from_payload(payload):
     return None
 
 
+def lemon_squeezy_variant_plan_map():
+    """{variant or product id: plan code} from LEMON_SQUEEZY_VARIANT_PLAN_MAP (dict or JSON text)."""
+    raw = getattr(settings, "LEMON_SQUEEZY_VARIANT_PLAN_MAP", None) or {}
+    if isinstance(raw, str):
+        try:
+            raw = json.loads(raw)
+        except json.JSONDecodeError:
+            raw = {}
+    if not isinstance(raw, dict):
+        return {}
+    allowed = {choice for choice, _ in OwnerOnboarding.PLAN_CHOICES}
+    mapping = {}
+    for provider_id, plan_code in raw.items():
+        plan_code = str(plan_code or "").strip().lower()
+        if plan_code in allowed:
+            mapping[str(provider_id).strip()] = plan_code
+    return mapping
+
+
+def _plan_code_from_payload(attributes, custom_data, fallback_plan):
+    mapping = lemon_squeezy_variant_plan_map()
+    if mapping:
+        # What was actually bought decides the plan. custom_data rides on the checkout URL,
+        # so a buyer could pay for Starter while claiming Scale.
+        for provider_id in (attributes.get("variant_id"), attributes.get("product_id")):
+            plan_code = mapping.get(str(provider_id or "").strip())
+            if plan_code:
+                return plan_code
+        return normalize_plan_code(fallback_plan)
+    return normalize_plan_code(custom_data.get("plan_code") or fallback_plan)
+
+
+def _attribute_datetime(attributes, key, current):
+    """An explicit null from the provider clears the date (e.g. ends_at after a resume)."""
+    if key not in attributes:
+        return current
+    return _parse_provider_datetime(attributes.get(key))
+
+
 def _subscription_payload_is_supported(payload, event_name):
     data = payload.get("data") or {}
     data_type = (data.get("type") or "").strip().lower()
@@ -259,14 +304,39 @@ def _sync_subscription_from_payload(onboarding, payload, event_name):
     urls = _payload_urls(attributes)
     now = timezone.now()
 
-    plan_code = normalize_plan_code(custom_data.get("plan_code") or onboarding.selected_plan)
-    subscription, _ = BillingSubscription.objects.get_or_create(
-        owner_onboarding=onboarding,
-        defaults={
-            "provider": BillingSubscription.PROVIDER_LEMON_SQUEEZY,
-            "plan_code": plan_code,
-        },
+    subscription = BillingSubscription.objects.select_for_update().filter(owner_onboarding=onboarding).first()
+    plan_code = _plan_code_from_payload(
+        attributes,
+        custom_data,
+        subscription.plan_code if subscription is not None else onboarding.selected_plan,
     )
+    if subscription is None:
+        subscription = BillingSubscription.objects.create(
+            owner_onboarding=onboarding,
+            provider=BillingSubscription.PROVIDER_LEMON_SQUEEZY,
+            plan_code=plan_code,
+        )
+
+    incoming_status = _status_from_payload(attributes, event_name, subscription.status)
+    incoming_subscription_id = str(data.get("id") or attributes.get("subscription_id") or "").strip()
+    provider_updated_at = _parse_provider_datetime(attributes.get("updated_at"))
+
+    # Webhooks can arrive late or out of order; an older snapshot must not undo a newer one.
+    if (
+        provider_updated_at is not None
+        and subscription.provider_updated_at is not None
+        and provider_updated_at < subscription.provider_updated_at
+    ):
+        return subscription, "stale"
+    # The death of a previous subscription must not lock out its paid replacement.
+    if (
+        incoming_subscription_id
+        and subscription.provider_subscription_id
+        and incoming_subscription_id != subscription.provider_subscription_id
+        and subscription.grants_access
+        and incoming_status not in {BillingSubscription.STATUS_ACTIVE, BillingSubscription.STATUS_ON_TRIAL}
+    ):
+        return subscription, "other_subscription"
 
     metadata = dict(subscription.metadata or {})
     metadata["custom_data"] = custom_data
@@ -274,17 +344,19 @@ def _sync_subscription_from_payload(onboarding, payload, event_name):
     metadata["variant_name"] = (attributes.get("variant_name") or "").strip()
 
     subscription.plan_code = plan_code
-    subscription.status = _status_from_payload(attributes, event_name, subscription.status)
+    subscription.status = incoming_status
+    if provider_updated_at is not None:
+        subscription.provider_updated_at = provider_updated_at
     subscription.provider_customer_id = str(attributes.get("customer_id") or subscription.provider_customer_id or "").strip()
     subscription.provider_order_id = str(attributes.get("order_id") or subscription.provider_order_id or "").strip()
-    subscription.provider_subscription_id = str(data.get("id") or attributes.get("subscription_id") or subscription.provider_subscription_id or "").strip()
+    subscription.provider_subscription_id = incoming_subscription_id or subscription.provider_subscription_id
     subscription.provider_product_id = str(attributes.get("product_id") or subscription.provider_product_id or "").strip()
     subscription.provider_variant_id = str(attributes.get("variant_id") or subscription.provider_variant_id or "").strip()
     subscription.product_name = (attributes.get("product_name") or subscription.product_name or "").strip()
     subscription.variant_name = (attributes.get("variant_name") or subscription.variant_name or "").strip()
     subscription.customer_portal_url = (urls.get("customer_portal") or getattr(settings, "LEMON_SQUEEZY_CUSTOMER_PORTAL_URL", "") or subscription.customer_portal_url or "").strip()
-    subscription.renews_at = _parse_provider_datetime(attributes.get("renews_at")) or subscription.renews_at
-    subscription.ends_at = _parse_provider_datetime(attributes.get("ends_at")) or subscription.ends_at
+    subscription.renews_at = _attribute_datetime(attributes, "renews_at", subscription.renews_at)
+    subscription.ends_at = _attribute_datetime(attributes, "ends_at", subscription.ends_at)
     subscription.last_event_name = event_name
     subscription.last_event_at = now
     subscription.metadata = metadata
@@ -299,6 +371,12 @@ def _sync_subscription_from_payload(onboarding, payload, event_name):
         subscription.paused_at = now
     if subscription.status in {BillingSubscription.STATUS_ACTIVE, BillingSubscription.STATUS_ON_TRIAL, BillingSubscription.STATUS_PAST_DUE}:
         subscription.paused_at = None
+    # The grace period runs from the FIRST past-due event; repeats of it must not restart the clock.
+    if subscription.status == BillingSubscription.STATUS_PAST_DUE:
+        if subscription.past_due_since is None:
+            subscription.past_due_since = provider_updated_at or now
+    else:
+        subscription.past_due_since = None
 
     subscription.save()
 
@@ -307,10 +385,17 @@ def _sync_subscription_from_payload(onboarding, payload, event_name):
         onboarding.save(update_fields=["selected_plan"])
     onboarding.billing_subscription = subscription
     onboarding.sync_billing_state()
-    return subscription
+    return subscription, ""
 
 
+@transaction.atomic
 def process_lemon_squeezy_webhook(payload, *, raw_body=b"", signature=""):
+    """Record and apply one delivery as a unit.
+
+    Atomic on purpose: if the sync fails, the BillingWebhookEvent row is rolled back too,
+    so the provider's retry is processed instead of being dismissed as a duplicate.
+    """
+    signature = (signature or "")[:255]
     event_name = _payload_event_name(payload)
     event_hash = _payload_hash(raw_body, payload)
     provider_event_id = _payload_event_id(payload)
@@ -324,13 +409,16 @@ def process_lemon_squeezy_webhook(payload, *, raw_body=b"", signature=""):
             "payload": payload or {},
         },
     )
+    webhook_event.skipped_reason = ""
     if not created:
         return webhook_event, False, None
 
     onboarding = _resolve_onboarding_from_payload(payload)
     subscription = None
     if onboarding is not None and _subscription_payload_is_supported(payload, event_name):
-        subscription = _sync_subscription_from_payload(onboarding, payload, event_name)
+        subscription, webhook_event.skipped_reason = _sync_subscription_from_payload(onboarding, payload, event_name)
+        if webhook_event.skipped_reason:
+            subscription = None
 
     if webhook_event.event_name != event_name or webhook_event.signature != signature or webhook_event.payload != (payload or {}):
         webhook_event.provider_event_id = provider_event_id

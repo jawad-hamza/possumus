@@ -1,69 +1,39 @@
-from django.db.models import Sum
-from accounts.models import Account, VoucherLine
+from accounts.models import Account
+from accounts.services.report_utils import ZERO, account_totals, parse_report_range
 
 
 def get_profit_and_loss(start_date=None, end_date=None):
     """
-    Returns Profit & Loss statement.
+    Profit & Loss for a period. An opening balance on an income/expense account
+    belongs to the time before the first posting, so it only counts when the
+    report is not limited by a start date.
     """
-
-    def line_total(account):
-        qs = VoucherLine.objects.filter(account=account)
-
-        if start_date:
-            qs = qs.filter(voucher__date__gte=start_date)
-        if end_date:
-            qs = qs.filter(voucher__date__lte=end_date)
-
-        sums = qs.aggregate(
-            debit=Sum("debit"),
-            credit=Sum("credit"),
-        )
-
-        debit = sums["debit"] or 0
-        credit = sums["credit"] or 0
-
-        # Income: credit - debit
-        if account.type == Account.INCOME:
-            return credit - debit
-
-        # Expense: debit - credit
-        return debit - credit
+    start_date, end_date = parse_report_range(start_date, end_date)
 
     income_rows = []
     expense_rows = []
+    total_income = ZERO
+    total_expense = ZERO
 
-    total_income = 0
-    total_expense = 0
-
-    accounts = Account.objects.filter(is_active=True)
-
-    for acc in accounts:
-        if acc.type not in (Account.INCOME, Account.EXPENSE):
-            continue
-
-        amount = line_total(acc)
-
-        if amount == 0:
-            continue
-
-        if acc.type == Account.INCOME:
-            income_rows.append({
-                "account": acc.title,
-                "amount": amount
-            })
+    for account, debit, credit in account_totals(start=start_date, end=end_date, include_opening=start_date is None):
+        if account.type == Account.INCOME:
+            amount = credit - debit
+            if amount == 0:
+                continue
+            income_rows.append({"account_id": account.id, "account": account.title, "amount": amount})
             total_income += amount
-
-        else:
-            expense_rows.append({
-                "account": acc.title,
-                "amount": amount
-            })
+        elif account.type == Account.EXPENSE:
+            amount = debit - credit
+            if amount == 0:
+                continue
+            expense_rows.append({"account_id": account.id, "account": account.title, "amount": amount})
             total_expense += amount
 
     return {
         "income": income_rows,
         "expenses": expense_rows,
+        "start_date": start_date,
+        "end_date": end_date,
         "total_income": total_income,
         "total_expense": total_expense,
         "net_profit": total_income - total_expense,

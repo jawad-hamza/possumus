@@ -2,7 +2,7 @@ from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
 
-from accounts.models import PartyLedgerEntry
+from accounts.models import PartyLedgerEntry, Voucher
 
 
 CUSTOMER = "customer"
@@ -30,7 +30,8 @@ def get_party_statement(*, party, from_date=None, to_date=None):
     if to_date:
         entries = entries.filter(voucher__date__lte=to_date)
 
-    entries = entries.order_by("voucher__date", "id")
+    entries = list(entries.order_by("voucher__date", "id"))
+    documents = _document_labels([entry.voucher for entry in entries])
 
     rows = []
     running = opening_balance
@@ -42,6 +43,7 @@ def get_party_statement(*, party, from_date=None, to_date=None):
                 "voucher_id": entry.voucher.id,
                 "voucher_type": entry.voucher.voucher_type,
                 "ref": f"{entry.voucher.ref_model}#{entry.voucher.ref_id}",
+                "document": documents.get(entry.voucher.id, ""),
                 "debit": entry.debit,
                 "credit": entry.credit,
                 "running_balance": running,
@@ -106,6 +108,39 @@ def get_unified_party_statement(*, customer=None, supplier=None, from_date=None,
         "rows": final_rows,
     }
 
+
+
+def _document_labels(vouchers) -> dict:
+    """voucher id -> the paper the shop recognises: "Invoice INV-00024", "Receipt 7", "Opening balance"."""
+    from pos.models import Purchase, Sale
+
+    sale_ids = {v.ref_id for v in vouchers if v.ref_model == "Sale" and v.ref_id}
+    purchase_ids = {v.ref_id for v in vouchers if v.ref_model == "Purchase" and v.ref_id}
+    invoices = {pk: number for pk, number in Sale.objects.filter(pk__in=sale_ids).values_list("pk", "invoice_number")}
+    bills = {
+        pk: number
+        for pk, number in Purchase.objects.filter(pk__in=purchase_ids).values_list("pk", "supplier_invoice_number")
+    }
+
+    labels = {}
+    for voucher in vouchers:
+        model, ref = voucher.ref_model, voucher.ref_id
+        if model == "Sale":
+            label = f"Invoice {invoices.get(ref) or f'#{ref}'}"
+        elif model == "Purchase":
+            label = f"Purchase #{ref}" + (f" (bill {bills[ref]})" if bills.get(ref) else "")
+        elif model == "SaleReturn":
+            label = f"Sale return #{ref}"
+        elif model == "PurchaseReturn":
+            label = f"Purchase return #{ref}"
+        elif model == "Settlement":
+            label = f"{'Receipt' if voucher.voucher_type == Voucher.RECEIPT else 'Payment'} #{ref}"
+        elif model in ("CustomerOpeningBalance", "SupplierOpeningBalance"):
+            label = "Opening balance"
+        else:
+            label = voucher.get_voucher_type_display()
+        labels[voucher.id] = label
+    return labels
 
 
 def _party_role(party) -> str:

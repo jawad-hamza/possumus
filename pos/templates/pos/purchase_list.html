@@ -1,102 +1,77 @@
 {% extends "pos/base.html" %}
+{% load static %}
+{% load currency_tags %}
 
 {% block title %}Purchases{% endblock %}
+{% block page_title %}Purchases{% endblock %}
+{% block page_help %}Supplier receipts with inventory value, paid amount, and balance due. Press F2 for a new purchase.{% endblock %}
+
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/return-flow.css' %}" rel="stylesheet">{% endblock %}
+
+{% block page_actions %}<a href="{% url 'purchase_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary" data-k-key="F2" data-k-key-label="New purchase"><i class="bi bi-plus-lg" aria-hidden="true"></i> New purchase</a>{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon warning"><i class="bi bi-truck"></i></span>
-        <div>
-            <h1 class="page-title">Purchases</h1>
-            <p class="page-subtitle">Supplier receipts with inventory value, paid amount, and balance due.</p>
+<section class="k-section" aria-label="Summary">
+    <div class="st-stats">
+        <div class="k-balance">
+            <div class="k-balance-label">Total purchases {% include "pos/partials/_help_tip.html" with tip_id="tipPurchaseCount" tip_name="Total purchases" tip_text="Purchase documents in the system." %}</div>
+            <div class="k-balance-figure">{{ purchase_count }}</div>
+        </div>
+        <div class="k-balance">
+            <div class="k-balance-label">This month {% include "pos/partials/_help_tip.html" with tip_id="tipPurchaseMonth" tip_name="This month" tip_text="Inventory received this month." %}</div>
+            <div class="k-balance-figure">{{ this_month_total|money }}</div>
+        </div>
+        <div class="k-balance{% if outstanding_total > 0 %} k-balance--due{% endif %}">
+            <div class="k-balance-label">You owe suppliers {% include "pos/partials/_help_tip.html" with tip_id="tipPurchaseOwed" tip_name="Outstanding payables" tip_text="Still open against suppliers." %}</div>
+            <div class="k-balance-figure">{{ outstanding_total|money }}</div>
         </div>
     </div>
-    <div class="page-actions">
-        <a href="{% url 'purchase_add' %}" class="btn btn-dark"><i class="bi bi-plus-circle"></i> New Purchase</a>
-    </div>
-</div>
+</section>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="metric-card primary">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Total Purchases</div>
-                    <div class="metric-value">{{ purchases|length }}</div>
-                    <div class="metric-meta">Purchase documents in the system.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-receipt"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="metric-card warning">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">This Month Value</div>
-                    <div class="metric-value">Rs {{ this_month_total|floatformat:2 }}</div>
-                    <div class="metric-meta">Inventory received this month.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-box-seam"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="metric-card danger">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Outstanding Payables</div>
-                    <div class="metric-value">Rs {{ outstanding_total|floatformat:2 }}</div>
-                    <div class="metric-meta">Still open against suppliers.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-hourglass-split"></i></span>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="page-card p-0 overflow-hidden">
-    <div class="table-responsive">
-        <table class="table align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th class="ps-4">Purchase</th>
-                    <th>Date</th>
-                    <th>Supplier</th>
-                    <th class="text-end">Total</th>
-                    <th class="text-end">Paid</th>
-                    <th class="text-end">Due</th>
-                    <th>Status</th>
-                    <th class="text-end pe-4">Actions</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for p in purchases %}
-                <tr>
-                    <td class="ps-4 fw-semibold">#{{ p.id }}</td>
-                    <td>{{ p.created_at|date:"d M Y" }}</td>
-                    <td>{{ p.supplier|default:"Cash Purchase" }}</td>
-                    <td class="text-end">Rs {{ p.total_amount|floatformat:2 }}</td>
-                    <td class="text-end">
-                        <div>Rs {{ p.report_paid_amount|floatformat:2 }}</div>
-                        {% if p.report_settlement_paid > 0 %}<div class="small text-muted">Later settlement Rs {{ p.report_settlement_paid|floatformat:2 }}</div>{% endif %}
-                    </td>
-                    <td class="text-end">Rs {{ p.report_balance_due|floatformat:2 }}</td>
-                    <td>
-                        <span class="status-chip {% if p.report_payment_status == 'paid' %}healthy{% elif p.report_payment_status == 'partial' %}advance{% else %}payable{% endif %}">{{ p.report_payment_status|title }}</span>
-                    </td>
-                    <td class="text-end pe-4">
-                        <div class="btn-group btn-group-sm">
-                            <a href="{% url 'purchase_detail' p.id %}" class="btn btn-outline-secondary"><i class="bi bi-eye"></i></a>
-                            <a href="{% url 'purchase_edit' p.id %}" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i></a>
-                        </div>
-                    </td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="8" class="text-center text-muted py-5">No purchases recorded yet.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
+<section class="k-section" aria-labelledby="purchase-list-title">
+    <div class="k-section-head"><h2 class="k-section-title" id="purchase-list-title">All purchases</h2></div>
+    <table class="k-ledger k-ledger--stack">
+        <thead>
+            <tr>
+                <th scope="col" data-k="meta">Purchase</th>
+                <th scope="col" data-k="what">Supplier</th>
+                <th scope="col" class="text-end" data-k="amount">Total</th>
+                <th scope="col" class="text-end" data-k="more">Paid</th>
+                <th scope="col" class="text-end" data-k="balance">Due</th>
+                <th scope="col" data-k="flag">Status</th>
+                <th scope="col" class="text-end" data-k="more"><span class="visually-hidden">Actions</span></th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for p in purchases %}
+            <tr data-rf-row="{{ p.id }}">
+                <td data-k="meta"><a href="{% url 'purchase_detail' p.id %}" class="st-name">#{{ p.id }}</a><span class="st-sub">{{ p.created_at|date:"d M Y" }}</span></td>
+                <td data-k="what" class="st-wrap">{{ p.supplier|default:"Cash purchase" }}{% if p.supplier_invoice_number %}<span class="st-sub">Bill {{ p.supplier_invoice_number }}</span>{% endif %}</td>
+                <td class="k-num text-end" data-k="amount" data-label="Total">{{ p.total_amount|money }}</td>
+                <td class="k-num text-end" data-k="more" data-label="Paid">{{ p.report_paid_amount|money }}{% if p.report_settlement_paid > 0 %}<span class="st-sub">Later settlement {{ p.report_settlement_paid|money }}</span>{% endif %}</td>
+                <td class="k-num text-end" data-k="balance" data-label="Due"><span class="{% if p.report_balance_due > 0 %}k-due{% else %}st-dim{% endif %}">{{ p.report_balance_due|money }}</span></td>
+                <td data-k="flag">{% if p.report_payment_status == 'paid' %}<span class="k-badge k-badge--green">Paid</span>{% elif p.report_payment_status == 'partial' %}<span class="k-badge k-badge--amber">Part paid</span>{% elif p.report_payment_status == 'credit' %}<span class="k-badge k-badge--amber">Credit</span>{% else %}<span class="k-badge">{{ p.report_payment_status|title }}</span>{% endif %}</td>
+                <td class="text-end" data-k="more">
+                    <span class="k-row-actions">
+                        <a href="{% url 'purchase_detail' p.id %}" class="k-icon-btn" data-tip="Open" aria-label="Open purchase #{{ p.id }}"><i class="bi bi-eye" aria-hidden="true"></i></a>
+                        <a href="{% url 'purchase_edit' p.id %}?next={{ request.get_full_path|urlencode }}" class="k-icon-btn" data-tip="Edit" aria-label="Edit purchase #{{ p.id }}"><i class="bi bi-pencil" aria-hidden="true"></i></a>
+                    </span>
+                </td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="7" class="k-empty" data-k="note">
+                    <i class="bi bi-truck" aria-hidden="true"></i>
+                    <p class="k-empty-title">No purchases recorded yet.</p>
+                    <p>A purchase receives stock, updates cost and sale price, and keeps what you owe the supplier.</p>
+                    <a class="btn btn-primary" href="{% url 'purchase_add' %}">New purchase</a>
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% include "pos/reports/_pagination.html" with page_obj=page_obj page_querystring="" %}
+</section>
 {% endblock %}
+
+{% block extra_js %}<script src="{% static 'zehnms/js/return-flow.js' %}"></script>{% endblock %}

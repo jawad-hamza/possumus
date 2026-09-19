@@ -1,0 +1,141 @@
+"""pos views, split by area. urls.py imports the view callables from here.
+
+Modules are named so that no module shares a name with a view (pos_views, not
+pos_screen; dashboard_views, not dashboard): the re-export below would otherwise
+shadow the submodule and break mock.patch("pos.views.<module>.<name>").
+"""
+from .public import (
+    home,
+    landing_plan_checkout,
+    start_trial,
+    signup_view,
+    resend_verification_email,
+    verify_signup_email,
+    google_auth_start,
+    google_auth_callback,
+    setup_admin,
+    login_view,
+    logout_view,
+    set_client_time_zone,
+)
+from .billing import (
+    billing_page,
+    billing_checkout,
+    billing_portal_redirect,
+    lemonsqueezy_webhook,
+)
+from .settings_views import (
+    settings_page,
+    download_backup_snapshot,
+)
+from .dashboard_views import (
+    dashboard,
+)
+from .reports import (
+    reports_home,
+    expiry_alert_report,
+    employee_report_list,
+    employee_report_detail,
+    daily_sales_report,
+    low_stock_list,
+)
+from .pos_views import (
+    scan_barcode,
+    products_by_category,
+    pos_screen,
+    add_customer_from_pos,
+    invoice,
+    invoice_pdf,
+    sale_return_view,
+)
+from .products import (
+    product_list,
+    product_add,
+    product_view,
+    product_edit,
+    product_delete,
+    brand_add,
+    category_add,
+    category_edit,
+    quick_create_brand,
+    quick_create_category,
+    quick_create_supplier,
+    quick_create_product,
+    stock_adjustments,
+)
+from .purchases import (
+    add_supplier_from_pos,
+    purchase_list,
+    purchase_add,
+    purchase_detail,
+    purchase_edit,
+    purchase_return_view,
+)
+from .parties import (
+    parties_home,
+    customer_list,
+    supplier_list,
+    customer_detail,
+    supplier_detail,
+    party_statement_page,
+)
+
+__all__ = [
+    "home",
+    "landing_plan_checkout",
+    "start_trial",
+    "signup_view",
+    "resend_verification_email",
+    "verify_signup_email",
+    "google_auth_start",
+    "google_auth_callback",
+    "setup_admin",
+    "login_view",
+    "logout_view",
+    "set_client_time_zone",
+    "billing_page",
+    "billing_checkout",
+    "billing_portal_redirect",
+    "lemonsqueezy_webhook",
+    "settings_page",
+    "download_backup_snapshot",
+    "dashboard",
+    "reports_home",
+    "expiry_alert_report",
+    "employee_report_list",
+    "employee_report_detail",
+    "daily_sales_report",
+    "low_stock_list",
+    "scan_barcode",
+    "products_by_category",
+    "pos_screen",
+    "add_customer_from_pos",
+    "invoice",
+    "invoice_pdf",
+    "sale_return_view",
+    "product_list",
+    "product_add",
+    "product_view",
+    "product_edit",
+    "product_delete",
+    "brand_add",
+    "category_add",
+    "category_edit",
+    "quick_create_brand",
+    "quick_create_category",
+    "quick_create_supplier",
+    "quick_create_product",
+    "stock_adjustments",
+    "add_supplier_from_pos",
+    "purchase_list",
+    "purchase_add",
+    "purchase_detail",
+    "purchase_edit",
+    "purchase_return_view",
+    "parties_home",
+    "customer_list",
+    "supplier_list",
+    "customer_detail",
+    "supplier_detail",
+    "party_statement_page",
+]

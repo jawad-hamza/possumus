@@ -1,73 +1,103 @@
 {% extends "pos/base.html" %}
-{% load accounting_tags %}
+{% load static accounting_tags %}
 
 {% block title %}Ledger - {{ account.title }}{% endblock %}
+{% block page_title %}Account ledger{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}{% include "accounts/_report_actions.html" %}{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon slate"><i class="bi bi-journal-richtext"></i></span>
-        <div>
-            <h1 class="page-title">Account Ledger</h1>
-            <p class="page-subtitle">Movement history for {{ account.title }}.</p>
-        </div>
+<header class="b-print-head">
+    <h2>{{ active_company.name|default:brand_name }}</h2>
+    <p>Account ledger: {{ account.title }}. {{ period_label }}.</p>
+</header>
+
+{% include "accounts/_report_header.html" %}
+
+<section class="k-section b-leaf">
+    <div>
+        <h2 class="b-leaf-name">{{ account.title }}{% if not account.is_active %} <span class="k-badge">Inactive</span>{% endif %}</h2>
+        <ul class="b-leaf-meta"><li>{{ account.get_type_display }} account</li><li>{{ period_label }}</li></ul>
     </div>
-    <div class="page-actions">
-        <span class="status-chip clear">{{ account.get_type_display }}</span>
+    <div class="b-no-print">
+        <label class="form-label" for="ledger-account-switch">Switch account</label>
+        <select class="form-select" id="ledger-account-switch" aria-label="Switch account" onchange="if (this.value) { window.location = this.value; }">
+            {% for option in accounts %}
+            <option value="{% url 'account_ledger' option.id %}{% if page_obj.base_query %}?{{ page_obj.base_query }}{% endif %}" {% if option.id == account.id %}selected{% endif %}>{{ option.title }}</option>
+            {% endfor %}
+        </select>
+    </div>
+</section>
+
+<div class="b-balances">
+    <div class="k-balance">
+        <div class="k-balance-label">Opening balance</div>
+        <div class="k-balance-figure">{{ opening_balance|money }} <span class="b-drcr">{{ opening_side }}</span></div>
+    </div>
+    <div class="k-balance">
+        <div class="k-balance-label">Total debit</div>
+        <div class="k-balance-figure">{{ total_debit|money }}</div>
+    </div>
+    <div class="k-balance">
+        <div class="k-balance-label">Total credit</div>
+        <div class="k-balance-figure">{{ total_credit|money }}</div>
+    </div>
+    <div class="k-balance">
+        <div class="k-balance-label">Closing balance</div>
+        <div class="k-balance-figure">{{ closing_balance|money }} <span class="b-drcr">{{ closing_side }}</span></div>
     </div>
 </div>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="metric-card primary">
-            <div class="metric-label">Total Debit</div>
-            <div class="metric-value">{{ total_debit|money }}</div>
-        </div>
+<section class="k-section" aria-labelledby="acct-ledger-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="acct-ledger-title">Entries <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Entries" aria-describedby="tipAcctLedger" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipAcctLedger" role="tooltip" hidden>Movement history. {{ period_label }}.</span></span></h2>
     </div>
-    <div class="col-md-4">
-        <div class="metric-card warning">
-            <div class="metric-label">Total Credit</div>
-            <div class="metric-value">{{ total_credit|money }}</div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="metric-card slate">
-            <div class="metric-label">Closing Balance</div>
-            <div class="metric-value">{{ closing_balance|money }} {{ closing_side }}</div>
-        </div>
-    </div>
-</div>
-
-<div class="page-card p-0 overflow-hidden">
     <div class="table-responsive">
-        <table class="table align-middle mb-0">
-            <thead class="table-light">
+        <table class="k-table k-ledger--stack b-bahi">
+            <thead>
                 <tr>
-                    <th class="ps-4">Date</th>
-                    <th>Voucher</th>
-                    <th>Narration</th>
-                    <th class="text-end">Debit</th>
-                    <th class="text-end">Credit</th>
-                    <th class="text-end pe-4">Running Balance</th>
+                    <th scope="col" data-k="meta">Date</th>
+                    <th scope="col" data-k="what">Voucher</th>
+                    <th scope="col" data-k="more">Narration</th>
+                    <th scope="col" class="k-num" data-k="amount" data-k-suffix="Dr">Debit</th>
+                    <th scope="col" class="k-num" data-k="amount" data-k-suffix="Cr">Credit</th>
+                    <th scope="col" class="k-num" data-k="balance">Running balance</th>
                 </tr>
             </thead>
             <tbody>
+                {% if page_obj.number == 1 %}
+                <tr class="b-bf">
+                    <td colspan="5" class="b-stack-title">Opening balance</td>
+                    <td class="k-num b-bal" data-label="Balance">{{ opening_balance|money }} <span class="b-drcr">{{ opening_side }}</span></td>
+                </tr>
+                {% endif %}
                 {% for row in ledger %}
                 <tr>
-                    <td class="ps-4">{{ row.date }}</td>
-                    <td>#{{ row.voucher.id }} | {{ row.voucher.get_voucher_type_display }}</td>
-                    <td>{{ row.narration|default:"-" }}</td>
-                    <td class="text-end">{{ row.debit|money }}</td>
-                    <td class="text-end">{{ row.credit|money }}</td>
-                    <td class="text-end pe-4 fw-semibold">{{ row.balance|money }} {{ row.drcr }}</td>
+                    <td data-label="Date">{{ row.date }}</td>
+                    <td data-label="Voucher">#{{ row.voucher.id }} &middot; {{ row.voucher.get_voucher_type_display }}</td>
+                    <td data-label="Narration">{{ row.narration|default:"-" }}</td>
+                    <td class="k-num" data-label="Debit">{% if row.debit %}{{ row.debit|money }}{% endif %}</td>
+                    <td class="k-num" data-label="Credit">{% if row.credit %}{{ row.credit|money }}{% endif %}</td>
+                    <td class="k-num b-bal" data-label="Balance">{{ row.balance|money }} <span class="b-drcr">{{ row.drcr }}</span></td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="6" class="text-center text-muted py-5">No ledger entries posted for this account.</td>
+                    <td colspan="6" class="k-empty"><p class="k-empty-title">No ledger entries posted for this account in this period.</p><p>Widen the dates or choose All time to see earlier movements.</p></td>
                 </tr>
                 {% endfor %}
             </tbody>
+            {% if ledger %}
+            <tfoot>
+                <tr>
+                    <td colspan="3" class="b-stack-title">Total for the period</td>
+                    <td class="k-num" data-label="Debit">{{ total_debit|money }}</td>
+                    <td class="k-num" data-label="Credit">{{ total_credit|money }}</td>
+                    <td class="k-num b-bal" data-label="Closing">{{ closing_balance|money }} <span class="b-drcr">{{ closing_side }}</span></td>
+                </tr>
+            </tfoot>
+            {% endif %}
         </table>
     </div>
-</div>
+    {% include "accounts/_pagination.html" %}
+</section>
 {% endblock %}

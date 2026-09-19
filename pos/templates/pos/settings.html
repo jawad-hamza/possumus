@@ -1,1270 +1,786 @@
 {% extends "pos/base.html" %}
+{% load static currency_tags %}
 
 {% block title %}Settings{% endblock %}
+{% block page_title %}Settings{% endblock %}
+{% block page_help %}Your business details, tax and till rules, features, team, bank accounts, backups and licence. Pick a section on the left.{% endblock %}
 
-{% block extra_css %}
-<style>
-    .settings-grid {
-        display: grid;
-        gap: 1.5rem;
-    }
-
-    .settings-hero {
-        border-radius: 22px;
-        border: 1px solid rgba(15, 23, 42, 0.08);
-        background: linear-gradient(135deg, #0f172a, #1e3a5f 60%, #1d4ed8 100%);
-        color: #fff;
-        padding: 1.6rem;
-        box-shadow: 0 24px 42px rgba(15, 23, 42, 0.18);
-    }
-
-    .settings-hero p {
-        color: rgba(255, 255, 255, 0.78);
-        margin-bottom: 0;
-    }
-
-    .settings-chip {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        border-radius: 999px;
-        padding: 6px 12px;
-        font-size: 0.82rem;
-        font-weight: 700;
-        background: rgba(255, 255, 255, 0.12);
-    }
-
-    .settings-form-grid {
-        display: grid;
-        gap: 1rem;
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-    }
-
-    .settings-form-grid.full {
-        grid-template-columns: 1fr;
-    }
-
-    .settings-switches {
-        display: grid;
-        gap: 0.85rem;
-    }
-
-    .settings-switch {
-        display: flex;
-        align-items: flex-start;
-        justify-content: space-between;
-        gap: 1rem;
-        border: 1px solid var(--card-border);
-        border-radius: 16px;
-        padding: 1rem;
-        background: #fff;
-    }
-
-    .settings-switch .copy {
-        min-width: 0;
-    }
-
-    .settings-switch .copy h3 {
-        font-size: 1rem;
-        margin: 0 0 0.2rem;
-    }
-
-    .settings-switch .copy p {
-        margin: 0;
-        color: var(--text-soft);
-        font-size: 0.92rem;
-    }
-
-    .settings-note {
-        border-radius: 18px;
-        border: 1px solid #dbeafe;
-        background: linear-gradient(180deg, #eff6ff, #f8fbff);
-        color: #1e3a8a;
-        padding: 1rem 1.1rem;
-    }
-
-    .category-rate {
-        font-weight: 700;
-        color: var(--text-main);
-    }
-
-    .table thead th {
-        white-space: nowrap;
-    }
-
-    .role-pill {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        border-radius: 999px;
-        padding: 6px 12px;
-        font-size: 0.78rem;
-        font-weight: 700;
-        background: #eff6ff;
-        color: #1d4ed8;
-    }
-
-    .role-pill.cashier {
-        background: #ecfeff;
-        color: #0f766e;
-    }
-
-    .session-active {
-        color: #15803d;
-        font-weight: 700;
-    }
-
-    .settings-tabs-shell {
-        padding: 0.4rem;
-        border-radius: 20px;
-    }
-
-    .settings-tabs {
-        gap: 0.75rem;
-    }
-
-    .settings-tabs .nav-link {
-        border: 1px solid transparent;
-        border-radius: 14px;
-        color: var(--text-soft);
-        font-weight: 700;
-        padding: 0.85rem 1rem;
-        background: transparent;
-        display: flex;
-        align-items: center;
-        gap: 0.55rem;
-    }
-
-    .settings-tabs .nav-link:hover {
-        border-color: var(--card-border);
-        color: var(--text-main);
-        background: #fff;
-    }
-
-    .settings-tabs .nav-link.active {
-        color: #fff;
-        border-color: transparent;
-        background: linear-gradient(135deg, #14213d, #1d4ed8);
-        box-shadow: 0 18px 28px rgba(20, 33, 61, 0.16);
-    }
-
-    .settings-tab-pane {
-        padding-top: 1rem;
-    }
-
-    .settings-badge-list {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.75rem;
-    }
-
-    .settings-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 0.5rem;
-        border-radius: 999px;
-        padding: 0.65rem 0.95rem;
-        border: 1px solid var(--card-border);
-        background: #f8fbff;
-        color: var(--text-main);
-        font-size: 0.9rem;
-        font-weight: 600;
-    }
-
-    .settings-timezone-card {
-        border: 1px solid #dbeafe;
-        background: linear-gradient(135deg, #f8fbff, #eef4ff);
-    }
-
-    .settings-timezone-summary {
-        display: grid;
-        gap: 0.9rem;
-    }
-
-    @media (max-width: 991px) {
-        .settings-form-grid {
-            grid-template-columns: 1fr;
-        }
-
-        .settings-tabs .nav-link {
-            width: 100%;
-            justify-content: center;
-        }
-    }
-</style>
-{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/settings.css' %}" rel="stylesheet">{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon slate"><i class="bi bi-sliders"></i></span>
-        <div>
-            <h1 class="page-title">Settings</h1>
-            <p class="page-subtitle">Business branding, GST rules, checkout controls, and team access live here.</p>
-        </div>
-    </div>
-</div>
+<div class="set">
+    <nav class="set-index-wrap" aria-label="Settings sections">
+        <ul class="nav nav-pills set-index" id="settingsTabNav" role="tablist">
+            <li class="nav-item" role="presentation">
+                <button class="nav-link active" id="settings-business-tab" data-bs-toggle="pill" data-bs-target="#settings-business-pane" type="button" role="tab" aria-controls="settings-business-pane" aria-selected="true" data-settings-tab="business">
+                    <span class="set-index-name">Business</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="settings-sales-tab" data-bs-toggle="pill" data-bs-target="#settings-sales-pane" type="button" role="tab" aria-controls="settings-sales-pane" aria-selected="false" data-settings-tab="sales">
+                    <span class="set-index-name">Tax and till</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="settings-features-tab" data-bs-toggle="pill" data-bs-target="#settings-features-pane" type="button" role="tab" aria-controls="settings-features-pane" aria-selected="false" data-settings-tab="features">
+                    <span class="set-index-name">Features</span><span class="set-index-fig">{{ edition_summary.enabled_count }}/{{ edition_summary.available_count }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="settings-team-tab" data-bs-toggle="pill" data-bs-target="#settings-team-pane" type="button" role="tab" aria-controls="settings-team-pane" aria-selected="false" data-settings-tab="team">
+                    <span class="set-index-name">Team and roles</span><span class="set-index-fig">{{ total_team_users }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="settings-banking-tab" data-bs-toggle="pill" data-bs-target="#settings-banking-pane" type="button" role="tab" aria-controls="settings-banking-pane" aria-selected="false" data-settings-tab="banking">
+                    <span class="set-index-name">Bank accounts</span><span class="set-index-fig">{{ active_bank_count }}</span>
+                </button>
+            </li>
+            {% if feature_modules.backups %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="settings-backups-tab" data-bs-toggle="pill" data-bs-target="#settings-backups-pane" type="button" role="tab" aria-controls="settings-backups-pane" aria-selected="false" data-settings-tab="backups">
+                    <span class="set-index-name">Backups</span><span class="set-index-fig">{{ backup_count }}</span>
+                </button>
+            </li>
+            {% endif %}
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="settings-audit-tab" data-bs-toggle="pill" data-bs-target="#settings-audit-pane" type="button" role="tab" aria-controls="settings-audit-pane" aria-selected="false" data-settings-tab="audit">
+                    <span class="set-index-name">Audit trail</span><span class="set-index-fig">{{ audit_event_count }}</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="settings-timezone-tab" data-bs-toggle="pill" data-bs-target="#settings-timezone-pane" type="button" role="tab" aria-controls="settings-timezone-pane" aria-selected="false" data-settings-tab="timezone">
+                    <span class="set-index-name">Time zone</span>
+                </button>
+            </li>
+            <li class="nav-item" role="presentation">
+                <button class="nav-link" id="settings-licence-tab" data-bs-toggle="pill" data-bs-target="#settings-licence-pane" type="button" role="tab" aria-controls="settings-licence-pane" aria-selected="false" data-settings-tab="licence">
+                    <span class="set-index-name">{% if billing_is_desktop %}Licence{% else %}Licence and billing{% endif %}</span>
+                </button>
+            </li>
+        </ul>
+    </nav>
 
-<div class="settings-hero mb-4">
-    <div class="d-flex flex-wrap justify-content-between gap-3 align-items-start">
-        <div>
-            <h2 class="h3 mb-2">Business Rules Control Centre</h2>
-            <p>Keep the business identity, tax mode, thermal receipt width, and cashier access aligned from one screen.</p>
-        </div>
-        <div class="d-flex flex-wrap gap-2">
-            <span class="settings-chip"><i class="bi bi-receipt"></i>{{ settings_obj.tax_label }}</span>
-            <span class="settings-chip"><i class="bi bi-printer"></i>{{ settings_obj.thermal_printer_width_mm }}mm thermal</span>
-            <span class="settings-chip"><i class="bi bi-shield-check"></i>{% if settings_obj.uses_category_gst %}Category GST{% elif settings_obj.gst_enabled %}Manual Cart Tax{% else %}Tax Disabled{% endif %}</span>
-        </div>
-    </div>
-</div>
+    <div class="tab-content set-body">
 
-<div class="row g-3 mb-4">
-    <div class="col-md-3 col-sm-6">
-        <div class="metric-card h-100 slate">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Team Members</div>
-                    <div class="metric-value">{{ total_team_users }}</div>
-                    <div class="metric-meta">All active and inactive system logins.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-people"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-sm-6">
-        <div class="metric-card h-100 info">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Taxable Categories</div>
-                    <div class="metric-value">{{ taxable_category_count }}</div>
-                    <div class="metric-meta">Categories currently charging GST automatically.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-tags"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-sm-6">
-        <div class="metric-card h-100 success">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Cashiers</div>
-                    <div class="metric-value">{{ cashier_count }}</div>
-                    <div class="metric-meta">POS-only accounts created for checkout staff.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-person-badge"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-md-3 col-sm-6">
-        <div class="metric-card h-100 warning">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Open Sessions</div>
-                    <div class="metric-value">{{ active_sessions_count }}</div>
-                    <div class="metric-meta">Users currently logged in and not yet signed out.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-clock-history"></i></span>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="page-card settings-tabs-shell mb-4">
-    <ul class="nav nav-pills settings-tabs" id="settingsTabNav" role="tablist">
-        <li class="nav-item" role="presentation">
-            <button class="nav-link active" id="settings-business-tab" data-bs-toggle="pill" data-bs-target="#settings-business-pane" type="button" role="tab" aria-controls="settings-business-pane" aria-selected="true" data-settings-tab="business">
-                <i class="bi bi-shop"></i>Business
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="settings-banking-tab" data-bs-toggle="pill" data-bs-target="#settings-banking-pane" type="button" role="tab" aria-controls="settings-banking-pane" aria-selected="false" data-settings-tab="banking">
-                <i class="bi bi-bank"></i>Banking
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="settings-backups-tab" data-bs-toggle="pill" data-bs-target="#settings-backups-pane" type="button" role="tab" aria-controls="settings-backups-pane" aria-selected="false" data-settings-tab="backups">
-                <i class="bi bi-safe2"></i>Backups
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="settings-audit-tab" data-bs-toggle="pill" data-bs-target="#settings-audit-pane" type="button" role="tab" aria-controls="settings-audit-pane" aria-selected="false" data-settings-tab="audit">
-                <i class="bi bi-journal-text"></i>Audit
-            </button>
-        </li>
-        <li class="nav-item" role="presentation">
-            <button class="nav-link" id="settings-team-tab" data-bs-toggle="pill" data-bs-target="#settings-team-pane" type="button" role="tab" aria-controls="settings-team-pane" aria-selected="false" data-settings-tab="team">
-                <i class="bi bi-people"></i>Team
-            </button>
-        </li>
-    </ul>
-</div>
-
-<div class="tab-content">
-<div class="tab-pane fade show active settings-tab-pane" id="settings-business-pane" role="tabpanel" aria-labelledby="settings-business-tab" tabindex="0">
-<div class="page-card settings-timezone-card p-4 mb-4">
-    <div class="row g-4 align-items-start">
-        <div class="col-xl-7">
-            <div class="section-title d-flex align-items-center gap-2 mb-3">
-                <span class="section-title-icon"><i class="bi bi-globe2"></i></span>
-                <div>
-                    <h2 class="h4 mb-1">Your Time Zone</h2>
-                    <p class="text-muted mb-0">Each admin can keep a personal time zone for dates, logs, and daily workflows. Leave it on system detected to follow the device you sign in from.</p>
-                </div>
-            </div>
-            <div class="settings-timezone-summary">
-                <div class="settings-badge-list">
-                    <span class="settings-badge"><i class="bi bi-clock-history"></i>Effective now: <strong data-effective-time-zone-label>{{ effective_time_zone }}</strong></span>
-                    <span class="settings-badge"><i class="bi bi-person-check"></i>Saved preference: <strong>{% if saved_time_zone_preference %}{{ saved_time_zone_preference }}{% else %}System detected{% endif %}</strong></span>
-                    <span class="settings-badge"><i class="bi bi-laptop"></i>This device: <strong data-browser-time-zone-label>{{ session_detected_time_zone|default:"Detecting..." }}</strong></span>
-                </div>
-                <div class="settings-note">
-                    <div class="fw-semibold mb-1"><i class="bi bi-shield-check me-1"></i>How it works</div>
-                    <div class="small">
-                        {% if uses_system_detected_time_zone %}
-                        Right now this admin follows the detected browser time zone. If the browser shares a different zone later, Vendora will use that automatically.
-                        {% else %}
-                        This admin is pinned to a saved time zone, so device changes will not affect the timestamps they see.
-                        {% endif %}
-                    </div>
-                </div>
-            </div>
-        </div>
-        <div class="col-xl-5">
-            <form method="post" novalidate>
-                {% csrf_token %}
-                <input type="hidden" name="action" value="save_time_zone">
-                <input type="hidden" name="browser_time_zone" value="{{ session_detected_time_zone }}" data-browser-time-zone-input>
-                <label class="form-label fw-semibold" for="{{ time_zone_form.time_zone.id_for_label }}">{{ time_zone_form.time_zone.label }}</label>
-                {{ time_zone_form.time_zone }}
-                {% if time_zone_form.time_zone.help_text %}<div class="form-text">{{ time_zone_form.time_zone.help_text }}</div>{% endif %}
-                {% if time_zone_form.time_zone.errors %}<div class="text-danger small mt-1">{{ time_zone_form.time_zone.errors|striptags }}</div>{% endif %}
-                {% if time_zone_form.non_field_errors %}<div class="text-danger small mt-2">{{ time_zone_form.non_field_errors|striptags }}</div>{% endif %}
-                <button class="btn btn-dark mt-3">Save Time Zone</button>
-            </form>
-        </div>
-    </div>
-</div>
-
-<div class="page-card p-4 mb-4">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-        <div class="section-title d-flex align-items-center gap-2 mb-0">
-            <span class="section-title-icon"><i class="bi bi-credit-card-2-front"></i></span>
-            <div>
-                <h2 class="h4 mb-1">Workspace Billing</h2>
-                <p class="text-muted mb-0">Track the 3 free days, current package, and subscription access without leaving Settings.</p>
-            </div>
-        </div>
-        <span class="status-chip {{ billing_status_tone }}">{{ billing_status_label }}</span>
-    </div>
-    {% if billing_onboarding %}
-    <div class="row g-3 align-items-stretch">
-        <div class="col-md-4">
-            <div class="settings-note h-100">
-                <div class="fw-semibold mb-1"><i class="bi bi-stars me-1"></i>Current package</div>
-                <div class="small">{{ billing_current_plan.name }} at ${{ billing_current_plan.price }}/month.</div>
-                <div class="small mt-1">Owner: {{ billing_onboarding.user.email|default:billing_onboarding.user.username }}</div>
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="settings-note h-100">
-                <div class="fw-semibold mb-1"><i class="bi bi-clock-history me-1"></i>Access window</div>
-                {% if billing_onboarding.trial_is_active %}
-                <div class="small">{{ billing_trial_days_remaining }} day{{ billing_trial_days_remaining|pluralize }} left in the automatic free period.</div>
-                {% elif billing_subscription and billing_subscription.renews_at %}
-                <div class="small">Renews on {{ billing_subscription.renews_at|date:"d M Y H:i" }}.</div>
-                {% elif billing_subscription and billing_subscription.ends_at %}
-                <div class="small">Access runs until {{ billing_subscription.ends_at|date:"d M Y H:i" }}.</div>
-                {% else %}
-                <div class="small">No paid renewal date has been synced yet.</div>
-                {% endif %}
-            </div>
-        </div>
-        <div class="col-md-4">
-            <div class="settings-note h-100">
-                <div class="fw-semibold mb-1"><i class="bi bi-box-arrow-up-right me-1"></i>Provider</div>
-                <div class="small">{{ billing_provider_name }} handles hosted checkout and subscription changes.</div>
-                <div class="d-flex flex-wrap gap-2 mt-3">
-                    <a href="{% url 'billing_page' %}" class="btn btn-sm btn-dark">Open Billing</a>
-                    {% if billing_portal_url and billing_can_manage %}
-                    <a href="{% url 'billing_portal_redirect' %}" class="btn btn-sm btn-outline-secondary">Customer Portal</a>
-                    {% endif %}
-                </div>
-            </div>
-        </div>
-    </div>
-    {% else %}
-    <div class="settings-note">
-        Billing becomes available after the owner signup flow is complete and the business workspace is created.
-    </div>
-    {% endif %}
-</div>
-
-<div class="row g-4 mb-4">
-    <div class="col-xl-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-title d-flex align-items-center gap-2 mb-3">
-                <span class="section-title-icon"><i class="bi bi-shop"></i></span>
-                <div>
-                    <h2 class="h4 mb-1">Branding & Receipt Identity</h2>
-                    <p class="text-muted mb-0">Business name, logo, contacts, and footer text used across receipts.</p>
-                </div>
-            </div>
-            <form method="post" enctype="multipart/form-data" novalidate>
+        {# ---------- Business ---------- #}
+        <div class="tab-pane show active" id="settings-business-pane" role="tabpanel" aria-labelledby="settings-business-tab" tabindex="0">
+            <h2 class="set-pane-title">Business{% include "pos/partials/_help_tip.html" with tip_id="tipSetBusiness" tip_name="Business" tip_text="The name, logo, contacts and footer printed on every receipt and invoice." %}</h2>
+            <form method="post" enctype="multipart/form-data" novalidate data-set-form>
                 {% csrf_token %}
                 <input type="hidden" name="action" value="save_branding">
-                <div class="settings-form-grid">
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ branding_form.name.id_for_label }}">{{ branding_form.name.label }}</label>
-                        {{ branding_form.name }}
-                        {% if branding_form.name.errors %}<div class="text-danger small mt-1">{{ branding_form.name.errors|striptags }}</div>{% endif %}
+                <section class="k-section">
+                    <div class="k-section-head"><h3 class="k-section-title">Business details</h3></div>
+                    <div class="k-form-grid">
+                        {% include "pos/partials/_settings_row.html" with field=branding_form.name wide=True %}
+                        {% include "pos/partials/_settings_row.html" with field=branding_form.phone %}
+                        {% include "pos/partials/_settings_row.html" with field=branding_form.email %}
+                        {% include "pos/partials/_settings_row.html" with field=branding_form.address wide=True %}
+                        {% include "pos/partials/_settings_row.html" with field=branding_form.tax_registration_number %}
+                        {% include "pos/partials/_settings_row.html" with field=branding_form.logo %}
                     </div>
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ branding_form.logo.id_for_label }}">{{ branding_form.logo.label }}</label>
-                        {{ branding_form.logo }}
-                        {% if branding_form.logo.errors %}<div class="text-danger small mt-1">{{ branding_form.logo.errors|striptags }}</div>{% endif %}
+                </section>
+                <section class="k-section">
+                    <div class="k-section-head"><h3 class="k-section-title">Receipt</h3></div>
+                    <div class="k-form-grid">
+                        {% include "pos/partials/_settings_row.html" with field=branding_form.invoice_footer wide=True %}
+                        {% include "pos/partials/_settings_switch.html" with field=branding_form.show_qr copy="Prints the QR code and the QR note at the foot of the receipt." %}
+                        {% include "pos/partials/_settings_row.html" with field=branding_form.qr_note wide=True %}
                     </div>
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ branding_form.phone.id_for_label }}">{{ branding_form.phone.label }}</label>
-                        {{ branding_form.phone }}
-                    </div>
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ branding_form.email.id_for_label }}">{{ branding_form.email.label }}</label>
-                        {{ branding_form.email }}
-                    </div>
+                </section>
+                <div class="set-save">
+                    <button class="btn btn-primary">Save business details</button>
+                    <span class="set-save-note" data-set-clean>Used on the next receipt you print.</span>
+                    <span class="set-save-note" data-set-dirty>Changes not saved yet.</span>
                 </div>
-                <div class="mt-3">
-                    <label class="form-label fw-semibold" for="{{ branding_form.address.id_for_label }}">{{ branding_form.address.label }}</label>
-                    {{ branding_form.address }}
-                </div>
-                <div class="settings-form-grid mt-3">
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ branding_form.tax_registration_number.id_for_label }}">{{ branding_form.tax_registration_number.label }}</label>
-                        {{ branding_form.tax_registration_number }}
-                        <div class="form-text">{{ branding_form.tax_registration_number.help_text }}</div>
-                    </div>
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ branding_form.qr_note.id_for_label }}">{{ branding_form.qr_note.label }}</label>
-                        {{ branding_form.qr_note }}
-                    </div>
-                </div>
-                <div class="mt-3">
-                    <label class="form-label fw-semibold" for="{{ branding_form.invoice_footer.id_for_label }}">{{ branding_form.invoice_footer.label }}</label>
-                    {{ branding_form.invoice_footer }}
-                </div>
-                <div class="form-check form-switch mt-3">
-                    {{ branding_form.show_qr }}
-                    <label class="form-check-label fw-semibold" for="{{ branding_form.show_qr.id_for_label }}">{{ branding_form.show_qr.label }}</label>
-                </div>
-                <button class="btn btn-dark mt-3">Save Branding</button>
             </form>
         </div>
-    </div>
 
-    <div class="col-xl-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-title d-flex align-items-center gap-2 mb-3">
-                <span class="section-title-icon"><i class="bi bi-receipt"></i></span>
-                <div>
-                    <h2 class="h4 mb-1">GST & POS Rules</h2>
-                    <p class="text-muted mb-0">Control how tax works and what cashiers can do at the cart.</p>
-                </div>
-            </div>
-            <form method="post" novalidate>
+        {# ---------- Tax and till ---------- #}
+        <div class="tab-pane" id="settings-sales-pane" role="tabpanel" aria-labelledby="settings-sales-tab" tabindex="0">
+            <h2 class="set-pane-title">Tax and till{% include "pos/partials/_help_tip.html" with tip_id="tipSetSales" tip_name="Tax and till" tip_text="How tax is charged, how money is written, and what a cashier may change at the cart." %}</h2>
+            <p class="set-pane-note">{% if settings_obj.uses_category_gst %}{{ settings_obj.tax_label }} by category{% elif settings_obj.gst_enabled %}One {{ settings_obj.tax_label }} rate typed at the cart{% else %}Tax is off{% endif %} · {{ settings_obj.thermal_printer_width_mm }} mm receipts</p>
+            <form method="post" novalidate data-set-form>
                 {% csrf_token %}
                 <input type="hidden" name="action" value="save_rules">
-                <div class="settings-form-grid">
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ system_form.tax_label.id_for_label }}">{{ system_form.tax_label.label }}</label>
-                        {{ system_form.tax_label }}
-                        <div class="form-text">{{ system_form.tax_label.help_text }}</div>
-                    </div>
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ system_form.tax_mode.id_for_label }}">{{ system_form.tax_mode.label }}</label>
-                        {{ system_form.tax_mode }}
-                        <div class="form-text">{{ system_form.tax_mode.help_text }}</div>
-                    </div>
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ system_form.default_sale_payment_method.id_for_label }}">{{ system_form.default_sale_payment_method.label }}</label>
-                        {{ system_form.default_sale_payment_method }}
-                    </div>
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ system_form.thermal_printer_width_mm.id_for_label }}">{{ system_form.thermal_printer_width_mm.label }}</label>
-                        {{ system_form.thermal_printer_width_mm }}
-                        <div class="form-text">{{ system_form.thermal_printer_width_mm.help_text }}</div>
-                    </div>
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ system_form.cash_gst_rate.id_for_label }}">{{ system_form.cash_gst_rate.label }}</label>
-                        {{ system_form.cash_gst_rate }}
-                        <div class="form-text">{{ system_form.cash_gst_rate.help_text }}</div>
-                    </div>
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ system_form.bank_gst_rate.id_for_label }}">{{ system_form.bank_gst_rate.label }}</label>
-                        {{ system_form.bank_gst_rate }}
-                        <div class="form-text">{{ system_form.bank_gst_rate.help_text }}</div>
-                    </div>
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ system_form.expiry_alert_days.id_for_label }}">{{ system_form.expiry_alert_days.label }}</label>
-                        {{ system_form.expiry_alert_days }}
-                        <div class="form-text">{{ system_form.expiry_alert_days.help_text }}</div>
-                    </div>
-                </div>
 
-                <div class="settings-switches mt-3">
-                    <div class="settings-switch">
-                        <div class="copy">
-                            <h3>Enable GST / Tax</h3>
-                            <p>Turns tax calculation on for sales and reports.</p>
-                        </div>
-                        <div class="form-check form-switch m-0">{{ system_form.gst_enabled }}</div>
+                <section class="k-section">
+                    <div class="k-section-head">
+                        <h3 class="k-section-title">Tax<span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About automatic tax" aria-describedby="tipSetTax" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipSetTax" role="tooltip" hidden><strong>How automatic tax works.</strong> With <strong>category tax</strong>, each line uses the rate of its product category, including separate cash and bank rates where they differ. With <strong>manual cart tax</strong> and the cash and bank rates switched on, cash and bank sales use the two rates on this page and the receipt shows both totals.</span></span></h3>
                     </div>
-                    <div class="settings-switch">
-                        <div class="copy">
-                            <h3>Use Payment Method GST</h3>
-                            <p>Cash and bank sales will automatically use their own GST rates and the POS cart tax box will lock.</p>
-                        </div>
-                        <div class="form-check form-switch m-0">{{ system_form.use_payment_method_gst }}</div>
+                    <div class="k-form-grid">
+                        {% include "pos/partials/_settings_switch.html" with field=system_form.gst_enabled copy="Turns tax calculation on for sales and reports." %}
+                        {% include "pos/partials/_settings_row.html" with field=system_form.tax_label %}
+                        {% include "pos/partials/_settings_row.html" with field=system_form.tax_mode %}
+                        {% include "pos/partials/_settings_switch.html" with field=system_form.use_payment_method_gst copy=system_form.use_payment_method_gst.help_text %}
+                        {% include "pos/partials/_settings_row.html" with field=system_form.cash_gst_rate %}
+                        {% include "pos/partials/_settings_row.html" with field=system_form.bank_gst_rate %}
                     </div>
-                    <div class="settings-switch">
-                        <div class="copy">
-                            <h3>Enable Product Expiry Tracking</h3>
-                            <p>Shows expiry date on product and purchase screens and turns on dashboard expiry alerts.</p>
-                        </div>
-                        <div class="form-check form-switch m-0">{{ system_form.enable_product_expiry }}</div>
-                    </div>
-                    <div class="settings-switch">
-                        <div class="copy">
-                            <h3>Allow Credit Sales</h3>
-                            <p>When disabled, POS will hide the credit-sale workflow and enforce cash/bank checkout.</p>
-                        </div>
-                        <div class="form-check form-switch m-0">{{ system_form.allow_credit_sales }}</div>
-                    </div>
-                    <div class="settings-switch">
-                        <div class="copy">
-                            <h3>Allow Price Override</h3>
-                            <p>Lets the operator change unit price at the cart for negotiated customer pricing.</p>
-                        </div>
-                        <div class="form-check form-switch m-0">{{ system_form.allow_price_override }}</div>
-                    </div>
-                    <div class="settings-switch">
-                        <div class="copy">
-                            <h3>Allow Line Discount</h3>
-                            <p>Lets the operator discount a specific product line while minimum margin still applies.</p>
-                        </div>
-                        <div class="form-check form-switch m-0">{{ system_form.allow_line_discount }}</div>
-                    </div>
-                </div>
+                </section>
 
-                <div class="settings-note mt-3">
-                    <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>How automatic tax works</div>
-                    <div class="small">If you switch to <strong>Category GST</strong>, each product line uses the category GST matrix, including category-specific cash and bank GST when those rates differ. If you keep <strong>Manual Cart Tax</strong> but enable <strong>Payment Method GST</strong>, cash and bank will instead use the business-level GST rates from this page and the receipt will show both totals.</div>
-                </div>
-
-                <button class="btn btn-dark mt-3">Save GST & POS Rules</button>
-            </form>
-        </div>
-    </div>
-</div>
-
-<div class="page-card p-4 mb-4">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-        <div class="section-title d-flex align-items-center gap-2 mb-0">
-            <span class="section-title-icon"><i class="bi bi-tags"></i></span>
-            <div>
-                <h2 class="h4 mb-1">Category GST Matrix</h2>
-                <p class="text-muted mb-0">Review taxable, zero-rated, exempt, and cash-vs-bank GST rates for product categories.</p>
-            </div>
-        </div>
-        <a href="{% url 'category_add' %}" class="btn btn-dark"><i class="bi bi-plus-circle me-2"></i>Add Category</a>
-    </div>
-    <div class="table-responsive">
-        <table class="table align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>Category</th>
-                    <th>GST Status</th>
-                    <th>Default</th>
-                    <th>Cash</th>
-                    <th>Bank</th>
-                    <th>Status</th>
-                    <th class="text-end">Action</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for category in categories %}
-                <tr>
-                    <td class="fw-semibold">{{ category.name }}</td>
-                    <td>
-                        {% if category.tax_status == 'taxable' %}
-                        <span class="status-chip healthy">Taxable</span>
-                        {% elif category.tax_status == 'zero_rated' %}
-                        <span class="status-chip clear">Zero Rated</span>
-                        {% else %}
-                        <span class="status-chip below">Exempt</span>
+                <section class="k-section">
+                    <div class="k-section-head"><h3 class="k-section-title">Money and receipts</h3></div>
+                    <div class="k-form-grid">
+                        {% include "pos/partials/_settings_row.html" with field=system_form.currency_symbol %}
+                        {% include "pos/partials/_settings_row.html" with field=system_form.currency_code %}
+                        {% include "pos/partials/_settings_row.html" with field=system_form.default_sale_payment_method %}
+                        {% include "pos/partials/_settings_row.html" with field=system_form.invoice_prefix extra_help="New invoices continue the same number series." %}
+                        {% include "pos/partials/_settings_row.html" with field=system_form.thermal_printer_width_mm %}
+                        {% if feature_modules.markup %}
+                        {% include "pos/partials/_settings_row.html" with field=system_form.default_markup_percent %}
                         {% endif %}
-                    </td>
-                    <td class="category-rate">{{ category.gst_rate|floatformat:2 }}%</td>
-                    <td class="category-rate">{{ category.cash_gst_rate|floatformat:2 }}%</td>
-                    <td class="category-rate">{{ category.bank_gst_rate|floatformat:2 }}%</td>
-                    <td>
-                        {% if category.is_active %}
-                        <span class="status-chip healthy">Active</span>
-                        {% else %}
-                        <span class="status-chip clear">Inactive</span>
-                        {% endif %}
-                    </td>
-                    <td class="text-end"><a href="{% url 'category_edit' category.id %}" class="btn btn-sm btn-outline-dark">Edit</a></td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="7" class="text-center text-muted py-4">No categories created yet.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-</div>
-
-<div class="tab-pane fade settings-tab-pane" id="settings-banking-pane" role="tabpanel" aria-labelledby="settings-banking-tab" tabindex="0">
-<div class="row g-4 mb-4">
-    <div class="col-xl-5">
-        <div class="page-card p-4 h-100">
-            <div class="section-title d-flex align-items-center gap-2 mb-3">
-                <span class="section-title-icon"><i class="bi bi-bank2"></i></span>
-                <div>
-                    <h2 class="h4 mb-1">Bank Ledgers</h2>
-                    <p class="text-muted mb-0">Create the real bank accounts the business uses so receipts, payments, and transfers post to the right place.</p>
-                </div>
-            </div>
-            <form method="post" novalidate>
-                {% csrf_token %}
-                <input type="hidden" name="action" value="create_bank">
-                {% for field in bank_form %}
-                <div class="mb-3">
-                    <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                    {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors|striptags }}</div>{% endif %}
-                </div>
-                {% endfor %}
-                <button class="btn btn-dark w-100"><i class="bi bi-plus-circle me-2"></i>Create Bank Ledger</button>
-            </form>
-        </div>
-    </div>
-
-    <div class="col-xl-7">
-        <div class="page-card p-4 h-100">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-                <div class="section-title d-flex align-items-center gap-2 mb-0">
-                    <span class="section-title-icon"><i class="bi bi-building"></i></span>
-                    <div>
-                        <h2 class="h4 mb-1">Available Bank Ledgers</h2>
-                        <p class="text-muted mb-0">These ledgers are used in POS bank sales, supplier payments, expense payments, and money transfers.</p>
                     </div>
+                </section>
+
+                <section class="k-section">
+                    <div class="k-section-head"><h3 class="k-section-title">At the till</h3></div>
+                    <div class="set-toggles">
+                        {% include "pos/partials/_settings_switch.html" with field=system_form.allow_credit_sales copy="When off, the till hides credit sales and every sale is paid in cash or by bank." %}
+                        {% include "pos/partials/_settings_switch.html" with field=system_form.allow_price_override copy="Lets the operator change the unit price at the cart for a negotiated price." %}
+                        {% include "pos/partials/_settings_switch.html" with field=system_form.allow_line_discount copy="Lets the operator discount one line. The minimum margin still applies." %}
+                        {% include "pos/partials/_settings_switch.html" with field=system_form.allow_zero_total_sales copy="Lets a sale close at a total of zero, such as a full discount or a giveaway. The stock still leaves and its cost is recorded." %}
+                    </div>
+                </section>
+
+                <section class="k-section">
+                    <div class="k-section-head"><h3 class="k-section-title">Expiry</h3></div>
+                    <div class="k-form-grid">
+                        {% include "pos/partials/_settings_switch.html" with field=system_form.enable_product_expiry copy="Shows expiry dates on products and purchases and turns on the dashboard expiry alerts." %}
+                        {% include "pos/partials/_settings_row.html" with field=system_form.expiry_alert_days %}
+                    </div>
+                </section>
+
+                <div class="set-save">
+                    <button class="btn btn-primary">Save tax and till rules</button>
+                    <span class="set-save-note" data-set-clean>Applies from the next sale.</span>
+                    <span class="set-save-note" data-set-dirty>Changes not saved yet.</span>
                 </div>
-                <span class="status-chip clear">{{ active_bank_count }} active of {{ bank_ledger_count }}</span>
-            </div>
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
+            </form>
+
+            <section class="k-section set-after-save">
+                <div class="k-section-head">
+                    <h3 class="k-section-title">Tax by category{% include "pos/partials/_help_tip.html" with tip_id="tipSetCatTax" tip_name="Tax by category" tip_text="Rates are edited on the category itself." %}</h3>
+                    <span class="k-section-note">{{ taxable_category_count }} categor{{ taxable_category_count|pluralize:"y,ies" }} charge {{ settings_obj.tax_label }}</span>
+                    <div class="k-actions"><a href="{% url 'category_add' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Add category</a></div>
+                </div>
+                <table class="k-table k-ledger--stack">
                     <thead>
                         <tr>
-                            <th>Bank</th>
-                            <th>Account Number</th>
-                            <th>Linked Ledger</th>
-                            <th>Status</th>
-                            <th class="text-end">Action</th>
+                            <th data-k="what">Category</th>
+                            <th class="k-num" data-k="field">Default</th>
+                            <th class="k-num" data-k="field">Cash</th>
+                            <th class="k-num" data-k="field">Bank</th>
+                            <th data-k="flag">Status</th>
+                            <th class="text-end" data-k="amount"><span class="visually-hidden">Action</span></th>
                         </tr>
                     </thead>
                     <tbody>
-                        {% for bank in bank_accounts %}
+                        {% for category in categories %}
                         <tr>
-                            <td>
-                                <div class="fw-semibold">{{ bank.name }}</div>
-                                <div class="small text-muted">{{ bank.branch|default:"Main branch / no note" }}</div>
-                            </td>
-                            <td>{{ bank.account_number }}</td>
-                            <td>{{ bank.account.title }}</td>
-                            <td>
-                                {% if bank.is_active %}
-                                <span class="status-chip healthy">Active</span>
-                                {% else %}
-                                <span class="status-chip clear">Disabled</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end">
-                                <form method="post" class="d-inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="toggle_bank">
-                                    <input type="hidden" name="bank_id" value="{{ bank.id }}">
-                                    <button class="btn btn-sm {% if bank.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
-                                        {% if bank.is_active %}Disable{% else %}Enable{% endif %}
-                                    </button>
-                                </form>
-                            </td>
+                            <td data-label="Category"><span class="set-cell-main">{{ category.name }}</span><span class="set-sub">{% if category.tax_status == 'taxable' %}Taxable{% elif category.tax_status == 'zero_rated' %}Zero rated{% else %}Exempt{% endif %}</span></td>
+                            <td class="k-num" data-label="Default">{{ category.gst_rate|floatformat:2 }}%</td>
+                            <td class="k-num" data-label="Cash">{{ category.cash_gst_rate|floatformat:2 }}%</td>
+                            <td class="k-num" data-label="Bank">{{ category.bank_gst_rate|floatformat:2 }}%</td>
+                            <td data-label="Status">{% if category.is_active %}<span class="k-badge k-badge--green">Active</span>{% else %}<span class="k-badge">Inactive</span>{% endif %}</td>
+                            <td class="text-end" data-k="amount"><span class="k-row-actions"><a href="{% url 'category_edit' category.id %}" class="k-icon-btn" aria-label="Edit {{ category.name }}" data-tip="Edit"><i class="bi bi-pencil" aria-hidden="true"></i></a></span></td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="5" class="text-center text-muted py-4">No bank ledgers added yet.</td></tr>
+                        <tr><td colspan="6" class="k-empty">No categories yet. Add one to charge a tax rate by category.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
-            </div>
+            </section>
         </div>
-    </div>
-</div>
-</div>
 
-<div class="tab-pane fade settings-tab-pane" id="settings-backups-pane" role="tabpanel" aria-labelledby="settings-backups-tab" tabindex="0">
-<div class="row g-4 mb-4">
-    <div class="col-xl-5">
-        <div class="page-card p-4 h-100">
-            <div class="section-title d-flex align-items-center gap-2 mb-3">
-                <span class="section-title-icon"><i class="bi bi-safe2"></i></span>
-                <div>
-                    <h2 class="h4 mb-1">Backups</h2>
-                    <p class="text-muted mb-0">Take a database snapshot before major data changes, upload an existing one, and restore only when recovery is needed.</p>
-                </div>
-            </div>
-            <form method="post" novalidate>
-                {% csrf_token %}
-                <input type="hidden" name="action" value="create_backup">
-                <div class="mb-3">
-                    <label class="form-label fw-semibold" for="backup_label">Backup Label</label>
-                    <input id="backup_label" name="backup_label" class="form-control" placeholder="Before stock count, pre-launch, month-end close">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-semibold" for="backup_notes">Notes</label>
-                    <textarea id="backup_notes" name="backup_notes" class="form-control" rows="3" placeholder="Optional note about why this snapshot was taken"></textarea>
-                </div>
-                <div class="settings-note mb-3">
-                    <div class="fw-semibold mb-1"><i class="bi bi-info-circle me-1"></i>Current backup scope</div>
-                    <div class="small">Live database: <span class="fw-semibold">{{ backup_runtime.vendor_label }}</span> ({{ backup_runtime.database_name }}).</div>
-                    <div class="small mt-1">This page can create snapshots for the active database engine and download any saved snapshot from the history table.</div>
-                    <div class="small mt-1">Accepted uploads: {{ backup_runtime.allowed_upload_extensions|join:', ' }}</div>
-                </div>
-                <button class="btn btn-dark w-100"><i class="bi bi-download me-2"></i>Create Backup Snapshot</button>
-            </form>
-
-            <form method="post" enctype="multipart/form-data" novalidate class="mt-4 pt-4 border-top">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="upload_backup">
-                <div class="mb-3">
-                    <label class="form-label fw-semibold" for="backup_upload_file">Upload Snapshot File</label>
-                    <input id="backup_upload_file" type="file" name="backup_upload_file" class="form-control" accept="{{ backup_runtime.allowed_upload_extensions|join:',' }}" required>
-                    <div class="form-text">Use a saved `.sqlite3`, `.dump`, or `.sql` snapshot file.</div>
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-semibold" for="upload_backup_label">Snapshot Label</label>
-                    <input id="upload_backup_label" name="upload_backup_label" class="form-control" placeholder="Imported from staging, accountant archive, cloud restore point">
-                </div>
-                <div class="mb-3">
-                    <label class="form-label fw-semibold" for="upload_backup_notes">Upload Notes</label>
-                    <textarea id="upload_backup_notes" name="upload_backup_notes" class="form-control" rows="3" placeholder="Optional note about where this snapshot came from"></textarea>
-                </div>
-                <button class="btn btn-outline-dark w-100"><i class="bi bi-upload me-2"></i>Upload Backup Snapshot</button>
-            </form>
-        </div>
-    </div>
-
-    <div class="col-xl-7">
-        <div class="page-card p-4 h-100">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-                <div class="section-title d-flex align-items-center gap-2 mb-0">
-                    <span class="section-title-icon"><i class="bi bi-clock-history"></i></span>
-                    <div>
-                        <h2 class="h4 mb-1">Backup History</h2>
-                        <p class="text-muted mb-0">Recent snapshots with file size, creator, download access, and restore status.</p>
-                    </div>
-                </div>
-                <span class="status-chip clear">{{ backup_count }} total snapshots</span>
-            </div>
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>Label</th>
-                            <th>Created</th>
-                            <th>Size</th>
-                            <th>Last Restore</th>
-                            <th class="text-end">Action</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for snapshot in backup_snapshots %}
-                        <tr>
-                            <td>
-                                <div class="fw-semibold">{{ snapshot.label }}</div>
-                                <div class="small text-muted">{{ snapshot.notes|default:snapshot.file_name }}</div>
-                                <div class="small text-muted mt-1">{{ snapshot.vendor_label }} snapshot{% if not snapshot.can_restore_here %} - restore disabled for {{ backup_runtime.vendor_label }}{% endif %}</div>
-                            </td>
-                            <td>{{ snapshot.created_at|date:"d M Y H:i" }}{% if snapshot.created_by %}<div class="small text-muted">by {{ snapshot.created_by.username }}</div>{% endif %}</td>
-                            <td>{{ snapshot.size_kb }} KB</td>
-                            <td>{{ snapshot.restored_at|date:"d M Y H:i"|default:"Never" }}</td>
-                            <td class="text-end">
-                                <a href="{% url 'download_backup_snapshot' snapshot.id %}" class="btn btn-sm btn-outline-dark me-2">Download</a>
-                                {% if snapshot.can_restore_here %}
-                                <form method="post" class="d-inline" onsubmit="return confirm('Restore this backup? The current live database will be replaced.');">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="restore_backup">
-                                    <input type="hidden" name="snapshot_id" value="{{ snapshot.id }}">
-                                    <button class="btn btn-sm btn-outline-warning">Restore</button>
-                                </form>
-                                {% else %}
-                                <button class="btn btn-sm btn-outline-secondary" type="button" disabled>Restore</button>
-                                {% endif %}
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="5" class="text-center text-muted py-4">No backups created yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-</div>
-
-<div class="tab-pane fade settings-tab-pane" id="settings-audit-pane" role="tabpanel" aria-labelledby="settings-audit-tab" tabindex="0">
-<div class="page-card p-4 mb-4" id="audit-trail">
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-        <div class="section-title d-flex align-items-center gap-2 mb-0">
-            <span class="section-title-icon"><i class="bi bi-journal-text"></i></span>
-            <div>
-                <h2 class="h4 mb-1">Audit Trail</h2>
-                <p class="text-muted mb-0">Review who changed settings, created logins, posted stock corrections, or ran critical admin actions.</p>
-            </div>
-        </div>
-        <span class="status-chip clear">{{ audit_event_count }} recorded events</span>
-    </div>
-    <div class="d-flex flex-wrap justify-content-between align-items-center gap-2 mb-3">
-        <div class="small text-muted">
-            {% if audit_mode == "all" %}
-            Showing all {{ audit_event_count }} recorded events.
-            {% elif audit_page_obj %}
-            Showing {{ audit_page_obj.start_index }}-{{ audit_page_obj.end_index }} of {{ audit_event_count }} recorded events.
-            {% else %}
-            Showing up to {{ audit_page_size }} recorded events.
-            {% endif %}
-        </div>
-        <div class="d-flex flex-wrap gap-2">
-            {% if audit_mode == "all" %}
-            <a href="{% url 'settings_page' %}#audit-trail" class="btn btn-sm btn-outline-dark">Back to Top 10</a>
-            {% else %}
-            <a href="{% url 'settings_page' %}?audit_mode=all#audit-trail" class="btn btn-sm btn-outline-dark">Show All</a>
-            {% if audit_page_obj and audit_page_obj.has_previous %}
-            <a href="{% url 'settings_page' %}?audit_page={{ audit_page_obj.previous_page_number }}#audit-trail" class="btn btn-sm btn-outline-secondary">Previous</a>
-            {% endif %}
-            {% if audit_page_obj and audit_page_obj.has_next %}
-            <a href="{% url 'settings_page' %}?audit_page={{ audit_page_obj.next_page_number }}#audit-trail" class="btn btn-sm btn-outline-secondary">Next</a>
-            {% endif %}
-            {% endif %}
-        </div>
-    </div>
-    <div class="table-responsive">
-        <table class="table align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>Time</th>
-                    <th>Action</th>
-                    <th>User</th>
-                    <th>Target</th>
-                    <th>Description</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for log in audit_logs %}
-                <tr>
-                    <td>{{ log.created_at|date:"d M Y H:i" }}</td>
-                    <td><span class="status-chip clear">{{ log.action|cut:"_"|title }}</span></td>
-                    <td>{{ log.actor.username|default:"System" }}</td>
-                    <td>{{ log.target_model|default:"-" }}{% if log.target_id %} #{{ log.target_id }}{% endif %}</td>
-                    <td>{{ log.description }}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="5" class="text-center text-muted py-4">No audit events recorded yet.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-</div>
-
-<div class="tab-pane fade settings-tab-pane" id="settings-team-pane" role="tabpanel" aria-labelledby="settings-team-tab" tabindex="0">
-<div class="row g-4 mb-4">
-    <div class="col-xl-5">
-        <div class="page-card p-4 h-100">
-            <div class="section-title d-flex align-items-center gap-2 mb-3">
-                <span class="section-title-icon"><i class="bi bi-diagram-3"></i></span>
-                <div>
-                    <h2 class="h4 mb-1">Create Custom Role</h2>
-                    <p class="text-muted mb-0">Build roles like Manager, Accountant, or Supervisor with page-by-page access and view/manage control.</p>
-                </div>
-            </div>
-            {% if role_form.non_field_errors %}
-            <div class="alert alert-warning py-2">{{ role_form.non_field_errors|striptags }}</div>
-            {% endif %}
-            <form method="post" novalidate>
-                {% csrf_token %}
-                <input type="hidden" name="action" value="create_role">
-                <div class="settings-form-grid">
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ role_form.name.id_for_label }}">{{ role_form.name.label }}</label>
-                        {{ role_form.name }}
-                        {% if role_form.name.help_text %}<div class="form-text">{{ role_form.name.help_text }}</div>{% endif %}
-                        {% if role_form.name.errors %}<div class="text-danger small mt-1">{{ role_form.name.errors|striptags }}</div>{% endif %}
-                    </div>
-                    <div>
-                        <label class="form-label fw-semibold" for="{{ role_form.description.id_for_label }}">{{ role_form.description.label }}</label>
-                        {{ role_form.description }}
-                        {% if role_form.description.help_text %}<div class="form-text">{{ role_form.description.help_text }}</div>{% endif %}
-                        {% if role_form.description.errors %}<div class="text-danger small mt-1">{{ role_form.description.errors|striptags }}</div>{% endif %}
-                    </div>
-                </div>
-                <div class="permission-grid mt-3">
-                    {% for field in role_form %}
-                    {% if field.name != 'name' and field.name != 'description' %}
-                    <div class="role-permission-card">
-                        <h3>{{ field.label }}</h3>
-                        <p>{{ field.help_text }}</p>
-                        {{ field }}
-                        {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors|striptags }}</div>{% endif %}
-                    </div>
-                    {% endif %}
-                    {% endfor %}
-                </div>
-                <button class="btn btn-dark w-100 mt-3"><i class="bi bi-plus-circle me-2"></i>Create Custom Role</button>
-            </form>
-        </div>
-    </div>
-
-    <div class="col-xl-7">
-        <div class="page-card p-4 h-100">
-            <div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-3">
-                <div class="section-title d-flex align-items-center gap-2 mb-0">
-                    <span class="section-title-icon"><i class="bi bi-shield-check"></i></span>
-                    <div>
-                        <h2 class="h4 mb-1">Custom Role Library</h2>
-                        <p class="text-muted mb-0">Every custom role is reusable in the team-user form and in the access reassignment table below.</p>
-                    </div>
-                </div>
-                <span class="status-chip clear">{{ custom_role_count }} custom role{{ custom_role_count|pluralize }}</span>
-            </div>
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                    <thead>
-                        <tr>
-                            <th>Role</th>
-                            <th>Permissions</th>
-                            <th>Assigned Users</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for entry in custom_roles %}
-                        <tr>
-                            <td>
-                                <div class="fw-semibold">{{ entry.role.name }}</div>
-                                <div class="small text-muted">{{ entry.role.description|default:"No description" }}</div>
-                            </td>
-                            <td>
-                                <div class="permission-badge-wrap mb-2">
-                                    {% for permission in entry.permission_items %}
-                                    <span class="permission-badge {% if permission.level == 'Manage' %}manage{% else %}view{% endif %}">
-                                        <i class="bi {% if permission.level == 'Manage' %}bi-pencil-square{% else %}bi-eye{% endif %}"></i>
-                                        {{ permission.label }}
-                                    </span>
-                                    {% endfor %}
+        {# ---------- Features ---------- #}
+        <div class="tab-pane" id="settings-features-pane" role="tabpanel" aria-labelledby="settings-features-tab" tabindex="0">
+            <div id="features">
+                <h2 class="set-pane-title">Features{% include "pos/partials/_help_tip.html" with tip_id="tipSetFeatures" tip_name="Features" tip_text="Switch off what this shop does not use and it disappears from the menus, the till and the reports. Nothing is deleted: switch it back on and the data is still there. The till, products, dashboard and settings are always on." %}</h2>
+                <p class="set-pane-note">{{ edition_summary.label }} edition<span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About your edition" aria-describedby="tipSetEdition" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipSetEdition" role="tooltip" hidden>{{ edition_summary.note }}</span></span> · {{ edition_summary.enabled_count }} of {{ edition_summary.available_count }} switched on</p>
+                <form method="post" novalidate data-set-form>
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_features">
+                    {% for group in feature_groups %}
+                    <section class="k-section">
+                        <div class="k-section-head"><h3 class="k-section-title">{{ group.name }}</h3></div>
+                        <div class="set-toggles">
+                            {% for row in group.rows %}
+                            <div class="set-toggle{% if row.locked %} is-locked{% endif %}">
+                                <i class="bi {{ row.module.icon }} set-toggle-icon" aria-hidden="true"></i>
+                                <div class="set-toggle-text">
+                                    <label class="set-toggle-name" for="module_{{ row.key }}">{{ row.module.label }}</label><span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About {{ row.module.label }}" aria-describedby="tipMod_{{ row.key }}" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipMod_{{ row.key }}" role="tooltip" hidden>{% if row.locked %}Not included in your edition.{% else %}When off, hides: {{ row.module.hides }}{% endif %}</span></span>{% if row.locked %}<span class="k-badge set-lock"><i class="bi bi-lock" aria-hidden="true"></i>Not in your edition</span>{% endif %}
+                                    <p class="set-toggle-note">{{ row.module.description }}</p>
                                 </div>
-                                <div class="access-summary">{{ entry.permissions_summary }}</div>
-                            </td>
-                            <td class="fw-semibold">{{ entry.member_count }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="3" class="text-center text-muted py-4">No custom roles created yet. Built-in Admin and Cashier roles are still available.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+                                <div class="form-check form-switch">
+                                    <input class="form-check-input" type="checkbox" role="switch" id="module_{{ row.key }}" name="module_{{ row.key }}" aria-label="{{ row.module.label }}" {% if row.enabled %}checked{% endif %} {% if row.locked %}disabled{% endif %}>
+                                </div>
+                            </div>
+                            {% endfor %}
+                        </div>
+                    </section>
+                    {% endfor %}
+                    <div class="set-save">
+                        <button class="btn btn-primary">Save features</button>
+                        <span class="set-save-note" data-set-clean>Menus change as soon as you save.</span>
+                        <span class="set-save-note" data-set-dirty>Changes not saved yet.</span>
+                    </div>
+                </form>
             </div>
         </div>
-    </div>
-</div>
 
-<div class="row g-4">
-    <div class="col-xl-5">
-        <div class="page-card p-4 h-100">
-            <div class="section-title d-flex align-items-center gap-2 mb-3">
-                <span class="section-title-icon"><i class="bi bi-person-plus"></i></span>
-                <div>
-                    <h2 class="h4 mb-1">Add Team Member</h2>
-                    <p class="text-muted mb-0">Create a new admin, cashier, or custom-role login without leaving the system.</p>
-                </div>
-            </div>
-            <form method="post" novalidate>
-                {% csrf_token %}
-                <input type="hidden" name="action" value="create_user">
-                {% for field in team_form %}
-                <div class="mb-3">
-                    <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                    {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors|striptags }}</div>{% endif %}
-                </div>
-                {% endfor %}
-                <button class="btn btn-dark w-100">Create Login</button>
-            </form>
-        </div>
-    </div>
+        {# ---------- Team and roles ---------- #}
+        <div class="tab-pane" id="settings-team-pane" role="tabpanel" aria-labelledby="settings-team-tab" tabindex="0">
+            <h2 class="set-pane-title">Team and roles{% include "pos/partials/_help_tip.html" with tip_id="tipSetTeam" tip_name="Team and roles" tip_text="Admins have the whole system, cashiers stay on the till, and custom roles follow the access you give them." %}</h2>
+            <p class="set-pane-note">{{ total_team_users }} login{{ total_team_users|pluralize }} · {{ cashier_count }} cashier{{ cashier_count|pluralize }} · {{ active_sessions_count }} open session{{ active_sessions_count|pluralize }}</p>
 
-    <div class="col-xl-7">
-        <div class="page-card p-4 h-100">
-            <div class="section-title d-flex align-items-center gap-2 mb-3">
-                <span class="section-title-icon"><i class="bi bi-shield-lock"></i></span>
-                <div>
-                    <h2 class="h4 mb-1">Access Rules</h2>
-                    <p class="text-muted mb-0">Admins have the full system, cashiers stay POS-only, and custom roles follow the permissions configured above.</p>
+            <section class="k-section">
+                <div class="k-section-head">
+                    <h3 class="k-section-title">Logins</h3>
+                    {% if feature_modules.team %}<div class="k-actions"><a href="#set-add-member" class="btn btn-primary btn-sm"><i class="bi bi-plus-lg me-1" aria-hidden="true"></i>Add team member</a></div>{% endif %}
                 </div>
-            </div>
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
+                <table class="k-table k-ledger--stack set-team-table">
                     <thead>
                         <tr>
-                            <th>Login ID</th>
-                            <th>Name</th>
-                            <th>Role</th>
-                            <th>Access</th>
-                            <th>Sales</th>
-                            <th>Last Login</th>
-                            <th>Status</th>
-                            <th class="text-end">Action</th>
+                            <th data-k="what">Login ID</th>
+                            <th data-k="flag">Role</th>
+                            <th class="k-num" data-k="hide">Sales</th>
+                            <th data-k="meta">Last login</th>
+                            <th data-k="balance">Status</th>
+                            <th class="text-end" data-k="amount"><span class="visually-hidden">Action</span></th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for row in team_users %}
                         <tr>
-                            <td class="fw-semibold">{{ row.user.username }}</td>
-                            <td>{{ row.user.get_full_name|default:"-" }}</td>
-                            <td>
-                                <span class="role-pill {% if row.role_variant == 'cashier' %}cashier{% elif row.role_variant == 'custom' %}custom{% endif %}">
-                                    <i class="bi {% if row.role_variant == 'cashier' %}bi-cart4{% elif row.role_variant == 'custom' %}bi-diagram-3{% else %}bi-shield-check{% endif %}"></i>
-                                    {{ row.role_label }}
-                                </span>
-                            </td>
-                            <td><div class="access-summary">{{ row.access_summary }}</div></td>
-                            <td>
-                                <div class="fw-semibold">{{ row.sales_count }}</div>
-                                <div class="small text-muted">Rs {{ row.sales_value|floatformat:2 }}</div>
-                            </td>
-                            <td>{{ row.user.last_login|date:"d M Y H:i"|default:"Never" }}</td>
-                            <td>
-                                {% if row.user.is_active %}
-                                <span class="status-chip healthy">Active</span>
-                                {% else %}
-                                <span class="status-chip below">Disabled</span>
-                                {% endif %}
-                            </td>
-                            <td class="text-end">
-                                {% if row.user.id == request.user.id %}
-                                <span class="text-muted small">Current account</span>
-                                {% else %}
-                                <form method="post" class="d-flex flex-wrap justify-content-end gap-2 mb-2">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="change_user_role">
-                                    <input type="hidden" name="user_id" value="{{ row.user.id }}">
-                                    <select name="role" class="form-select form-select-sm" style="min-width: 180px;">
-                                        {% for value, label in role_choices %}
-                                        <option value="{{ value }}" {% if value == row.role_value %}selected{% endif %}>{{ label }}</option>
-                                        {% endfor %}
-                                    </select>
-                                    <button class="btn btn-sm btn-outline-dark">Save Role</button>
-                                </form>
-                                <form method="post" class="d-inline">
-                                    {% csrf_token %}
-                                    <input type="hidden" name="action" value="toggle_user">
-                                    <input type="hidden" name="user_id" value="{{ row.user.id }}">
-                                    <button class="btn btn-sm {% if row.user.is_active %}btn-outline-danger{% else %}btn-outline-success{% endif %}">
-                                        {% if row.user.is_active %}Disable{% else %}Enable{% endif %}
-                                    </button>
-                                </form>
-                                {% endif %}
+                            <td data-label="Login ID"><span class="set-cell-main">{{ row.user.username }}</span><span class="set-sub">{{ row.user.get_full_name|default:"-" }}</span></td>
+                            <td data-label="Role"><span class="k-badge{% if row.role_value == 'admin' %} k-badge--blue{% endif %}">{{ row.role_label }}</span><span class="k-tip"><button type="button" class="k-tip-btn" aria-label="Access for {{ row.user.username }}" aria-describedby="tipAccess{{ row.user.id }}" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipAccess{{ row.user.id }}" role="tooltip" hidden>{{ row.access_summary }}</span></span></td>
+                            <td class="k-num" data-label="Sales">{{ row.sales_count }}<span class="set-sub">{{ row.sales_value|money }}</span></td>
+                            <td data-label="Last login">{{ row.user.last_login|date:"d M Y H:i"|default:"Never" }}</td>
+                            <td data-label="Status">{% if row.user.is_active %}<span class="k-badge k-badge--green">Active</span>{% else %}<span class="k-badge">Disabled</span>{% endif %}</td>
+                            <td class="text-end" data-k="amount">
+                                <div class="dropdown set-kebab">
+                                    <button class="btn k-icon-btn k-kebab dropdown-toggle" type="button" data-bs-toggle="dropdown" data-bs-auto-close="outside" data-bs-popper-config='{"strategy":"fixed"}' aria-expanded="false" aria-label="Manage {{ row.user.username }}"><i class="bi bi-three-dots-vertical" aria-hidden="true"></i></button>
+                                    <div class="dropdown-menu dropdown-menu-end set-manage">
+                                        {% if row.user.id == request.user.id %}
+                                        <p class="set-manage-note">Current account</p>
+                                        <a href="{% url 'password_change' %}" class="dropdown-item"><i class="bi bi-key me-2" aria-hidden="true"></i>Change my password</a>
+                                        {% else %}
+                                        <form method="post" class="set-manage-form">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="change_user_role">
+                                            <input type="hidden" name="user_id" value="{{ row.user.id }}">
+                                            <label class="form-label" for="role_for_{{ row.user.id }}">Role</label>
+                                            <div class="set-manage-line">
+                                                <select name="role" id="role_for_{{ row.user.id }}" class="form-select form-select-sm" aria-label="Role for {{ row.user.username }}">
+                                                    {% for value, label in role_choices %}
+                                                    <option value="{{ value }}" {% if value == row.role_value %}selected{% endif %}>{{ label }}</option>
+                                                    {% endfor %}
+                                                </select>
+                                                <button class="btn btn-sm btn-outline-secondary">Save role</button>
+                                            </div>
+                                        </form>
+                                        {% if not row.is_protected %}
+                                        <form method="post" autocomplete="off" class="set-manage-form">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="set_user_password">
+                                            <input type="hidden" name="user_id" value="{{ row.user.id }}">
+                                            <label class="form-label" for="pw_for_{{ row.user.id }}">New password</label>
+                                            <div class="set-manage-line">
+                                                <input type="password" name="new_password" id="pw_for_{{ row.user.id }}" class="form-control form-control-sm" placeholder="At least 8 characters" autocomplete="new-password" minlength="8" required aria-label="New password for {{ row.user.username }}">
+                                                <button class="btn btn-sm btn-outline-secondary">Set password</button>
+                                            </div>
+                                        </form>
+                                        {% endif %}
+                                        <form method="post" class="set-manage-form set-manage-form--last">
+                                            {% csrf_token %}
+                                            <input type="hidden" name="action" value="toggle_user">
+                                            <input type="hidden" name="user_id" value="{{ row.user.id }}">
+                                            {% if row.user.is_active %}
+                                            <p class="set-manage-note">Disabling signs {{ row.user.username }} out now and blocks the login. Their sales and records stay in the books.</p>
+                                            {% else %}
+                                            <p class="set-manage-note">Enabling lets {{ row.user.username }} sign in again with the same password and role.</p>
+                                            {% endif %}
+                                            <button class="btn btn-sm {% if row.user.is_active %}btn-outline-danger{% else %}btn-outline-secondary{% endif %}">{% if row.user.is_active %}Disable{% else %}Enable{% endif %} Login</button>
+                                        </form>
+                                        {% endif %}
+                                    </div>
+                                </div>
                             </td>
                         </tr>
                         {% empty %}
-                        <tr><td colspan="8" class="text-center text-muted py-4">No team members have been created yet.</td></tr>
+                        <tr><td colspan="6" class="k-empty">No team members have been created yet.</td></tr>
                         {% endfor %}
                     </tbody>
                 </table>
+            </section>
+
+            <section class="k-section" id="set-add-member">
+                <div class="k-section-head">
+                    <h3 class="k-section-title">Add a team member{% include "pos/partials/_help_tip.html" with tip_id="tipSetAddMember" tip_name="Add a team member" tip_text="A new admin, cashier or custom-role login. They sign in with the login ID and password you set here." %}</h3>
+                </div>
+                {% if feature_modules.team %}
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create_user">
+                    <div class="k-form-grid">
+                        {% for field in team_form %}
+                        {% include "pos/partials/_settings_row.html" with field=field %}
+                        {% endfor %}
+                    </div>
+                    <div class="k-form-actions">
+                        <button class="btn btn-primary">Create login</button>
+                    </div>
+                </form>
+                {% else %}
+                <div class="alert alert-info mb-0">
+                    <div class="alert-heading">Team &amp; Roles is off</div>
+                    {% if team_module_locked %}Not included in your edition.{% else %}Switch it on under Features to add team members.{% endif %} Existing logins keep working.
+                </div>
+                {% endif %}
+                {% if lan_till_urls %}
+                <div class="set-group">
+                    <h4 class="set-group-title">Extra tills on this network{% include "pos/partials/_help_tip.html" with tip_id="tipSetLan" tip_name="Extra tills" tip_text="On another computer or tablet in the shop, open this address in a browser and sign in with that team member's login." %}</h4>
+                    {% for url in lan_till_urls %}<span class="set-url">{{ url }}</span>{% endfor %}
+                </div>
+                {% endif %}
+            </section>
+
+            <section class="k-section">
+                <div class="k-section-head">
+                    <h3 class="k-section-title">Custom roles{% include "pos/partials/_help_tip.html" with tip_id="tipSetRoles" tip_name="Custom roles" tip_text="Each one can be given to any login above. Admin and Cashier are built in." %}</h3>
+                    <span class="k-section-note">{{ custom_role_count }} custom role{{ custom_role_count|pluralize }}</span>
+                </div>
+                <table class="k-table k-ledger--stack">
+                    <thead>
+                        <tr>
+                            <th data-k="what">Role</th>
+                            <th data-k="note">Access</th>
+                            <th class="k-num" data-k="amount">Logins</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for entry in custom_roles %}
+                        <tr>
+                            <td data-label="Role"><span class="set-cell-main">{{ entry.role.name }}</span><span class="set-sub">{{ entry.role.description|default:"No description" }}</span></td>
+                            <td data-label="Access">
+                                <ul class="set-perms">
+                                    {% for permission in entry.permission_items %}
+                                    <li><i class="bi {% if permission.level == 'Manage' %}bi-pencil-square{% else %}bi-eye{% endif %}" aria-hidden="true"></i>{{ permission.label }}<span class="visually-hidden"> ({{ permission.level }})</span></li>
+                                    {% endfor %}
+                                </ul>
+                                <span class="set-sub">{{ entry.permissions_summary }}</span>
+                            </td>
+                            <td class="k-num" data-label="Logins">{{ entry.member_count }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="k-empty">No custom roles created yet. Built-in Admin and Cashier roles are still available.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="k-section">
+                <div class="k-section-head">
+                    <h3 class="k-section-title">Create a custom role{% include "pos/partials/_help_tip.html" with tip_id="tipSetNewRole" tip_name="Create a custom role" tip_text="Roles such as Manager, Accountant or Supervisor, with view or manage access page by page. Pages left on No access stay hidden for this role." %}</h3>
+                </div>
+                {% if role_form.non_field_errors %}
+                <div class="alert alert-warning py-2">{{ role_form.non_field_errors|striptags }}</div>
+                {% endif %}
+                {% if feature_modules.team %}
+                <form method="post" novalidate data-set-form>
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create_role">
+                    <div class="k-form-grid">
+                        {% include "pos/partials/_settings_row.html" with field=role_form.name %}
+                        {% include "pos/partials/_settings_row.html" with field=role_form.description %}
+                    </div>
+                    <h4 class="set-group-title set-group-title--gap">Access page by page</h4>
+                    <div class="k-form-grid set-perm-grid">
+                        {% for field in role_form %}
+                        {% if field.name != 'name' and field.name != 'description' %}
+                        {% include "pos/partials/_settings_row.html" with field=field %}
+                        {% endif %}
+                        {% endfor %}
+                    </div>
+                    <div class="set-save">
+                        <button class="btn btn-primary"><i class="bi bi-plus-lg me-2" aria-hidden="true"></i>Create custom role</button>
+                        <span class="set-save-note" data-set-clean>Pages left on No access stay hidden for this role.</span>
+                        <span class="set-save-note" data-set-dirty>Role not created yet.</span>
+                    </div>
+                </form>
+                {% else %}
+                <div class="alert alert-info mb-0">
+                    <div class="alert-heading">Team &amp; Roles is off</div>
+                    {% if team_module_locked %}Not included in your edition.{% else %}Switch it on under Features to add custom roles.{% endif %} Existing logins keep working.
+                </div>
+                {% endif %}
+            </section>
+
+            <section class="k-section">
+                <div class="k-section-head">
+                    <h3 class="k-section-title">Recent sign-in activity{% include "pos/partials/_help_tip.html" with tip_id="tipSetSessions" tip_name="Recent sign-in activity" tip_text="The latest sign in and sign out records." %}</h3>
+                </div>
+                <table class="k-table k-ledger--stack">
+                    <thead>
+                        <tr>
+                            <th data-k="what">User</th>
+                            <th data-k="meta">Signed in</th>
+                            <th data-k="meta">Signed out</th>
+                            <th data-k="hide">IP</th>
+                            <th data-k="flag">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for log in session_logs %}
+                        <tr>
+                            <td data-label="User"><span class="set-cell-main">{{ log.user.username }}</span><span class="set-sub">{{ log.role_name }}</span></td>
+                            <td data-label="Signed in">{{ log.login_at|date:"d M Y H:i" }}</td>
+                            <td data-label="Signed out">{{ log.logout_at|date:"d M Y H:i"|default:"Still signed in" }}</td>
+                            <td data-label="IP" class="set-muted">{{ log.ip_address|default:"-" }}</td>
+                            <td data-label="Status">{% if log.logout_at %}<span class="k-badge">Closed</span>{% else %}<span class="k-badge k-badge--blue">Open</span>{% endif %}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="k-empty">No sign-in activity recorded yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+        </div>
+
+        {# ---------- Bank accounts ---------- #}
+        <div class="tab-pane" id="settings-banking-pane" role="tabpanel" aria-labelledby="settings-banking-tab" tabindex="0">
+            <h2 class="set-pane-title">Bank accounts{% include "pos/partials/_help_tip.html" with tip_id="tipSetBanks" tip_name="Bank accounts" tip_text="The real bank accounts the business uses. Bank sales, supplier payments, expenses and transfers post to the ledger of the account you pick." %}</h2>
+            <p class="set-pane-note">{{ active_bank_count }} active of {{ bank_ledger_count }}</p>
+
+            <section class="k-section">
+                <div class="k-section-head">
+                    <h3 class="k-section-title">Accounts{% include "pos/partials/_help_tip.html" with tip_id="tipSetBankOff" tip_name="Disabled accounts" tip_text="A disabled account can no longer be picked for sales or payments. Its ledger and everything already posted to it stay in the books." %}</h3>
+                </div>
+                <table class="k-table k-ledger--stack">
+                    <thead>
+                        <tr>
+                            <th data-k="what">Bank</th>
+                            <th data-k="meta">Account number</th>
+                            <th data-k="hide">Linked ledger</th>
+                            <th data-k="flag">Status</th>
+                            <th class="text-end" data-k="amount"><span class="visually-hidden">Action</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for bank in bank_accounts %}
+                        <tr>
+                            <td data-label="Bank"><span class="set-cell-main">{{ bank.name }}</span><span class="set-sub">{{ bank.branch|default:"Main branch / no note" }}</span></td>
+                            <td data-label="Account number" class="set-tabular">{{ bank.account_number }}</td>
+                            <td data-label="Linked ledger">{{ bank.account.title }}</td>
+                            <td data-label="Status">{% if bank.is_active %}<span class="k-badge k-badge--green">Active</span>{% else %}<span class="k-badge">Disabled</span>{% endif %}</td>
+                            <td class="text-end" data-k="amount">
+                                <span class="k-row-actions">
+                                    <form method="post" class="d-inline">
+                                        {% csrf_token %}
+                                        <input type="hidden" name="action" value="toggle_bank">
+                                        <input type="hidden" name="bank_id" value="{{ bank.id }}">
+                                        <button class="btn btn-sm btn-outline-secondary">{% if bank.is_active %}Disable{% else %}Enable{% endif %}</button>
+                                    </form>
+                                </span>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="k-empty">No bank ledgers added yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+
+            <section class="k-section">
+                <div class="k-section-head">
+                    <h3 class="k-section-title">Add a bank account</h3>
+                </div>
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create_bank">
+                    <div class="k-form-grid">
+                        {% for field in bank_form %}
+                        {% include "pos/partials/_settings_row.html" with field=field %}
+                        {% endfor %}
+                    </div>
+                    <div class="k-form-actions">
+                        <button class="btn btn-primary"><i class="bi bi-plus-lg me-2" aria-hidden="true"></i>Create bank ledger</button>
+                    </div>
+                </form>
+            </section>
+        </div>
+
+        {# ---------- Backups ---------- #}
+        {% if feature_modules.backups %}
+        <div class="tab-pane" id="settings-backups-pane" role="tabpanel" aria-labelledby="settings-backups-tab" tabindex="0">
+            <h2 class="set-pane-title">Backups{% include "pos/partials/_help_tip.html" with tip_id="tipSetBackups" tip_name="Backups" tip_text="Take a snapshot before big changes such as a stock count or month end. Restore only when you need to go back." %}</h2>
+            <p class="set-pane-note">{{ backup_count }} snapshot{{ backup_count|pluralize }} in total</p>
+
+            <section class="k-section">
+                <div class="k-section-head">
+                    <h3 class="k-section-title">Take a backup</h3>
+                </div>
+                {% if not backup_runtime.backups_available %}
+                <div class="alert alert-info mb-0">
+                    <div class="alert-heading">Backups are handled by your hosting</div>
+                    This deployment has no writable disk, so snapshots cannot be created here. Use your database provider's backups ({{ backup_runtime.vendor_label }}).
+                </div>
+                {% else %}
+                <form method="post" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="create_backup">
+                    <div class="k-form-grid">
+                        <div class="k-form-field">
+                            <label class="form-label" for="backup_label">Backup label</label>
+                            <input id="backup_label" name="backup_label" class="form-control" placeholder="Before stock count, month-end close">
+                        </div>
+                        <div class="k-form-field">
+                            <label class="form-label" for="backup_notes">Notes<span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About backup notes" aria-describedby="tipSetBackupDb" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipSetBackupDb" role="tooltip" hidden>Live database: {{ backup_runtime.vendor_label }} ({{ backup_runtime.database_name }}). The snapshot is saved here and can be downloaded from the history below.</span></span></label>
+                            <input id="backup_notes" name="backup_notes" class="form-control" placeholder="Optional note about why this snapshot was taken">
+                        </div>
+                    </div>
+                    <div class="k-form-actions">
+                        <button class="btn btn-primary"><i class="bi bi-download me-2" aria-hidden="true"></i>Create backup snapshot</button>
+                    </div>
+                </form>
+                {% endif %}
+            </section>
+
+            <section class="k-section">
+                <div class="k-section-head">
+                    <h3 class="k-section-title">Backup history</h3>
+                </div>
+                <table class="k-table k-ledger--stack">
+                    <thead>
+                        <tr>
+                            <th data-k="what">Label</th>
+                            <th data-k="meta">Created</th>
+                            <th class="k-num" data-k="balance">Size</th>
+                            <th data-k="hide">Last restore</th>
+                            <th class="text-end" data-k="amount"><span class="visually-hidden">Action</span></th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for snapshot in backup_snapshots %}
+                        <tr>
+                            <td data-label="Label">
+                                <span class="set-cell-main">{{ snapshot.label }}</span>
+                                <span class="set-sub">{{ snapshot.notes|default:snapshot.file_name }} · {{ snapshot.vendor_label }} snapshot</span>
+                                {% if backup_runtime.restore_supported and snapshot.restore_block_reason %}<span class="set-sub set-sub--due">{{ snapshot.restore_block_reason }}</span>{% endif %}
+                            </td>
+                            <td data-label="Created">{{ snapshot.created_at|date:"d M Y H:i" }}{% if snapshot.created_by %}<span class="set-sub">by {{ snapshot.created_by.username }}</span>{% endif %}</td>
+                            <td class="k-num" data-label="Size">{{ snapshot.size_kb }} KB</td>
+                            <td data-label="Last restore">{{ snapshot.restored_at|date:"d M Y H:i"|default:"Never" }}</td>
+                            <td class="text-end" data-k="amount">
+                                <span class="k-row-actions">
+                                    <a href="{% url 'download_backup_snapshot' snapshot.id %}" class="k-icon-btn" aria-label="Download {{ snapshot.label }}" data-tip="Download"><i class="bi bi-download" aria-hidden="true"></i></a>
+                                </span>
+                            </td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="5" class="k-empty">No backups created yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </section>
+
+            {% if backup_runtime.backups_available and backup_runtime.upload_supported %}
+            <section class="k-section">
+                <div class="k-section-head">
+                    <h3 class="k-section-title">Bring in a saved snapshot{% include "pos/partials/_help_tip.html" with tip_id="tipSetUpload" tip_name="Bring in a saved snapshot" tip_text="Adds a snapshot file to the history above. Nothing is restored until you press Restore." %}</h3>
+                </div>
+                <form method="post" enctype="multipart/form-data" novalidate>
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="upload_backup">
+                    <div class="k-form-grid">
+                        <div class="k-form-field k-span-2">
+                            <label class="form-label" for="backup_upload_file">Upload snapshot file<span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About the snapshot file" aria-describedby="tipSetUploadFile" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipSetUploadFile" role="tooltip" hidden>Use a saved snapshot file ({{ backup_runtime.allowed_upload_extensions|join:', ' }}).</span></span></label>
+                            <input id="backup_upload_file" type="file" name="backup_upload_file" class="form-control" accept="{{ backup_runtime.allowed_upload_extensions|join:',' }}" required>
+                        </div>
+                        <div class="k-form-field">
+                            <label class="form-label" for="upload_backup_label">Snapshot label</label>
+                            <input id="upload_backup_label" name="upload_backup_label" class="form-control" placeholder="Accountant archive, old computer">
+                        </div>
+                        <div class="k-form-field">
+                            <label class="form-label" for="upload_backup_notes">Upload notes</label>
+                            <input id="upload_backup_notes" name="upload_backup_notes" class="form-control" placeholder="Optional note about where this snapshot came from">
+                        </div>
+                    </div>
+                    <div class="k-form-actions">
+                        <button class="btn btn-outline-secondary"><i class="bi bi-upload me-2" aria-hidden="true"></i>Upload backup snapshot</button>
+                    </div>
+                </form>
+            </section>
+            {% endif %}
+
+            {% if backup_runtime.restore_supported %}
+            <section class="k-section set-danger">
+                <div class="k-section-head">
+                    <h3 class="k-section-title">Restore a backup</h3>
+                    <span class="k-badge k-badge--red">Replaces live data</span>
+                </div>
+                <ul class="set-danger-list">
+                    <li>Restore replaces everything in the shop with the snapshot. Sales, purchases, stock and ledger entries made after it are removed.</li>
+                    <li>The current data is backed up first, so a restore can itself be undone from this list.</li>
+                    <li>You confirm with your password on the next page, and other staff have to sign in again.</li>
+                </ul>
+                <form method="post" class="set-restore">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="restore_backup">
+                    <div class="k-form-field">
+                        <label class="form-label" for="restore_snapshot_id">Backup to restore</label>
+                        <select id="restore_snapshot_id" name="snapshot_id" class="form-select" required>
+                            <option value="">Choose a backup</option>
+                            {% for snapshot in backup_snapshots %}
+                            <option value="{{ snapshot.id }}"{% if not snapshot.can_restore_here %} disabled{% endif %}>{{ snapshot.label }} · {{ snapshot.created_at|date:"d M Y H:i" }}{% if not snapshot.can_restore_here %} (cannot be restored here){% endif %}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                    <button class="btn btn-outline-danger"><i class="bi bi-arrow-counterclockwise me-2" aria-hidden="true"></i>Restore</button>
+                </form>
+            </section>
+            {% endif %}
+        </div>
+        {% endif %}
+
+        {# ---------- Audit trail ---------- #}
+        <div class="tab-pane" id="settings-audit-pane" role="tabpanel" aria-labelledby="settings-audit-tab" tabindex="0">
+            <div id="audit-trail">
+                <h2 class="set-pane-title">Audit trail{% include "pos/partials/_help_tip.html" with tip_id="tipSetAudit" tip_name="Audit trail" tip_text="Who changed settings, created logins, corrected stock or ran an admin action, and when." %}</h2>
+                <section class="k-section">
+                    <div class="k-section-head">
+                        <span class="k-section-note">
+                            {% if audit_mode == "all" %}
+                            Showing all {{ audit_event_count }} recorded events
+                            {% elif audit_page_obj %}
+                            Showing {{ audit_page_obj.start_index }}-{{ audit_page_obj.end_index }} of {{ audit_event_count }} recorded events
+                            {% else %}
+                            Showing up to {{ audit_page_size }} recorded events
+                            {% endif %}
+                        </span>
+                        <div class="k-actions">
+                            {% if audit_mode == "all" %}
+                            <a href="{% url 'settings_page' %}#audit-trail" class="btn btn-sm btn-outline-secondary">Back to top 10</a>
+                            {% else %}
+                            {% if audit_page_obj and audit_page_obj.has_previous %}
+                            <a href="{% url 'settings_page' %}?audit_page={{ audit_page_obj.previous_page_number }}#audit-trail" class="btn btn-sm btn-outline-secondary"><i class="bi bi-chevron-left me-1" aria-hidden="true"></i>Previous</a>
+                            {% endif %}
+                            {% if audit_page_obj and audit_page_obj.has_next %}
+                            <a href="{% url 'settings_page' %}?audit_page={{ audit_page_obj.next_page_number }}#audit-trail" class="btn btn-sm btn-outline-secondary">Next<i class="bi bi-chevron-right ms-1" aria-hidden="true"></i></a>
+                            {% endif %}
+                            <a href="{% url 'settings_page' %}?audit_mode=all#audit-trail" class="btn btn-sm btn-link">Show all</a>
+                            {% endif %}
+                        </div>
+                    </div>
+                    <table class="k-table k-ledger--stack">
+                        <thead>
+                            <tr>
+                                <th data-k="meta">Time</th>
+                                <th data-k="what">Action</th>
+                                <th data-k="flag">User</th>
+                                <th data-k="note">Description</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for log in audit_logs %}
+                            <tr>
+                                <td data-label="Time" class="set-nowrap">{{ log.created_at|date:"d M Y H:i" }}</td>
+                                <td data-label="Action"><span class="set-cell-main">{{ log.action|cut:"_"|title }}</span><span class="set-sub">{{ log.target_model|default:"-" }}{% if log.target_id %} #{{ log.target_id }}{% endif %}</span></td>
+                                <td data-label="User">{{ log.actor.username|default:"System" }}</td>
+                                <td data-label="Description" class="set-desc">{{ log.description }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4" class="k-empty">No audit events recorded yet.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </section>
             </div>
         </div>
-    </div>
-</div>
-<div class="page-card p-4 mt-4">
-    <div class="section-title d-flex align-items-center gap-2 mb-3">
-        <span class="section-title-icon"><i class="bi bi-clock-history"></i></span>
-        <div>
-            <h2 class="h4 mb-1">Recent Sign-in Activity</h2>
-            <p class="text-muted mb-0">Latest login and logout records captured from the workspace.</p>
+
+        {# ---------- Time zone ---------- #}
+        <div class="tab-pane" id="settings-timezone-pane" role="tabpanel" aria-labelledby="settings-timezone-tab" tabindex="0">
+            <h2 class="set-pane-title">Your time zone{% include "pos/partials/_help_tip.html" with tip_id="tipSetTz" tip_name="Your time zone" tip_text="Each admin keeps a personal time zone for dates and logs. Leave it on system detected to follow the device you sign in from." %}</h2>
+            <section class="k-section">
+                <dl class="set-facts">
+                    <div><dt>In use now</dt><dd><span data-effective-time-zone-label>{{ effective_time_zone }}</span></dd></div>
+                    <div><dt>Saved preference</dt><dd>{% if saved_time_zone_preference %}{{ saved_time_zone_preference }}{% else %}System detected{% endif %}</dd></div>
+                    <div><dt>This device</dt><dd><span data-browser-time-zone-label>{{ session_detected_time_zone|default:"Detecting..." }}</span></dd></div>
+                </dl>
+                <form method="post" novalidate class="set-tz-form">
+                    {% csrf_token %}
+                    <input type="hidden" name="action" value="save_time_zone">
+                    <input type="hidden" name="browser_time_zone" value="{{ session_detected_time_zone }}" data-browser-time-zone-input>
+                    <div class="k-form-field">
+                        <label class="form-label" for="{{ time_zone_form.time_zone.id_for_label }}">{{ time_zone_form.time_zone.label }}<span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About {{ time_zone_form.time_zone.label }}" aria-describedby="{{ time_zone_form.time_zone.auto_id }}_helptext" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="{{ time_zone_form.time_zone.auto_id }}_helptext" role="tooltip" hidden>{% if time_zone_form.time_zone.help_text %}{{ time_zone_form.time_zone.help_text }} {% endif %}{% if uses_system_detected_time_zone %}Right now this admin follows the detected browser time zone. If the browser shares a different zone later, {{ brand_name }} will use that automatically.{% else %}This admin is pinned to a saved time zone, so device changes will not affect the timestamps they see.{% endif %}</span></span></label>
+                        {{ time_zone_form.time_zone }}
+                        {% if time_zone_form.time_zone.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ time_zone_form.time_zone.errors|striptags }}</div>{% endif %}
+                        {% if time_zone_form.non_field_errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ time_zone_form.non_field_errors|striptags }}</div>{% endif %}
+                    </div>
+                    <div class="k-form-actions">
+                        <button class="btn btn-primary">Save time zone</button>
+                    </div>
+                </form>
+            </section>
         </div>
+
+        {# ---------- Licence and billing ---------- #}
+        <div class="tab-pane" id="settings-licence-pane" role="tabpanel" aria-labelledby="settings-licence-tab" tabindex="0">
+            <h2 class="set-pane-title">{% if billing_is_desktop %}Licence{% else %}Licence and billing{% endif %}<span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About the licence" aria-describedby="tipSetLicence" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipSetLicence" role="tooltip" hidden>The {{ trial_days }}-day free trial, the licence{% if not billing_is_desktop %} or package{% endif %}, and whether the shop is open.</span></span></h2>
+            <section class="k-section">
+                {% if billing_onboarding %}
+                <div class="k-section-head">
+                    <h3 class="k-section-title">Status</h3>
+                    <span class="status-chip {{ billing_status_tone }}">{{ billing_status_label }}</span>
+                </div>
+                <dl class="set-facts">
+                    {% if billing_license %}
+                    <div><dt>Licensed to</dt><dd>{{ billing_license.licensee }}</dd></div>
+                    <div><dt>Edition</dt><dd>{{ billing_license.edition_label }}<span class="set-sub">Users allowed: {{ billing_license.max_users_label }}</span></dd></div>
+                    {% endif %}
+                    {% if not billing_is_desktop %}
+                    <div><dt>Current package</dt><dd>{{ billing_current_plan.name }} at ${{ billing_current_plan.price }}/month<span class="set-sub">{{ billing_provider_name }} handles checkout</span></dd></div>
+                    {% endif %}
+                    <div>
+                        <dt>Access</dt>
+                        <dd>
+                            {% if billing_license and billing_license.is_perpetual %}
+                            Lifetime licence. No renewal needed.
+                            {% elif billing_license %}
+                            Licensed until {{ billing_license.expires_at|date:"d M Y" }}.
+                            {% elif billing_onboarding.trial_is_active %}
+                            {{ billing_trial_days_remaining }} day{{ billing_trial_days_remaining|pluralize }} left in the automatic free period.
+                            {% elif billing_subscription and billing_subscription.renews_at %}
+                            Renews on {{ billing_subscription.renews_at|date:"d M Y H:i" }}.
+                            {% elif billing_subscription and billing_subscription.ends_at %}
+                            Access runs until {{ billing_subscription.ends_at|date:"d M Y H:i" }}.
+                            {% elif billing_is_desktop %}
+                            The free trial has ended. A licence key opens the shop again.
+                            {% else %}
+                            No paid renewal date has been synced yet.
+                            {% endif %}
+                        </dd>
+                    </div>
+                    <div><dt>Owner</dt><dd>{{ billing_onboarding.user.email|default:billing_onboarding.user.username }}</dd></div>
+                </dl>
+                <div class="k-form-actions">
+                    <a href="{% url 'license_page' %}" class="btn btn-primary"><i class="bi bi-key me-2" aria-hidden="true"></i>{% if billing_license %}Replace Licence Key{% else %}Enter Licence Key{% endif %}</a>
+                    <a href="{% url 'billing_page' %}" class="btn btn-outline-secondary">{% if billing_is_desktop %}Trial and Licence Details{% else %}Open Billing{% endif %}</a>
+                    {% if billing_portal_url and billing_can_manage %}
+                    <a href="{% url 'billing_portal_redirect' %}" class="btn btn-link">Customer portal</a>
+                    {% endif %}
+                </div>
+                {% else %}
+                <div class="alert alert-info">Billing becomes available after the owner signup flow is complete and the business workspace is created.</div>
+                <div class="k-form-actions">
+                    <a href="{% url 'license_page' %}" class="btn btn-outline-secondary"><i class="bi bi-key me-2" aria-hidden="true"></i>{% if billing_license %}Replace Licence Key{% else %}Enter Licence Key{% endif %}</a>
+                </div>
+                {% endif %}
+            </section>
+        </div>
+
     </div>
-    <div class="table-responsive">
-        <table class="table align-middle mb-0">
-            <thead>
-                <tr>
-                    <th>User</th>
-                    <th>Role</th>
-                    <th>Signed In</th>
-                    <th>Signed Out</th>
-                    <th>IP</th>
-                    <th>Status</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for log in session_logs %}
-                <tr>
-                    <td class="fw-semibold">{{ log.user.username }}</td>
-                    <td>{{ log.role_name }}</td>
-                    <td>{{ log.login_at|date:"d M Y H:i" }}</td>
-                    <td>{{ log.logout_at|date:"d M Y H:i"|default:"Still signed in" }}</td>
-                    <td>{{ log.ip_address|default:"-" }}</td>
-                    <td>
-                        {% if log.logout_at %}
-                        <span class="text-muted small">Closed</span>
-                        {% else %}
-                        <span class="session-active">Open</span>
-                        {% endif %}
-                    </td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="6" class="text-center text-muted py-4">No sign-in activity recorded yet.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
-</div>
 </div>
 {% endblock %}
 
-{% block extra_js %}
-<script>
-    (function () {
-        const tabStorageKey = 'settingsActiveTab';
-        const tabButtons = Array.from(document.querySelectorAll('[data-settings-tab]'));
-
-        function findTabButtonByName(tabName) {
-            return tabButtons.find(function (button) {
-                return button.dataset.settingsTab === tabName;
-            });
-        }
-
-        function showSettingsTab(button) {
-            if (!button || typeof bootstrap === 'undefined') {
-                return;
-            }
-            bootstrap.Tab.getOrCreateInstance(button).show();
-        }
-
-        function tabNameFromHash() {
-            if (!window.location.hash) {
-                return '';
-            }
-            if (window.location.hash === '#audit-trail') {
-                return 'audit';
-            }
-            const target = document.querySelector(window.location.hash);
-            if (!target) {
-                return '';
-            }
-            const pane = target.closest('.tab-pane');
-            if (!pane) {
-                return '';
-            }
-            const button = tabButtons.find(function (candidate) {
-                return candidate.getAttribute('data-bs-target') === '#' + pane.id;
-            });
-            return button ? button.dataset.settingsTab : '';
-        }
-
-        function syncTabQuery(tabName) {
-            const currentUrl = new URL(window.location.href);
-            if (tabName === 'business') {
-                currentUrl.searchParams.delete('tab');
-            } else {
-                currentUrl.searchParams.set('tab', tabName);
-            }
-            window.history.replaceState({}, '', currentUrl);
-        }
-
-        tabButtons.forEach(function (button) {
-            button.addEventListener('shown.bs.tab', function (event) {
-                const tabName = event.target.dataset.settingsTab || 'business';
-                localStorage.setItem(tabStorageKey, tabName);
-                syncTabQuery(tabName);
-
-                if (window.location.hash) {
-                    const target = document.querySelector(window.location.hash);
-                    if (target) {
-                        window.requestAnimationFrame(function () {
-                            target.scrollIntoView({ block: 'start' });
-                        });
-                    }
-                }
-            });
-        });
-
-        window.addEventListener('DOMContentLoaded', function () {
-            const requestedTab = new URLSearchParams(window.location.search).get('tab');
-            const hashTab = tabNameFromHash();
-            const savedTab = localStorage.getItem(tabStorageKey);
-            const initialTab = hashTab || requestedTab || savedTab || 'business';
-            showSettingsTab(findTabButtonByName(initialTab) || findTabButtonByName('business'));
-        });
-
-        function shouldResetSettingsScroll() {
-            if (window.location.hash) {
-                return false;
-            }
-            return !document.querySelector('.text-danger, .alert-warning, .alert-danger');
-        }
-
-        function resetSettingsScroll() {
-            if (!shouldResetSettingsScroll()) {
-                return;
-            }
-            window.scrollTo(0, 0);
-            document.documentElement.scrollTop = 0;
-            document.body.scrollTop = 0;
-            const content = document.getElementById('content');
-            if (content) {
-                content.scrollTop = 0;
-            }
-        }
-
-        if ('scrollRestoration' in window.history) {
-            window.history.scrollRestoration = 'manual';
-        }
-
-        window.addEventListener('DOMContentLoaded', function () {
-            window.requestAnimationFrame(resetSettingsScroll);
-        });
-
-        window.addEventListener('pageshow', function () {
-            window.requestAnimationFrame(resetSettingsScroll);
-        });
-    })();
-</script>
-{% endblock %}
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+{% block extra_js %}<script src="{% static 'zehnms/js/pages/settings.js' %}"></script>{% endblock %}

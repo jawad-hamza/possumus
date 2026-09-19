@@ -1,0 +1,117 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}Import products{% endblock %}
+{% block page_title %}Import products{% endblock %}
+{% block page_help %}Bring your whole catalog in from a spreadsheet: products, prices, categories, brands, suppliers and opening stock in one go.{% endblock %}
+
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet">{% endblock %}
+
+{% block page_actions %}<a href="{% url 'product_import_template' %}" class="btn btn-primary"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Download template</a><a href="{% url 'product_export' %}" class="btn btn-outline-secondary"><i class="bi bi-download" aria-hidden="true"></i> Export current products</a><a href="{% url 'product_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to products</a>{% endblock %}
+
+{% block content %}
+{% if plan and plan.errors %}
+<section class="k-section" id="import-errors" aria-labelledby="import-errors-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title k-out" id="import-errors-title"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> Nothing was imported</h2>
+        <span class="k-badge k-badge--red">{{ plan.errors|length }} problem{{ plan.errors|length|pluralize }} found</span>
+    </div>
+    <p class="k-measure">Fix {{ plan.errors|length|pluralize:"it,them" }} in your spreadsheet, save it as CSV again and upload it below. Row numbers match the rows in your spreadsheet.</p>
+    <div class="k-ledger-scroll" style="--k-ledger-h: 46vh">
+        <table class="k-ledger k-ledger--stack st-errors">
+            <thead>
+                <tr>
+                    <th scope="col" data-k="meta">Row</th>
+                    <th scope="col" data-k="what">Product</th>
+                    <th scope="col" data-k="note">What to fix</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for error in plan.errors %}
+                <tr>
+                    <td data-k="meta" data-label="Row">{% if error.row %}Row {{ error.row }}{% else %}&mdash;{% endif %}</td>
+                    <td data-k="what" class="st-wrap"><span class="st-name">{{ error.label }}</span></td>
+                    <td data-k="note" class="st-wrap st-fix">
+                        {% for message in error.messages %}
+                        <div>{{ message }}</div>
+                        {% endfor %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% elif checked_only %}
+<div class="alert alert-success" id="import-preview">
+    <i class="bi bi-check-circle" aria-hidden="true"></i>
+    <div>
+        <h2 class="alert-heading h6">The file is ready to import</h2>
+        <p class="mb-1">
+            {{ plan.create_count }} new product{{ plan.create_count|pluralize }}{% if plan.update_count %}, {{ plan.update_count }} update{{ plan.update_count|pluralize }}{% endif %}{% if plan.opening_stock_count %}, opening stock for {{ plan.opening_stock_count }}{% endif %}.
+            Nothing has been saved yet: choose the same file again and press <strong>Import products</strong>.
+        </p>
+        {% if plan.new_categories %}<div class="small">New categories: {{ plan.new_categories|join:", " }}</div>{% endif %}
+        {% if plan.new_brands %}<div class="small">New brands: {{ plan.new_brands|join:", " }}</div>{% endif %}
+        {% if plan.new_suppliers %}<div class="small">New suppliers: {{ plan.new_suppliers|join:", " }}</div>{% endif %}
+        {% for warning in plan.warnings %}
+        <div class="small k-due"><i class="bi bi-info-circle" aria-hidden="true"></i> {{ warning }}</div>
+        {% endfor %}
+    </div>
+</div>
+{% endif %}
+
+<div class="row g-4">
+    <div class="col-xl-7">
+        <section class="k-section" aria-labelledby="import-steps-title">
+            <div class="k-section-head"><h2 class="k-section-title" id="import-steps-title">Upload a spreadsheet</h2></div>
+            <form method="post" enctype="multipart/form-data">
+                {% csrf_token %}
+                <ol class="st-steps">
+                    <li>
+                        <h3>Get the spreadsheet layout {% include "pos/partials/_help_tip.html" with tip_id="tipImportStep1" tip_name="the template" tip_text="Opens in Excel, Google Sheets or LibreOffice. The two example rows are skipped automatically, so you can leave or delete them." %}</h3>
+                        <a href="{% url 'product_import_template' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Download template</a>
+                    </li>
+                    <li>
+                        <h3>Fill one row per product {% include "pos/partials/_help_tip.html" with tip_id="tipImportStep2" tip_name="filling rows" tip_text="Only the name and a price (or a markup) are needed. Save the sheet as CSV when you are done." %}</h3>
+                    </li>
+                    <li>
+                        <h3><label for="catalog_file">Upload the CSV file</label> {% include "pos/partials/_help_tip.html" with tip_id="tipImportStep3" tip_name="uploading" tip_text="Every row is checked first; if any row has a problem nothing is imported and you get the full list of fixes." %}</h3>
+                        <input type="file" name="catalog_file" id="catalog_file" class="form-control" accept=".csv,text/csv" required aria-describedby="catalogFileSize">
+                        <div class="form-text" id="catalogFileSize" data-k-keep>Up to {{ max_size_mb }} MB.</div>
+
+                        <div class="form-check form-switch mt-4">
+                            <input class="form-check-input" type="checkbox" name="update_existing" id="update_existing" {% if update_existing %}checked{% endif %}>
+                            <label class="form-check-label" for="update_existing">Update products that already exist {% include "pos/partials/_help_tip.html" with tip_id="tipImportUpdate" tip_name="updating" tip_text="Products are matched by SKU. Stock is never changed for existing products." %}</label>
+                        </div>
+
+                        <div class="k-actions mt-4">
+                            <button type="submit" name="mode" value="import" class="btn btn-primary"><i class="bi bi-cloud-arrow-up" aria-hidden="true"></i> Import products</button>
+                            <button type="submit" name="mode" value="check" class="btn btn-outline-secondary">Check file only</button>
+                        </div>
+                    </li>
+                </ol>
+            </form>
+        </section>
+    </div>
+
+    <div class="col-xl-5">
+        <section class="k-section" aria-labelledby="import-columns-title">
+            <div class="k-section-head"><h2 class="k-section-title" id="import-columns-title">Columns</h2></div>
+            <table class="k-table k-table--dense st-columns">
+                    <thead>
+                        <tr><th scope="col">Column</th><th scope="col">What goes in it</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for column, requirement, help_text in column_guide %}
+                        <tr>
+                            <td class="text-nowrap"><code>{{ column }}</code></td>
+                            <td class="st-wrap">{{ help_text }}{% if requirement != "Optional" %} <span class="k-badge k-badge--blue">{{ requirement }}</span>{% endif %}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+            </table>
+        </section>
+    </div>
+</div>
+{% endblock %}

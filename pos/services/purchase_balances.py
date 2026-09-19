@@ -2,6 +2,7 @@ from collections import defaultdict, deque
 from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
+from django.db.models import Sum
 
 from accounts.models import Settlement
 from pos.models import Purchase, Supplier, quantize_money
@@ -22,6 +23,33 @@ def _payment_status(total, paid, due):
     if paid > 0:
         return "partial"
     return "credit"
+
+
+def outstanding_purchase_total():
+    """What is still owed on all purchases, without loading every purchase.
+
+    annotate_purchase_balances() hands each supplier's payments to the oldest bills first
+    and carries any excess forward, so the amount left per supplier is simply
+    unpaid-at-purchase minus payments made since, never below zero.
+    """
+    due_by_supplier = defaultdict(lambda: ZERO)
+    for supplier_id, total, paid in Purchase.objects.values_list("supplier_id", "total_amount", "paid_amount").iterator():
+        total = _money(total)
+        due_by_supplier[supplier_id] += max(total - min(_money(paid), total), ZERO)
+
+    supplier_type = ContentType.objects.get_for_model(Supplier)
+    settled = dict(
+        Settlement.objects.filter(settlement_type=Settlement.PAYMENT, content_type=supplier_type)
+        .values("object_id")
+        .annotate(total=Sum("amount"))
+        .values_list("object_id", "total")
+    )
+    outstanding = ZERO
+    for supplier_id, due in due_by_supplier.items():
+        if supplier_id is not None:
+            due = max(due - _money(settled.get(supplier_id)), ZERO)
+        outstanding += due
+    return quantize_money(outstanding)
 
 
 def annotate_purchase_balances(purchases):

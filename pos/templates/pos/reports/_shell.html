@@ -1,0 +1,93 @@
+{% extends "pos/base.html" %}
+{% comment %}
+Shared frame for every report page. The switcher and the date shortcuts keep the
+chosen dates, so moving from one report to the next never means typing them again.
+Blocks: report_header_actions, report_extra_filters, report_body, report_css, report_js.
+{% endcomment %}
+{% load static currency_tags %}
+{% block title %}{{ report_title|default:"Reports" }}{% endblock %}
+{% block page_title %}{{ report_title|default:"Reports" }}{% endblock %}
+{% block page_help %}{{ report_description }}{% endblock %}
+
+{% block extra_css %}
+<link rel="stylesheet" href="{% static 'zehnms/css/pages/reports.css' %}">
+{% block report_css %}{% endblock %}
+{% endblock %}
+
+{% block page_actions %}{% block report_header_actions %}{% endblock %}{% if not hide_export %}<a href="{{ export_url }}" class="btn btn-outline-secondary" data-report-export data-k-key="F8" data-k-key-label="Export this report to CSV"><i class="bi bi-download" aria-hidden="true"></i> Export CSV</a>{% endif %}<button type="button" class="btn btn-outline-secondary" onclick="window.print()" data-k-key="F9" data-k-key-label="Print this report"><i class="bi bi-printer" aria-hidden="true"></i> Print</button>{% endblock %}
+
+{% block content %}
+<div class="rp-print-head">
+    <div>
+        <div class="rp-print-shop">{{ active_company.name|default:brand_name }}</div>
+        <p class="rp-print-title">{{ report_title }}</p>
+    </div>
+    <div class="rp-print-meta">
+        {% if range_label %}<div>{{ range_label }}</div>{% endif %}
+        <div>Printed {% now "d M Y H:i" %}</div>
+    </div>
+</div>
+
+<nav class="rp-index" aria-label="Reports" data-rp-index>
+    <a href="{% url 'reports_home' %}" class="rp-index-home" data-tip="All reports"><i class="bi bi-grid" aria-hidden="true"></i><span class="visually-hidden">All reports</span></a>
+    {% for group in report_groups %}
+    <div class="rp-index-group" role="group" aria-label="{{ group.name }} reports">
+        <span class="rp-index-name" aria-hidden="true">{{ group.name }}</span>
+        {% for link in group.links %}
+        <a href="{{ link.url }}" data-tip="{{ link.title }}: {{ link.description }}" data-goto="{{ link.title }}"{% if link.active %} aria-current="page"{% endif %}>{{ link.short_title }}</a>
+        {% endfor %}
+    </div>
+    {% endfor %}
+</nav>
+
+{% if range_mode != "none" or report.filters %}
+<section class="k-section rp-filters" aria-label="Dates and filters">
+    <form method="get" class="rp-range report-filter-form" id="report-filter-form" data-rp-range="{{ range_mode }}">
+        {% if quick_ranges %}
+        <div class="rp-presets" role="group" aria-label="Date shortcuts">
+            {% for item in quick_ranges %}
+            <a href="{{ item.url }}" class="quick-range {% if item.active %}active{% endif %}" data-rp-preset="{{ item.label }}"{% if item.active %} aria-current="true"{% endif %}>{{ item.label }}</a>
+            {% endfor %}
+        </div>
+        {% endif %}
+        <div class="rp-fields">
+            {% if range_mode == "range" %}
+            <div class="rp-field">
+                <label for="report-start" class="form-label">From</label>
+                <input id="report-start" type="date" name="start" value="{{ start|date:'Y-m-d' }}" class="form-control">
+            </div>
+            <div class="rp-field">
+                <label for="report-end" class="form-label">To</label>
+                <input id="report-end" type="date" name="end" value="{{ end|date:'Y-m-d' }}" class="form-control">
+            </div>
+            {% elif range_mode == "as_of" %}
+            <div class="rp-field">
+                <label for="report-end" class="form-label">As of</label>
+                <input id="report-end" type="date" name="end" value="{{ end|date:'Y-m-d' }}" class="form-control">
+            </div>
+            {% endif %}
+            {% for filter in report.filters %}
+            <div class="rp-field rp-field--wide">
+                <label for="report-filter-{{ filter.name }}" class="form-label">{{ filter.label }}</label>
+                <select id="report-filter-{{ filter.name }}" name="{{ filter.name }}" class="form-select" data-auto-submit>
+                    {% for value, label in filter.options %}
+                    <option value="{{ value }}" {% if value == filter.value %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endfor %}
+            {% block report_extra_filters %}{% endblock %}
+            <button class="btn btn-primary rp-apply">Apply</button>
+        </div>
+        {% if range_label %}<p class="rp-range-label"><i class="bi bi-calendar3" aria-hidden="true"></i> {{ range_label }}</p>{% endif %}
+    </form>
+</section>
+{% endif %}
+
+{% block report_body %}{% endblock %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'zehnms/js/pages/reports.js' %}"></script>
+{% block report_js %}{% endblock %}
+{% endblock %}

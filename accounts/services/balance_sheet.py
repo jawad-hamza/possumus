@@ -1,84 +1,54 @@
-from django.db.models import Sum
-from accounts.models import Account, VoucherLine
+from accounts.models import Account
 from accounts.services.profit_loss import get_profit_and_loss
+from accounts.services.report_utils import (
+    OPENING_DIFFERENCE_LABEL,
+    ZERO,
+    account_totals,
+    natural_balance,
+    opening_difference,
+    parse_report_date,
+)
+
+CURRENT_EARNINGS_LABEL = "Current Earnings (profit to date)"
 
 
 def get_balance_sheet(as_of_date=None):
-    """
-    Returns Balance Sheet as of a given date.
-    """
+    """Assets = Liabilities + Equity, where equity includes earnings up to the date."""
+    as_of_date = parse_report_date(as_of_date)
 
-    def account_balance(account):
-        qs = VoucherLine.objects.filter(account=account)
+    sections = {Account.ASSET: [], Account.LIABILITY: [], Account.EQUITY: []}
+    totals = {Account.ASSET: ZERO, Account.LIABILITY: ZERO, Account.EQUITY: ZERO}
 
-        if as_of_date:
-            qs = qs.filter(voucher__date__lte=as_of_date)
-
-        sums = qs.aggregate(
-            debit=Sum("debit"),
-            credit=Sum("credit"),
-        )
-
-        debit = sums["debit"] or 0
-        credit = sums["credit"] or 0
-
-        # Assets & Expenses → debit - credit
-        if account.type in (Account.ASSET, Account.EXPENSE):
-            return debit - credit
-
-        # Liabilities, Equity, Income → credit - debit
-        return credit - debit
-
-    assets = []
-    liabilities = []
-    equity = []
-
-    total_assets = 0
-    total_liabilities = 0
-    total_equity = 0
-
-    accounts = Account.objects.filter(is_active=True)
-
-    for acc in accounts:
-        if acc.type not in (Account.ASSET, Account.LIABILITY, Account.EQUITY):
+    for account, debit, credit in account_totals(end=as_of_date):
+        if account.type not in sections:
             continue
-
-        balance = account_balance(acc)
-
+        balance = natural_balance(account, debit, credit)
         if balance == 0:
             continue
+        sections[account.type].append({"account_id": account.id, "account": account.title, "balance": balance})
+        totals[account.type] += balance
 
-        row = {"account": acc.title, "balance": balance}
-
-        if acc.type == Account.ASSET:
-            assets.append(row)
-            total_assets += balance
-
-        elif acc.type == Account.LIABILITY:
-            liabilities.append(row)
-            total_liabilities += balance
-
-        else:
-            equity.append(row)
-            total_equity += balance
-
-    # 🔹 Add Net Profit to Equity
-    pl = get_profit_and_loss(end_date=as_of_date)
-    net_profit = pl["net_profit"]
-
+    net_profit = get_profit_and_loss(end_date=as_of_date)["net_profit"]
     if net_profit != 0:
-        equity.append({
-            "account": "Retained Earnings",
-            "balance": net_profit
-        })
-        total_equity += net_profit
+        sections[Account.EQUITY].append({"account_id": None, "account": CURRENT_EARNINGS_LABEL, "balance": net_profit})
+        totals[Account.EQUITY] += net_profit
+
+    # Openings entered one-sided are shown for what they are instead of
+    # silently breaking the equation.
+    difference = opening_difference()
+    if difference != 0:
+        sections[Account.EQUITY].append({"account_id": None, "account": OPENING_DIFFERENCE_LABEL, "balance": difference})
+        totals[Account.EQUITY] += difference
 
     return {
-        "assets": assets,
-        "liabilities": liabilities,
-        "equity": equity,
-        "total_assets": total_assets,
-        "total_liabilities": total_liabilities,
-        "total_equity": total_equity,
-        "balanced": total_assets == (total_liabilities + total_equity),
+        "assets": sections[Account.ASSET],
+        "liabilities": sections[Account.LIABILITY],
+        "equity": sections[Account.EQUITY],
+        "as_of_date": as_of_date,
+        "net_profit": net_profit,
+        "opening_difference": difference,
+        "total_assets": totals[Account.ASSET],
+        "total_liabilities": totals[Account.LIABILITY],
+        "total_equity": totals[Account.EQUITY],
+        "balanced": totals[Account.ASSET] == (totals[Account.LIABILITY] + totals[Account.EQUITY]),
     }

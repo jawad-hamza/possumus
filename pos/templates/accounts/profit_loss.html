@@ -1,86 +1,71 @@
-﻿{% extends "pos/base.html" %}
-{% load accounting_tags %}
+{% extends "pos/base.html" %}
+{% load static accounting_tags %}
 
 {% block title %}Profit & Loss{% endblock %}
+{% block page_title %}Profit and loss{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}{% include "accounts/_report_actions.html" %}{% endblock %}
 
 {% block content %}
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-    <div>
-        <h2 class="mb-1">Profit & Loss</h2>
-        <p class="text-muted mb-0">{{ period_label }}. This report compares income earned against expenses spent.</p>
-    </div>
-    <form class="d-flex flex-wrap gap-2">
-        <input type="date" class="form-control" name="start" value="{{ request.GET.start }}">
-        <input type="date" class="form-control" name="end" value="{{ request.GET.end }}">
-        <button class="btn btn-dark">Apply</button>
-    </form>
-</div>
+<header class="b-print-head">
+    <h2>{{ active_company.name|default:brand_name }}</h2>
+    <p>Profit &amp; Loss. {{ period_label }}.</p>
+</header>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Total Income</div>
-            <div class="fs-4 fw-bold text-success">{{ total_income|money }}</div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Total Expense</div>
-            <div class="fs-4 fw-bold text-danger">{{ total_expense|money }}</div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">{{ status_label }}</div>
-            <div class="fs-4 fw-bold {% if net_profit >= 0 %}text-success{% else %}text-danger{% endif %}">{{ net_profit|money }}</div>
-        </div>
-    </div>
-</div>
+{% include "accounts/_report_header.html" %}
 
-<div class="row g-3">
-    <div class="col-lg-6">
-        <div class="page-card p-0 overflow-hidden h-100">
-            <div class="p-4 border-bottom">
-                <h4 class="mb-1">Income</h4>
-                <p class="text-muted mb-0">Money coming into the business from income accounts.</p>
-            </div>
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                    <tbody>
-                        {% for row in income %}
-                        <tr>
-                            <td class="ps-4">{{ row.account }}</td>
-                            <td class="text-end pe-4">{{ row.amount|money }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="2" class="text-center text-muted py-5">No income posted for this period.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+<section class="k-section b-sheet" aria-labelledby="pl-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="pl-title">{{ period_label }} <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About this report" aria-describedby="tipPl" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipPl" role="tooltip" hidden>This report compares income earned against expenses spent.</span></span></h2>
+        <span class="k-badge {% if net_profit >= 0 %}k-badge--green{% else %}k-badge--red{% endif %}">{{ status_label }}: {{ net_profit|money }}</span>
     </div>
-    <div class="col-lg-6">
-        <div class="page-card p-0 overflow-hidden h-100">
-            <div class="p-4 border-bottom">
-                <h4 class="mb-1">Expenses</h4>
-                <p class="text-muted mb-0">Money spent to run the business.</p>
-            </div>
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                    <tbody>
-                        {% for row in expenses %}
-                        <tr>
-                            <td class="ps-4">{{ row.account }}</td>
-                            <td class="text-end pe-4">{{ row.amount|money }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="2" class="text-center text-muted py-5">No expenses posted for this period.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
+
+    <table class="b-statement">
+        <thead>
+            <tr>
+                <th scope="col">Account</th>
+                <th scope="col" class="k-num">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr class="b-group">
+                <th scope="colgroup" colspan="2">Income <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Income" aria-describedby="tipPlIncome" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipPlIncome" role="tooltip" hidden>Money coming into the business from income accounts.</span></span></th>
+            </tr>
+            {% for row in income %}
+            <tr class="b-acct">
+                <td><a href="{% url 'account_ledger' row.account_id %}?start={{ filter_start }}&end={{ filter_end }}">{{ row.account }}</a></td>
+                <td class="k-num">{{ row.amount|money }}</td>
+            </tr>
+            {% empty %}
+            <tr class="b-acct b-empty"><td colspan="2">No income posted for this period.</td></tr>
+            {% endfor %}
+            <tr class="b-subtotal">
+                <td>Total income</td>
+                <td class="k-num k-in">{{ total_income|money }}</td>
+            </tr>
+
+            <tr class="b-group">
+                <th scope="colgroup" colspan="2">Expenses <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Expenses" aria-describedby="tipPlExpense" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipPlExpense" role="tooltip" hidden>Money spent to run the business.</span></span></th>
+            </tr>
+            {% for row in expenses %}
+            <tr class="b-acct">
+                <td><a href="{% url 'account_ledger' row.account_id %}?start={{ filter_start }}&end={{ filter_end }}">{{ row.account }}</a></td>
+                <td class="k-num">{{ row.amount|money }}</td>
+            </tr>
+            {% empty %}
+            <tr class="b-acct b-empty"><td colspan="2">No expenses posted for this period.</td></tr>
+            {% endfor %}
+            <tr class="b-subtotal">
+                <td>Total expense</td>
+                <td class="k-num k-out">{{ total_expense|money }}</td>
+            </tr>
+        </tbody>
+        <tfoot>
+            <tr class="b-total">
+                <td>{{ status_label }}</td>
+                <td class="k-num {% if net_profit >= 0 %}k-in{% else %}k-out{% endif %}">{{ net_profit|money }}</td>
+            </tr>
+        </tfoot>
+    </table>
+</section>
 {% endblock %}

@@ -1,0 +1,36 @@
+/* Entry pages (product form, purchase entry). Loads after stock.css. */
+
+/* On a phone the save row stays pinned as ONE row: running total, Cancel, Save. */
+@media (max-width: 575.98px) {
+    .st-actionbar:not(.st-actionbar--inline) {
+        flex-wrap: nowrap;
+        gap: var(--k-2);
+    }
+
+    .st-actionbar-note {
+        flex: 1 1 auto;
+        min-width: 0;
+        font-size: var(--k-text-xs);
+        line-height: 1.3;
+    }
+
+    .st-actionbar-note strong {
+        display: inline-block;
+        font-size: var(--k-text-md);
+    }
+
+    .st-actionbar > .btn {
+        flex: 0 0 auto;
+    }
+
+    /* Cancel becomes a text button so Save is the only filled control in the row. */
+    .st-actionbar > a.btn-outline-secondary {
+        border-color: transparent;
+        background: transparent;
+        padding-inline: var(--k-2);
+    }
+
+    .st-actionbar > button[name="save_and_new"] {
+        display: none;
+    }
+}

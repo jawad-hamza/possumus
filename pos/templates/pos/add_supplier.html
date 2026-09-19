@@ -1,44 +1,44 @@
 {% extends "pos/base.html" %}
+{% load static %}
 
-{% block title %}Add Supplier{% endblock %}
+{% block title %}Add supplier{% endblock %}
+{% block page_title %}Add supplier{% endblock %}
+{% block page_help %}Create the supplier once, then use it in purchases and payable tracking.{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="{{ next_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>{% endblock %}
 
 {% block content %}
-<div class="row justify-content-center">
-    <div class="col-xl-8 col-lg-10">
-        <div class="d-flex justify-content-between align-items-center gap-3 mb-4">
-            <div>
-                <h2 class="mb-1">Add Supplier</h2>
-                <p class="text-muted mb-0">Create the supplier once, then use it in purchases and payable tracking.</p>
+<div class="k-form">
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ next_url }}">
+
+        {% if return_to_purchase %}
+        <div class="alert alert-info">
+            After save, you will return to the purchase workflow with the supplier list refreshed.
+        </div>
+        {% endif %}
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <section class="k-section" aria-labelledby="party-details-title">
+            <div class="k-section-head"><h2 class="k-section-title" id="party-details-title">Supplier details</h2></div>
+            <div class="k-form-grid">
+                {% include "pos/partials/_field.html" with field=form.name %}
+                {% include "pos/partials/_field.html" with field=form.phone %}
+                {% include "pos/partials/_field.html" with field=form.email %}
+                <div class="k-span-2">{% include "pos/partials/_field.html" with field=form.address %}</div>
             </div>
+        </section>
+
+        {% include "pos/partials/_party_opening_fields.html" with party_word="supplier" %}
+
+        <div class="k-form-actions">
+            <button type="submit" class="btn btn-primary">Save supplier</button>
             <a href="{{ next_url }}" class="btn btn-outline-secondary">Cancel</a>
         </div>
-
-        <form method="post" class="page-card p-4 p-lg-5">
-            {% csrf_token %}
-            <input type="hidden" name="next" value="{{ next_url }}">
-
-            {% if return_to_purchase %}
-            <div class="alert alert-info border mb-4">
-                After save, you will return to the purchase workflow with the supplier list refreshed.
-            </div>
-            {% endif %}
-
-            {% if form.non_field_errors %}
-            <div class="alert alert-danger">{{ form.non_field_errors }}</div>
-            {% endif %}
-
-            <div class="row g-4">
-                <div class="col-md-6">{% include "pos/partials/_field.html" with field=form.name %}</div>
-                <div class="col-md-6">{% include "pos/partials/_field.html" with field=form.phone %}</div>
-                <div class="col-md-6">{% include "pos/partials/_field.html" with field=form.email %}</div>
-                <div class="col-12">{% include "pos/partials/_field.html" with field=form.address %}</div>
-            </div>
-
-            <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
-                <a href="{{ next_url }}" class="btn btn-outline-secondary">Cancel</a>
-                <button type="submit" class="btn btn-dark">Save Supplier</button>
-            </div>
-        </form>
-    </div>
+    </form>
 </div>
 {% endblock %}

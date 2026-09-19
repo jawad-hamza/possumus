@@ -1,6 +1,7 @@
-﻿from decimal import Decimal
+from decimal import Decimal
 
 from django.contrib.contenttypes.models import ContentType
+from django.core.exceptions import ValidationError
 from django.db import transaction
 from django.db.models import Sum
 from django.utils import timezone
@@ -8,6 +9,7 @@ from django.utils import timezone
 from accounts.models import Account, PartyLedgerEntry, Voucher, VoucherLine
 from accounts.services.audit import record_audit
 from accounts.services.cash_bank import resolve_money_account
+from accounts.services.party_balance import get_party_balance
 from pos.models import (
     Purchase,
     PurchaseItem,
@@ -17,7 +19,9 @@ from pos.models import (
     SaleItem,
     SaleReturn,
     SaleReturnItem,
+    format_qty,
     quantize_money,
+    quantize_qty,
 )
 
 
@@ -34,14 +38,26 @@ def _ensure_account(title: str, account_type: str) -> Account:
     return account
 
 
-def _sale_item_returnable(item: SaleItem) -> int:
-    returned = item.return_items.aggregate(total=Sum("quantity"))["total"] or 0
-    return max(item.quantity - returned, 0)
+def _sale_item_returnable(item: SaleItem) -> Decimal:
+    returned = item.return_items.aggregate(total=Sum("quantity"))["total"] or ZERO
+    return max(item.quantity - returned, ZERO)
 
 
-def _purchase_item_returnable(item: PurchaseItem) -> int:
-    returned = item.return_items.aggregate(total=Sum("quantity"))["total"] or 0
-    return max(item.quantity - returned, 0)
+def _purchase_item_returnable(item: PurchaseItem) -> Decimal:
+    returned = item.return_items.aggregate(total=Sum("quantity"))["total"] or ZERO
+    return max(item.quantity - returned, ZERO)
+
+
+def _return_quantity(product, raw_quantity) -> Decimal:
+    try:
+        quantity = quantize_qty(raw_quantity or 0)
+    except (ArithmeticError, ValueError, TypeError) as exc:
+        raise ValueError(f"Enter a valid return quantity for {product.display_name}.") from exc
+    if quantity > ZERO:
+        quantity_error = product.validate_quantity(quantity)
+        if quantity_error:
+            raise ValueError(quantity_error)
+    return quantity
 
 
 @transaction.atomic
@@ -49,7 +65,7 @@ def create_sale_return(*, sale, quantities, refund_method, reason, notes="", ban
     sale_obj = (
         Sale.objects.select_related("customer")
         .prefetch_related("items__product__category", "items__return_items")
-        .select_for_update()
+        .select_for_update(of=("self",))
         .get(pk=getattr(sale, "pk", sale))
     )
 
@@ -57,6 +73,14 @@ def create_sale_return(*, sale, quantities, refund_method, reason, notes="", ban
         raise ValueError("Reason is required for sale return.")
     if refund_method == SaleReturn.RECEIVABLE and sale_obj.customer is None:
         raise ValueError("A customer is required to reduce receivable.")
+    if refund_method != SaleReturn.RECEIVABLE and sale_obj.is_credit and sale_obj.customer is not None:
+        # Paying cash back on an unpaid credit sale would leave the receivable open.
+        outstanding = get_party_balance(sale_obj.customer)
+        if outstanding > ZERO:
+            raise ValueError(
+                f"{sale_obj.customer.name} still owes {outstanding:.2f} on credit. "
+                "Reduce the receivable instead of refunding money."
+            )
 
     sale_return = SaleReturn.objects.create(
         sale=sale_obj,
@@ -75,15 +99,17 @@ def create_sale_return(*, sale, quantities, refund_method, reason, notes="", ban
 
     items_map = {item.id: item for item in sale_obj.items.all()}
     for item_id, qty in quantities.items():
-        quantity = int(qty or 0)
-        if quantity <= 0:
-            continue
         item = items_map.get(int(item_id))
         if item is None:
+            if quantize_qty(qty or 0) <= ZERO:
+                continue
             raise ValueError("One of the sale items could not be found.")
+        quantity = _return_quantity(item.product, qty)
+        if quantity <= ZERO:
+            continue
         returnable = _sale_item_returnable(item)
         if quantity > returnable:
-            raise ValueError(f"Only {returnable} units of {item.product.name} can be returned.")
+            raise ValueError(f"Only {format_qty(returnable)} {item.product.unit} of {item.product.display_name} can be returned.")
 
         line_amount = quantize_money(item.line_total * Decimal(quantity) / Decimal(item.quantity))
         net_amount = quantize_money(line_amount * discount_factor)
@@ -106,8 +132,7 @@ def create_sale_return(*, sale, quantities, refund_method, reason, notes="", ban
             cost_amount=cost_amount,
         )
 
-        item.product.stock += quantity
-        item.product.save(update_fields=["stock"])
+        item.product.apply_stock_change(quantity)
 
         total_net += net_amount
         total_tax += tax_amount
@@ -125,7 +150,7 @@ def create_sale_return(*, sale, quantities, refund_method, reason, notes="", ban
     voucher = Voucher.objects.create(
         voucher_type=Voucher.JOURNAL,
         date=timezone.localdate(),
-        narration=f"Sale return #{sale_return.id} for sale #{sale_obj.id}",
+        narration=f"Sale return #{sale_return.id} for sale {sale_obj.display_number}",
         ref_model="SaleReturn",
         ref_id=sale_return.id,
     )
@@ -154,7 +179,7 @@ def create_sale_return(*, sale, quantities, refund_method, reason, notes="", ban
     sale_return.save(update_fields=["net_amount", "tax_amount", "total_amount", "cost_amount", "voucher"])
     record_audit(
         action="sale_return_created",
-        description=f"Sale return #{sale_return.id} recorded for sale #{sale_obj.id}.",
+        description=f"Sale return #{sale_return.id} recorded for sale {sale_obj.display_number}.",
         actor=actor,
         target=sale_return,
         metadata={"total_amount": str(sale_return.total_amount)},
@@ -167,7 +192,7 @@ def create_purchase_return(*, purchase, quantities, settlement_method, reason, n
     purchase_obj = (
         Purchase.objects.select_related("supplier")
         .prefetch_related("items__product", "items__return_items")
-        .select_for_update()
+        .select_for_update(of=("self",))
         .get(pk=getattr(purchase, "pk", purchase))
     )
 
@@ -189,17 +214,17 @@ def create_purchase_return(*, purchase, quantities, settlement_method, reason, n
     total_amount = ZERO
     items_map = {item.id: item for item in purchase_obj.items.all()}
     for item_id, qty in quantities.items():
-        quantity = int(qty or 0)
-        if quantity <= 0:
-            continue
         item = items_map.get(int(item_id))
         if item is None:
+            if quantize_qty(qty or 0) <= ZERO:
+                continue
             raise ValueError("One of the purchase items could not be found.")
+        quantity = _return_quantity(item.product, qty)
+        if quantity <= ZERO:
+            continue
         returnable = _purchase_item_returnable(item)
         if quantity > returnable:
-            raise ValueError(f"Only {returnable} units of {item.product.name} can be returned.")
-        if quantity > item.product.stock:
-            raise ValueError(f"Current stock of {item.product.name} is not enough for this return.")
+            raise ValueError(f"Only {format_qty(returnable)} {item.product.unit} of {item.product.display_name} can be returned.")
 
         line_amount = quantize_money(Decimal(item.cost_price or 0) * Decimal(quantity))
         PurchaseReturnItem.objects.create(
@@ -209,8 +234,10 @@ def create_purchase_return(*, purchase, quantities, settlement_method, reason, n
             quantity=quantity,
             line_amount=line_amount,
         )
-        item.product.stock -= quantity
-        item.product.save(update_fields=["stock"])
+        try:
+            item.product.apply_stock_change(-quantity)
+        except ValidationError as exc:
+            raise ValueError(f"Current stock of {item.product.display_name} is not enough for this return.") from exc
         total_amount += line_amount
 
     if not purchase_return.items.exists():

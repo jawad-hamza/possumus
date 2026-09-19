@@ -1,6 +1,8 @@
 ﻿from datetime import timedelta
 from decimal import Decimal, InvalidOperation
 
+from django.conf import settings
+from django.db.models import F
 from django.utils import timezone
 
 from pos.models import CompanyProfile, Product, Sale, SystemSettings, quantize_money
@@ -22,12 +24,16 @@ def normalized_rate(value):
     return quantize_money(rate)
 
 
+def default_brand_name():
+    return getattr(settings, "PUBLIC_BRAND_NAME", "") or "ZehnMS"
+
+
 def get_active_company_profile(create=False):
     company = CompanyProfile.objects.filter(is_active=True).first()
     if company or not create:
         return company
     return CompanyProfile.objects.create(
-        name="POS IMS",
+        name=default_brand_name(),
         invoice_footer="Thank you for your business.",
         is_active=True,
     )
@@ -256,6 +262,15 @@ def sale_totals_from_rows(rows, discount_rate, manual_tax_rate, settings_obj, pa
         "applied_tax_rate": applied_tax_rate,
         "comparison_totals": comparison_totals,
     }
+
+
+def low_stock_products():
+    """Active products at or below their reorder level, the emptiest first."""
+    return (
+        Product.objects.filter(stock__lte=F("low_stock_threshold"), is_active=True, track_stock=True)
+        .select_related("category")
+        .order_by("stock", "name")
+    )
 
 
 def near_expiry_products(settings_obj, *, today=None):

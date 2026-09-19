@@ -1,0 +1,100 @@
+{% extends "pos/base.html" %}
+{% load static accounting_tags %}
+
+{% block title %}Cash flow{% endblock %}
+{% block page_title %}Cash flow{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}{% include "accounts/_report_actions.html" %}{% endblock %}
+
+{% block content %}
+<header class="b-print-head">
+    <h2>{{ active_company.name|default:brand_name }}</h2>
+    <p>Cash Flow. {{ period_label }}.</p>
+</header>
+
+{% include "accounts/_report_header.html" %}
+
+<div class="b-grid b-grid--stack b-sheet--wide">
+    <section class="k-section" aria-labelledby="cf-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="cf-title">{{ period_label }} <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About cash flow" aria-describedby="tipCf" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipCf" role="tooltip" hidden>Where cash and bank money came from, and where it went.</span></span></h2>
+            <span class="k-badge {% if net_change >= 0 %}k-badge--green{% else %}k-badge--red{% endif %}">Net change: {{ net_change|money }}</span>
+        </div>
+        <div class="table-responsive">
+            <table class="b-statement b-statement--scroll">
+                <thead>
+                    <tr>
+                        <th scope="col">Activity</th>
+                        <th scope="col" class="k-num">Money in</th>
+                        <th scope="col" class="k-num">Money out</th>
+                        <th scope="col" class="k-num">Net</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="b-carry">
+                        <td colspan="3">Money at start</td>
+                        <td class="k-num">{{ opening_balance|money }}</td>
+                    </tr>
+                    <tr class="b-group">
+                        <th scope="colgroup" colspan="4">By activity <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About By activity" aria-describedby="tipCfActivity" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipCfActivity" role="tooltip" hidden>Transfers between cash and bank show on both sides and net to zero.</span></span></th>
+                    </tr>
+                    {% for row in rows %}
+                    <tr class="b-acct">
+                        <td>{{ row.label }}</td>
+                        <td class="k-num k-in">{% if row.money_in %}{{ row.money_in|money }}{% endif %}</td>
+                        <td class="k-num k-out">{% if row.money_out %}{{ row.money_out|money }}{% endif %}</td>
+                        <td class="k-num">{{ row.net|money }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr class="b-acct b-empty"><td colspan="4">No cash or bank movement in this period.</td></tr>
+                    {% endfor %}
+                    {% if rows %}
+                    <tr class="b-subtotal">
+                        <td>Total</td>
+                        <td class="k-num">{{ total_in|money }}</td>
+                        <td class="k-num">{{ total_out|money }}</td>
+                        <td class="k-num">{{ net_change|money }}</td>
+                    </tr>
+                    {% endif %}
+                </tbody>
+                <tfoot>
+                    <tr class="b-total">
+                        <td colspan="3">Money at end</td>
+                        <td class="k-num">{{ closing_balance|money }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </div>
+    </section>
+
+    <aside class="k-side" aria-labelledby="cash-flow-accounts-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="cash-flow-accounts-title">By account <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About By account" aria-describedby="tipCfAccounts" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipCfAccounts" role="tooltip" hidden>Open an account to see each movement.</span></span></h2>
+        </div>
+        <div class="table-responsive">
+        <table class="k-table k-table--dense k-ledger--stack b-side-table">
+            <thead>
+                <tr>
+                    <th scope="col" data-k="what">Account</th>
+                    <th scope="col" class="k-num" data-k="field">In</th>
+                    <th scope="col" class="k-num" data-k="field">Out</th>
+                    <th scope="col" class="k-num" data-k="amount">Net</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in by_account %}
+                <tr>
+                    <td class="b-stack-title"><a href="{% url 'account_ledger' row.account_id %}?start={{ filter_start }}&end={{ filter_end }}">{{ row.label }}</a></td>
+                    <td class="k-num" data-label="In">{{ row.money_in|money }}</td>
+                    <td class="k-num" data-label="Out">{{ row.money_out|money }}</td>
+                    <td class="k-num b-bal" data-label="Net">{{ row.net|money }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="4" class="k-empty">No movement.</td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        </div>
+    </aside>
+</div>
+{% endblock %}

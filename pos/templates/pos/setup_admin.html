@@ -1,193 +1,36 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Business Setup | Vendora</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
-    <style>
-        body {
-            min-height: 100vh;
-            background: linear-gradient(160deg, #14213d 0%, #1e3a63 42%, #f8fafc 42%, #eef3f9 100%);
-            color: #14213d;
-        }
+{% extends "pos/auth_base.html" %}
+{% load static %}
+{% block title %}Business setup{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/access.css' %}" rel="stylesheet">{% endblock %}
+{% block sheet_class %}k-auth-sheet--form{% endblock %}
+{% block cover %}
+{% if desktop_mode %}
+<p class="k-cover-note">You can change these details any time in Settings.</p>
+{% endif %}
+{% endblock %}
+{% block heading %}{% if desktop_mode %}Your shop's details{% else %}Create the business workspace{% endif %}{% endblock %}
+{% block intro %}{% if desktop_mode %}Last step. Only the shop name is needed to start; the rest can wait.{% else %}Your owner email is verified. Add the business details for your {{ trial_days }}-day free trial on the {{ onboarding.plan_label }} plan.{% endif %}{% endblock %}
+{% block body %}
+{% if form.non_field_errors %}
+<div class="alert alert-danger py-2" role="alert">{{ form.non_field_errors|striptags }}</div>
+{% endif %}
 
-        .setup-shell {
-            min-height: 100vh;
-            display: grid;
-            place-items: center;
-            padding: 24px;
-        }
+<ol class="k-steps" aria-label="Setup steps">
+    <li class="is-done">Owner account<i class="bi bi-check2" aria-hidden="true"></i><span class="visually-hidden">done</span></li>
+    <li aria-current="step">{% if desktop_mode %}Shop details{% else %}Business details{% endif %}</li>
+</ol>
 
-        .setup-card {
-            width: min(100%, 1100px);
-            display: grid;
-            grid-template-columns: 1.05fr minmax(340px, 430px);
-            border-radius: 28px;
-            overflow: hidden;
-            box-shadow: 0 32px 70px rgba(15, 23, 42, 0.22);
-            background: #ffffff;
-        }
-
-        .setup-copy {
-            padding: clamp(28px, 5vw, 56px);
-            background: linear-gradient(180deg, #14213d, #10203a);
-            color: #ffffff;
-        }
-
-        .setup-mark {
-            width: 68px;
-            height: 68px;
-            border-radius: 22px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            background: linear-gradient(135deg, #fca311, #ffd27a);
-            color: #0f172a;
-            font-size: 1.45rem;
-            font-weight: 800;
-            margin-bottom: 18px;
-        }
-
-        .setup-form {
-            padding: clamp(24px, 4vw, 40px);
-        }
-
-        .form-control,
-        .form-select,
-        textarea.form-control {
-            border-radius: 14px;
-            padding: 0.82rem 0.95rem;
-        }
-
-        .btn-dark,
-        .btn-outline-dark {
-            border-radius: 14px;
-            padding: 0.88rem 1rem;
-            font-weight: 700;
-        }
-
-        .feature-list {
-            display: grid;
-            gap: 14px;
-            margin-top: 28px;
-        }
-
-        .feature {
-            display: flex;
-            gap: 12px;
-            align-items: flex-start;
-        }
-
-        .feature i {
-            color: #fca311;
-            font-size: 1.1rem;
-            margin-top: 2px;
-        }
-
-        .plan-pill {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            border-radius: 999px;
-            padding: 8px 14px;
-            background: rgba(252, 163, 17, 0.18);
-            color: #ffd27a;
-            font-size: 0.82rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-        }
-
-        @media (max-width: 992px) {
-            .setup-card {
-                grid-template-columns: 1fr;
-            }
-        }
-    </style>
-</head>
-<body>
-<div class="setup-shell">
-    <div class="setup-card">
-        <section class="setup-copy">
-            <div class="setup-mark">VD</div>
-            <div class="plan-pill"><i class="bi bi-stars"></i>{{ onboarding.plan_label }} plan</div>
-            <h1 class="display-6 fw-bold mt-3 mb-3">Create the business workspace</h1>
-            <p class="text-white-50 mb-0">Your owner email is verified. This step creates the business profile for your first 3 free days and unlocks full admin control inside Vendora.</p>
-            <div class="feature-list">
-                <div class="feature">
-                    <i class="bi bi-shop"></i>
-                    <div>
-                        <div class="fw-semibold">Business-first setup</div>
-                        <div class="text-white-50 small">Set the business name, contact details, and tax registration before the dashboard opens.</div>
-                    </div>
-                </div>
-                <div class="feature">
-                    <i class="bi bi-shield-check"></i>
-                    <div>
-                        <div class="fw-semibold">Owner gets full control</div>
-                        <div class="text-white-50 small">This registered account becomes the admin and can later create cashier or staff logins from Settings.</div>
-                    </div>
-                </div>
-                <div class="feature">
-                    <i class="bi bi-clock-history"></i>
-                    <div>
-                        <div class="fw-semibold">Free access is already active</div>
-                        <div class="text-white-50 small">Your first 3 free days are already active, so once this page is saved the workspace is ready to use.</div>
-                    </div>
-                </div>
-            </div>
-        </section>
-
-        <section class="setup-form">
-            <div class="text-uppercase small fw-bold text-warning mb-2">Business Setup</div>
-            <h2 class="h3 fw-bold mb-1">Business details</h2>
-            <p class="text-muted mb-4">Only the registered owner account can access this screen.</p>
-
-            {% if messages %}
-            {% for message in messages %}
-            <div class="alert alert-{{ message.tags|default:'info' }} py-2">{{ message }}</div>
-            {% endfor %}
-            {% endif %}
-
-            {% if form.non_field_errors %}
-            <div class="alert alert-danger py-2">{{ form.non_field_errors|striptags }}</div>
-            {% endif %}
-
-            <form method="post" novalidate>
-                {% csrf_token %}
-                <input type="hidden" name="browser_time_zone" id="setupBrowserTimeZone" data-browser-time-zone-input>
-                {% for field in form %}
-                <div class="mb-3">
-                    <label class="form-label fw-semibold" for="{{ field.id_for_label }}">{{ field.label }}</label>
-                    {{ field }}
-                    {% if field.help_text %}<div class="form-text">{{ field.help_text }}</div>{% endif %}
-                    {% if field.errors %}<div class="text-danger small mt-1">{{ field.errors|striptags }}</div>{% endif %}
-                </div>
-                {% endfor %}
-                <button class="btn btn-dark w-100">Create Business Workspace</button>
-            </form>
-        </section>
+<form method="post" novalidate>
+    {% csrf_token %}
+    <input type="hidden" name="browser_time_zone" id="setupBrowserTimeZone" data-browser-time-zone-input>
+    <div class="k-auth-grid k-auth-grid--setup">
+    {% for field in form %}
+    {% include "pos/partials/_auth_field.html" with field=field %}
+    {% endfor %}
     </div>
-</div>
-<script>
-    (function () {
-        function getBrowserTimeZone() {
-            try {
-                return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-            } catch (error) {
-                return '';
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', function () {
-            const browserTimeZone = getBrowserTimeZone();
-            document.querySelectorAll('[data-browser-time-zone-input]').forEach(function (input) {
-                input.value = browserTimeZone;
-            });
-        });
-    })();
-</script>
-</body>
-</html>
+    <button class="btn btn-primary w-100">{% if desktop_mode %}Save and open the shop{% else %}Create business workspace{% endif %}</button>
+    {% if desktop_mode %}<p class="k-auth-under">Your {{ trial_days }}-day free trial has started and everything is unlocked. A licence key keeps the shop open after that.</p>{% endif %}
+</form>
+{% endblock %}
+{% block foot %}{% endblock %}
+{% block extra_js %}<script src="{% static 'zehnms/js/pages/access.js' %}"></script>{% endblock %}

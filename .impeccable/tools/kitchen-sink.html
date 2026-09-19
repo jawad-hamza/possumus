@@ -1,0 +1,89 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Component sheet</title>
+<link href="/static/vendor/bootstrap/css/bootstrap.min.css" rel="stylesheet">
+<link href="/static/vendor/bootstrap-icons/bootstrap-icons.min.css" rel="stylesheet">
+<link href="/static/zehnms/css/tokens.css" rel="stylesheet">
+<link href="/static/zehnms/css/components.css" rel="stylesheet">
+<link href="/static/zehnms/css/shell.css" rel="stylesheet">
+</head>
+<body>
+<div class="k-page" style="max-width:1120px">
+
+  <section class="k-section">
+    <div class="k-section-head">
+      <h2 class="k-section-title">Buttons <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About buttons" aria-describedby="tipButtons" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipButtons" role="tooltip" hidden>One filled blue button per page or panel. Red only on the step that confirms a delete.</span></span></h2>
+    </div>
+    <div class="k-actions">
+      <button class="btn btn-primary" data-k-key="F9" data-k-key-label="Save sale">Save sale <span class="k-key">F9</span></button>
+      <button class="btn btn-outline-secondary"><i class="bi bi-printer"></i>Print</button>
+      <button class="btn btn-link">Text button</button>
+      <button class="btn btn-success">Receive payment</button>
+      <button class="btn btn-outline-danger">Delete</button>
+      <button class="btn btn-danger">Yes, delete</button>
+      <button class="btn btn-primary" disabled>Disabled</button>
+      <button class="btn btn-primary is-loading" aria-busy="true">Saving</button>
+      <button class="btn btn-outline-secondary btn-sm">Small</button>
+      <button class="btn btn-primary btn-lg">Large</button>
+      <button class="k-icon-btn" aria-label="Edit" data-tip="Edit"><i class="bi bi-pencil"></i></button>
+    </div>
+  </section>
+
+  <section class="k-section">
+    <div class="k-section-head"><h2 class="k-section-title">Badges</h2></div>
+    <p><span class="k-badge">Draft</span> <span class="k-badge k-badge--blue">Held</span> <span class="k-badge k-badge--green">Paid</span> <span class="k-badge k-badge--amber">Low</span> <span class="k-badge k-badge--red">Overdue</span> <span class="k-stamp">Old stamp</span> <span class="k-state k-state--due">Owes you</span> <span class="k-state k-state--none">Settled</span> <span class="badge bg-success">Legacy</span></p>
+  </section>
+
+  <div class="row g-4 mb-4">
+    <div class="col-6 col-lg-3"><div class="k-section"><div class="k-balance"><div class="k-balance-label">Cash in hand</div><div class="k-balance-figure">Rs 48,250.00</div><div class="k-balance-note">12 sales today</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="k-section"><div class="k-balance k-balance--in"><div class="k-balance-label">Received</div><div class="k-balance-figure">Rs 31,900.50</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="k-section"><div class="k-balance k-balance--due"><div class="k-balance-label">Customers owe</div><div class="k-balance-figure">Rs 30,000.00</div></div></div></div>
+    <div class="col-6 col-lg-3"><div class="k-section"><div class="k-balance k-balance--out"><div class="k-balance-label">Paid out</div><div class="k-balance-figure">Rs 12,480.75</div></div></div></div>
+  </div>
+
+  <section class="k-section">
+    <div class="k-section-head"><h2 class="k-section-title">Sales</h2><span class="k-section-note">3 bills</span><div class="k-actions"><a class="btn btn-outline-secondary btn-sm" href="#">Export</a></div></div>
+    <div class="table-responsive">
+    <table class="k-table k-ledger--stack">
+      <thead><tr><th data-k="what">Item</th><th data-k="meta">Date</th><th class="k-num" data-k="more">Qty</th><th class="k-num" data-k="amount">Amount</th><th data-k="flag">Status</th><th data-k="more"><span class="visually-hidden">Actions</span></th></tr></thead>
+      <tbody>
+        <tr><td>Atta chakki fresh</td><td>19 Sep</td><td class="k-num">0.500 kg</td><td class="k-num">70.00</td><td><span class="k-badge k-badge--green">Paid</span></td><td class="text-end"><span class="k-row-actions"><button class="k-icon-btn" aria-label="Edit"><i class="bi bi-pencil"></i></button></span></td></tr>
+        <tr><td>Tapal Danedar 190 g</td><td>19 Sep</td><td class="k-num">2.000 pcs</td><td class="k-num">840.00</td><td><span class="k-badge k-badge--amber">Credit</span></td><td class="text-end"><span class="k-row-actions"><button class="k-icon-btn" aria-label="Edit"><i class="bi bi-pencil"></i></button></span></td></tr>
+        <tr><td>Cooking oil 5 L</td><td>18 Sep</td><td class="k-num">1.000 pcs</td><td class="k-num k-out">-2,950.00</td><td><span class="k-badge">Returned</span></td><td class="text-end"><span class="k-row-actions"><button class="k-icon-btn" aria-label="Edit"><i class="bi bi-pencil"></i></button></span></td></tr>
+      </tbody>
+      <tfoot><tr><td>Total</td><td></td><td></td><td class="k-num">-2,040.00</td><td></td><td></td></tr></tfoot>
+    </table>
+    </div>
+  </section>
+
+  <section class="k-section k-form">
+    <div class="k-section-head"><h2 class="k-section-title">Form</h2></div>
+    <div class="k-form-grid">
+      <div class="k-form-field"><label class="form-label" for="f1">Name<span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Name" aria-describedby="f1_helptext" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="f1_helptext" role="tooltip" hidden>As printed on the receipt.</span></span></label><input class="form-control" id="f1" value="Tapal Danedar"></div>
+      <div class="k-form-field"><label class="form-label" for="f2">Category</label><select class="form-select" id="f2"><option>Tea</option></select></div>
+      <div class="k-form-field"><label class="form-label" for="f3">Price</label><div class="input-group"><span class="input-group-text">Rs</span><input class="form-control is-invalid" id="f3" value="-4"></div><div class="k-error"><i class="bi bi-exclamation-circle"></i>Enter a price above zero.</div></div>
+      <div class="k-form-field"><label class="form-label" for="f4">Markup</label><input class="form-control" id="f4" value="20"><div class="form-text">Moves into a tooltip by the shell.</div></div>
+      <div class="k-form-field k-span-2"><div class="form-check form-switch"><input class="form-check-input" type="checkbox" id="f5" checked><label class="form-check-label" for="f5">Active</label></div><div class="form-check"><input class="form-check-input" type="checkbox" id="f6"><label class="form-check-label" for="f6">Track expiry</label></div></div>
+    </div>
+    <div class="k-form-actions"><button class="btn btn-primary">Save</button><button class="btn btn-outline-secondary">Cancel</button></div>
+  </section>
+
+  <section class="k-section">
+    <ul class="nav nav-tabs"><li class="nav-item"><a class="nav-link active" href="#">Details</a></li><li class="nav-item"><a class="nav-link" href="#">Stock</a></li><li class="nav-item"><a class="nav-link" href="#">History</a></li></ul>
+    <div class="alert alert-info">Info: the backup finished.</div>
+    <div class="alert alert-success">Saved.</div>
+    <div class="alert alert-warning">Two products are low on stock.</div>
+    <div class="alert alert-danger">The sale could not be saved.</div>
+    <div class="k-empty"><p class="k-empty-title">No purchases yet</p><p>Purchases you record appear here.</p><a class="btn btn-primary" href="#">New purchase</a></div>
+    <ul class="pagination"><li class="page-item disabled"><a class="page-link">Previous</a></li><li class="page-item active"><a class="page-link">1</a></li><li class="page-item"><a class="page-link">2</a></li><li class="page-item"><a class="page-link">Next</a></li></ul>
+    <div class="progress mt-4"><div class="progress-bar" style="width:40%"></div></div>
+  </section>
+
+</div>
+<script src="/static/vendor/bootstrap/js/bootstrap.bundle.min.js"></script>
+<script src="/static/zehnms/js/shell.js"></script>
+</body>
+</html>

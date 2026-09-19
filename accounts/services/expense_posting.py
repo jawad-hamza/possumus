@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation
 from django.db import transaction
 
 from accounts.models import Account, Expense, Voucher, VoucherLine
+from accounts.services.books_lock import assert_books_open, normalize_voucher_date
 from accounts.services.cash_bank import resolve_money_account
 
 
@@ -29,7 +30,9 @@ def _expense_payable_account():
     return account
 
 
-def _sync_voucher(*, ref_id, narration, date):
+def _sync_voucher(*, ref_id, narration, date, actor=None):
+    date = normalize_voucher_date(date)
+    assert_books_open(date, action=f"post expense #{ref_id}")
     voucher, created = Voucher.objects.get_or_create(
         voucher_type=Voucher.EXPENSE,
         ref_model="Expense",
@@ -37,10 +40,12 @@ def _sync_voucher(*, ref_id, narration, date):
         defaults={
             "narration": narration,
             "date": date,
+            "created_by": actor,
         },
     )
 
     if not created:
+        # Saving first lets the books-lock guard refuse before any line is removed.
         voucher.narration = narration
         voucher.date = date
         voucher.save(update_fields=["narration", "date"])
@@ -50,7 +55,7 @@ def _sync_voucher(*, ref_id, narration, date):
 
 
 @transaction.atomic
-def post_expense(expense_id):
+def post_expense(expense_id, *, actor=None):
     expense = Expense.objects.select_related("category", "category__account", "bank_account").get(pk=expense_id)
     amount = _to_decimal(expense.amount)
     paid_amount = _to_decimal(expense.paid_amount or ZERO)
@@ -76,6 +81,7 @@ def post_expense(expense_id):
         ref_id=expense.id,
         narration=f"Expense #{expense.id} - {expense.display_title} via {payment_label}",
         date=expense.date,
+        actor=actor,
     )
 
     VoucherLine.objects.create(

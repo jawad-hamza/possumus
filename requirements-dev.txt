@@ -1,0 +1,5 @@
+# Local development and CI.
+-r requirements.txt
+waitress==3.0.2
+pyflakes==3.4.0
+ruff==0.16.8

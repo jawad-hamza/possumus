@@ -1,348 +1,201 @@
 {% extends "pos/base.html" %}
-{% load accounting_tags %}
+{% load static accounting_tags %}
 
-{% block title %}Money Desk{% endblock %}
-
-{% block extra_css %}
-<style>
-    .money-help {
-        border: 1px solid #dbe7f5;
-        border-radius: 16px;
-        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-        padding: 16px;
-    }
-
-    .history-card {
-        height: 100%;
-    }
-
-    .history-card .table td,
-    .history-card .table th {
-        font-size: 0.92rem;
-        vertical-align: middle;
-    }
-
-    .open-expense-row {
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        gap: 12px;
-        padding: 14px 0;
-        border-bottom: 1px solid #e2e8f0;
-    }
-
-    .open-expense-row:last-child {
-        border-bottom: 0;
-        padding-bottom: 0;
-    }
-
-    @media (max-width: 576px) {
-        .open-expense-row {
-            flex-direction: column;
-            align-items: stretch;
-        }
-
-        .open-expense-row .btn {
-            width: 100%;
-        }
-    }
-</style>
-{% endblock %}
+{% block title %}Money desk{% endblock %}
+{% block page_title %}Money desk{% endblock %}
+{% block page_help %}Introduce opening funds, transfer money between cash and bank, and pay old expense bills with a clear audit trail.{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}{% if nav_access.expenses %}<a href="{% url 'expense_list' %}" class="btn btn-outline-secondary"><i class="bi bi-receipt-cutoff" aria-hidden="true"></i> Expenses</a>{% endif %}<a href="{% url 'money_breakdown' %}" class="btn btn-outline-secondary">Money breakdown</a><a href="{% url 'accounts_home' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Accounts</a>{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon warning"><i class="bi bi-arrow-left-right"></i></span>
-        <div>
-            <h1 class="page-title">Money Desk</h1>
-            <p class="page-subtitle">Introduce opening funds, transfer money between cash and bank, and pay old expense bills with a clear audit trail.</p>
-        </div>
+<div class="b-balances b-balances--tight">
+    <div class="k-balance {% if available_money < 0 %}k-balance--out{% endif %} b-balances-wide">
+        <div class="k-balance-label">Money available now</div>
+        <div class="k-balance-figure">{{ available_money|money }}</div>
+        <div class="k-balance-note">Cash plus bank after all posted entries.</div>
     </div>
-    <div class="page-actions">
-        <a href="{% url 'accounts_home' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Accounts</a>
-        <a href="{% url 'expense_list' %}" class="btn btn-outline-secondary"><i class="bi bi-receipt-cutoff"></i> Expense Log</a>
+    <div class="k-balance">
+        <div class="k-balance-label">Cash balance</div>
+        <div class="k-balance-figure">{{ cash_balance|money }}</div>
+        <div class="k-balance-note">Cash in hand per books</div>
     </div>
-</div>
-
-<div class="row g-3 mb-4">
-    <div class="col-sm-6 col-xl-3">
-        <div class="metric-card primary">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Money Available Now</div>
-                    <div class="metric-value">{{ available_money|money }}</div>
-                    <div class="metric-meta">Cash plus bank after all posted entries.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-wallet2"></i></span>
-            </div>
-        </div>
+    <div class="k-balance">
+        <div class="k-balance-label">Bank balance</div>
+        <div class="k-balance-figure">{{ bank_balance|money }}</div>
+        <div class="k-balance-note">Per books</div>
     </div>
-    <div class="col-sm-6 col-xl-3">
-        <div class="metric-card success">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Cash Balance</div>
-                    <div class="metric-value">{{ cash_balance|money }}</div>
-                    <div class="metric-meta">Current cash in hand per books.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-cash"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-xl-3">
-        <div class="metric-card info">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Bank Balance</div>
-                    <div class="metric-value">{{ bank_balance|money }}</div>
-                    <div class="metric-meta">Current bank balance per books.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-bank"></i></span>
-            </div>
-        </div>
-    </div>
-    <div class="col-sm-6 col-xl-3">
-        <div class="metric-card danger">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="metric-label">Expense Bills Due</div>
-                    <div class="metric-value">{{ expense_payable_balance|money }}</div>
-                    <div class="metric-meta">Outstanding rent, utilities, and other unpaid bills.</div>
-                </div>
-                <span class="metric-icon"><i class="bi bi-lightning-charge"></i></span>
-            </div>
-        </div>
+    <div class="k-balance {% if expense_payable_balance %}k-balance--due{% endif %} b-balances-wide">
+        <div class="k-balance-label">Expense bills due</div>
+        <div class="k-balance-figure">{{ expense_payable_balance|money }}</div>
+        <div class="k-balance-note">Outstanding rent, utilities, and other unpaid bills.</div>
     </div>
 </div>
 
-<div class="money-help mb-4">
-    <div class="fw-semibold mb-2">How this page affects money</div>
-    <div class="small text-muted">Opening Funds / Owner Capital increases Cash or Bank and credits Owner Capital. Expense Payment reduces Cash or Bank and clears Expense Payable. Transfer moves money between Cash and Bank without changing total money available.</div>
+<div class="b-grid b-grid--even">
+    <section class="k-section" aria-labelledby="capital-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="capital-title">Opening funds / owner capital <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Opening funds" aria-describedby="tipCapital" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipCapital" role="tooltip" hidden>Record where business money came from and which account it entered into.<br><strong>Opening Funds / Owner Capital</strong> increases Cash or Bank and credits Owner Capital.</span></span></h2>
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="capital">
+            <div class="k-form-grid">
+                {% include "pos/partials/_field.html" with field=capital_form.source_name %}
+                {% include "pos/partials/_field.html" with field=capital_form.date %}
+                {% include "pos/partials/_field.html" with field=capital_form.amount %}
+                {% include "pos/partials/_field.html" with field=capital_form.deposit_to %}
+                {% include "pos/partials/_field.html" with field=capital_form.bank_account %}
+                <div class="k-span-2">{% include "pos/partials/_field.html" with field=capital_form.notes %}</div>
+            </div>
+            {% if capital_form.non_field_errors %}<div class="k-error mt-3" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ capital_form.non_field_errors|join:', ' }}</div>{% endif %}
+            <div class="k-form-actions">
+                <button class="btn btn-primary"><i class="bi bi-save" aria-hidden="true"></i> Record funds</button>
+            </div>
+        </form>
+    </section>
+
+    <section class="k-section" aria-labelledby="transfer-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="transfer-title">Transfer cash and bank <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Transfer" aria-describedby="tipTransfer" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipTransfer" role="tooltip" hidden>Clearly mark which account money moved out from and which account it moved into.<br><strong>Transfer</strong> moves money between Cash and Bank without changing total money available.</span></span></h2>
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="transfer">
+            <div class="k-form-grid">
+                {% include "pos/partials/_field.html" with field=transfer_form.date %}
+                {% include "pos/partials/_field.html" with field=transfer_form.amount %}
+                {% include "pos/partials/_field.html" with field=transfer_form.from_account %}
+                {% include "pos/partials/_field.html" with field=transfer_form.to_account %}
+                {% include "pos/partials/_field.html" with field=transfer_form.from_bank_account %}
+                {% include "pos/partials/_field.html" with field=transfer_form.to_bank_account %}
+            </div>
+            {% if transfer_form.non_field_errors %}<div class="k-error mt-3" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ transfer_form.non_field_errors|join:', ' }}</div>{% endif %}
+            <div class="k-form-actions">
+                <button class="btn btn-primary"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Save transfer</button>
+            </div>
+        </form>
+    </section>
 </div>
 
-<div class="row g-4 mb-4">
-    <div class="col-xl-6">
-        <div class="page-card p-4 p-lg-5 h-100">
-            <div class="section-heading mb-4">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-success"><i class="bi bi-box-arrow-in-down"></i></span>
-                    <div>
-                        <h2 class="section-title">Opening Funds / Owner Capital</h2>
-                        <p class="section-copy">Record where business money came from and which account it entered into.</p>
-                    </div>
-                </div>
-            </div>
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="capital">
-                <div class="row g-3">
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=capital_form.source_name %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=capital_form.date %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=capital_form.amount %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=capital_form.deposit_to %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=capital_form.bank_account %}</div>
-                    <div class="col-12">{% include "pos/partials/_field.html" with field=capital_form.notes %}</div>
-                </div>
-                {% if capital_form.non_field_errors %}<div class="text-danger small mt-3">{{ capital_form.non_field_errors|join:', ' }}</div>{% endif %}
-                <div class="d-flex justify-content-end mt-4">
-                    <button class="btn btn-dark"><i class="bi bi-save"></i> Record Funds</button>
-                </div>
-            </form>
+<div class="b-grid">
+    <section class="k-section" aria-labelledby="pay-expense-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="pay-expense-title">Pay outstanding expense <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Pay outstanding expense" aria-describedby="tipPayExpense" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipPayExpense" role="tooltip" hidden>Choose an unpaid bill and record where the payment left from.<br><strong>Expense Payment</strong> reduces Cash or Bank and clears Expense Payable.</span></span></h2>
         </div>
-    </div>
-    <div class="col-xl-6">
-        <div class="page-card p-4 p-lg-5 h-100">
-            <div class="section-heading mb-4">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-warning"><i class="bi bi-arrow-left-right"></i></span>
-                    <div>
-                        <h2 class="section-title">Transfer Cash and Bank</h2>
-                        <p class="section-copy">Clearly mark which account money moved out from and which account it moved into.</p>
-                    </div>
-                </div>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="pay_expense">
+            <div class="k-form-grid">
+                {% include "pos/partials/_field.html" with field=expense_payment_form.expense %}
+                {% include "pos/partials/_field.html" with field=expense_payment_form.date %}
+                {% include "pos/partials/_field.html" with field=expense_payment_form.amount %}
+                {% include "pos/partials/_field.html" with field=expense_payment_form.payment_method %}
+                {% include "pos/partials/_field.html" with field=expense_payment_form.bank_account %}
             </div>
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="transfer">
-                <div class="row g-3">
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=transfer_form.date %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=transfer_form.amount %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=transfer_form.from_account %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=transfer_form.to_account %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=transfer_form.from_bank_account %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=transfer_form.to_bank_account %}</div>
-                </div>
-                {% if transfer_form.non_field_errors %}<div class="text-danger small mt-3">{{ transfer_form.non_field_errors|join:', ' }}</div>{% endif %}
-                <div class="d-flex justify-content-end mt-4">
-                    <button class="btn btn-dark"><i class="bi bi-arrow-left-right"></i> Save Transfer</button>
-                </div>
-            </form>
+            {% if expense_payment_form.non_field_errors %}<div class="k-error mt-3" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ expense_payment_form.non_field_errors|join:', ' }}</div>{% endif %}
+            <div class="k-form-actions">
+                <button class="btn btn-primary"><i class="bi bi-cash-stack" aria-hidden="true"></i> Save payment</button>
+            </div>
+        </form>
+    </section>
+
+    <aside class="k-side" aria-labelledby="open-bills-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="open-bills-title">Outstanding bills <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Outstanding bills" aria-describedby="tipOpenBills" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipOpenBills" role="tooltip" hidden>Quick pick list for bills still unpaid or partially paid.</span></span></h2>
         </div>
-    </div>
+        <span id="outstanding-bills"></span>
+        <ul class="b-links">
+            {% for expense in open_expenses %}
+            <li><a href="{% url 'money_desk' %}?expense={{ expense.id }}"{% if selected_expense_id == expense.id|stringformat:'s' %} aria-current="true"{% endif %} data-tip="Use in payment form">
+                <strong>{{ expense.display_title }}</strong>
+                <span class="b-links-aside k-due">{{ expense.balance_due|money }}</span>
+                {% if expense.vendor %}<span class="b-sub">{{ expense.vendor }}</span>{% endif %}
+            </a></li>
+            {% empty %}
+            <li class="k-empty">No outstanding bills right now.</li>
+            {% endfor %}
+        </ul>
+        {% include "accounts/_pagination.html" with page_obj=open_expenses anchor="outstanding-bills" %}
+    </aside>
 </div>
 
-<div class="row g-4 mb-4">
-    <div class="col-xl-7">
-        <div class="page-card p-4 p-lg-5 h-100">
-            <div class="section-heading mb-4">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-danger"><i class="bi bi-credit-card"></i></span>
-                    <div>
-                        <h2 class="section-title">Pay Outstanding Expense</h2>
-                        <p class="section-copy">Choose an unpaid bill and record where the payment left from.</p>
-                    </div>
-                </div>
-            </div>
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="pay_expense">
-                <div class="row g-3">
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.expense %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.date %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.amount %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.payment_method %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.bank_account %}</div>
-                </div>
-                {% if expense_payment_form.non_field_errors %}<div class="text-danger small mt-3">{{ expense_payment_form.non_field_errors|join:', ' }}</div>{% endif %}
-                <div class="d-flex justify-content-end mt-4">
-                    <button class="btn btn-dark"><i class="bi bi-cash-stack"></i> Save Payment</button>
-                </div>
-            </form>
+<div class="b-grid b-grid--three">
+    <section class="k-section" aria-labelledby="recent-payments-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="recent-payments-title">Recent expense payments <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Recent expense payments" aria-describedby="tipRecentPay" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipRecentPay" role="tooltip" hidden>Shows which bill was paid and the account money left from.</span></span></h2>
         </div>
-    </div>
-    <div class="col-xl-5">
-        <div class="page-card p-4 p-lg-5 h-100">
-            <div class="section-heading mb-4">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon"><i class="bi bi-list-check"></i></span>
-                    <div>
-                        <h2 class="section-title">Outstanding Bills</h2>
-                        <p class="section-copy">Quick pick list for bills still unpaid or partially paid.</p>
-                    </div>
-                </div>
-            </div>
-            <div>
-                {% for expense in open_expenses %}
-                <div class="open-expense-row">
-                    <div>
-                        <div class="fw-semibold">{{ expense.display_title }}</div>
-                        <div class="small text-muted">Due {{ expense.balance_due|money }}{% if expense.vendor %} | {{ expense.vendor }}{% endif %}</div>
-                    </div>
-                    <a href="{% url 'money_desk' %}?expense={{ expense.id }}" class="btn btn-sm btn-outline-primary {% if selected_expense_id == expense.id|stringformat:'s' %}active{% endif %}">Use in payment form</a>
-                </div>
-                {% empty %}
-                <div class="text-muted">No outstanding bills right now.</div>
-                {% endfor %}
-            </div>
+        <span id="expense-payments"></span>
+        <div class="table-responsive">
+            <table class="k-table k-table--dense">
+                <thead>
+                    <tr><th scope="col">Bill</th><th scope="col">From</th><th scope="col" class="k-num">Amount</th></tr>
+                </thead>
+                <tbody>
+                    {% for payment in recent_expense_payments %}
+                    <tr>
+                        <td><strong>{{ payment.expense.display_title }}</strong><span class="b-sub">#{{ payment.voucher_id|default:'-' }}</span></td>
+                        <td>{{ payment.from_account_title }}{% if payment.payment_method == 'bank' %}<span class="b-sub">{{ payment.bank_reference }}</span>{% endif %}</td>
+                        <td class="k-num k-out">{{ payment.amount|money }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" class="k-empty">No expense payments yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-    </div>
-</div>
+        {% include "accounts/_pagination.html" with page_obj=recent_expense_payments anchor="expense-payments" %}
+    </section>
 
-<div class="row g-4">
-    <div class="col-xl-4">
-        <div class="page-card p-4 history-card">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-danger"><i class="bi bi-cash-stack"></i></span>
-                    <div>
-                        <h2 class="section-title">Recent Expense Payments</h2>
-                        <p class="section-copy">Shows which bill was paid and the account money left from.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr><th>Bill</th><th>From</th><th class="text-end">Amount</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for payment in recent_expense_payments %}
-                        <tr>
-                            <td>
-                                <div class="fw-semibold">{{ payment.expense.display_title }}</div>
-                                <div class="small text-muted">#{{ payment.voucher_id|default:'-' }}</div>
-                            </td>
-                            <td>{{ payment.from_account_title }}{% if payment.payment_method == 'bank' %}<div class="small text-muted">{{ payment.bank_reference }}</div>{% endif %}</td>
-                            <td class="text-end">{{ payment.amount|money }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="3" class="text-center text-muted py-4">No expense payments yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+    <section class="k-section" aria-labelledby="recent-funding-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="recent-funding-title">Recent funding <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Recent funding" aria-describedby="tipRecentFund" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipRecentFund" role="tooltip" hidden>Shows where money came from and which account it entered into.</span></span></h2>
         </div>
-    </div>
-    <div class="col-xl-4">
-        <div class="page-card p-4 history-card">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-success"><i class="bi bi-box-arrow-in-down"></i></span>
-                    <div>
-                        <h2 class="section-title">Recent Funding</h2>
-                        <p class="section-copy">Shows where money came from and which account it entered into.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr><th>Source</th><th>Into</th><th class="text-end">Amount</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for entry in recent_capital_entries %}
-                        <tr>
-                            <td>
-                                <div class="fw-semibold">{{ entry.source_name }}</div>
-                                <div class="small text-muted">#{{ entry.voucher_id|default:'-' }}</div>
-                            </td>
-                            <td>{{ entry.to_account_title }}{% if entry.deposit_to == 'bank' %}<div class="small text-muted">{{ entry.bank_reference }}</div>{% endif %}</td>
-                            <td class="text-end">{{ entry.amount|money }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="3" class="text-center text-muted py-4">No funds introduced yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+        <span id="capital-entries"></span>
+        <div class="table-responsive">
+            <table class="k-table k-table--dense">
+                <thead>
+                    <tr><th scope="col">Source</th><th scope="col">Into</th><th scope="col" class="k-num">Amount</th></tr>
+                </thead>
+                <tbody>
+                    {% for entry in recent_capital_entries %}
+                    <tr>
+                        <td><strong>{{ entry.source_name }}</strong><span class="b-sub">#{{ entry.voucher_id|default:'-' }}</span></td>
+                        <td>{{ entry.to_account_title }}{% if entry.deposit_to == 'bank' %}<span class="b-sub">{{ entry.bank_reference }}</span>{% endif %}</td>
+                        <td class="k-num k-in">{{ entry.amount|money }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" class="k-empty">No funds introduced yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
         </div>
-    </div>
-    <div class="col-xl-4">
-        <div class="page-card p-4 history-card">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-warning"><i class="bi bi-arrow-left-right"></i></span>
-                    <div>
-                        <h2 class="section-title">Recent Transfers</h2>
-                        <p class="section-copy">Shows which account transferred out and which account transferred in.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr><th>Out</th><th>In</th><th class="text-end">Amount</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for transfer in recent_transfers %}
-                        <tr>
-                            <td>{{ transfer.from_account_title }}{% if transfer.from_account == 'bank' %}<div class="small text-muted">{{ transfer.from_bank_reference }}</div>{% endif %}</td>
-                            <td>{{ transfer.to_account_title }}{% if transfer.to_account == 'bank' %}<div class="small text-muted">{{ transfer.to_bank_reference }}</div>{% endif %}</td>
-                            <td class="text-end">
-                                <div class="fw-semibold">{{ transfer.amount|money }}</div>
-                                <div class="small text-muted">#{{ transfer.voucher_id|default:'-' }}</div>
-                            </td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="3" class="text-center text-muted py-4">No transfers posted yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+        {% include "accounts/_pagination.html" with page_obj=recent_capital_entries anchor="capital-entries" %}
+    </section>
+
+    <section class="k-section" aria-labelledby="recent-transfers-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="recent-transfers-title">Recent transfers <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Recent transfers" aria-describedby="tipRecentTrans" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipRecentTrans" role="tooltip" hidden>Shows which account transferred out and which account transferred in.</span></span></h2>
         </div>
-    </div>
+        <span id="transfers"></span>
+        <div class="table-responsive">
+            <table class="k-table k-table--dense">
+                <thead>
+                    <tr><th scope="col">Out</th><th scope="col">In</th><th scope="col" class="k-num">Amount</th></tr>
+                </thead>
+                <tbody>
+                    {% for transfer in recent_transfers %}
+                    <tr>
+                        <td>{{ transfer.from_account_title }}{% if transfer.from_account == 'bank' %}<span class="b-sub">{{ transfer.from_bank_reference }}</span>{% endif %}</td>
+                        <td>{{ transfer.to_account_title }}{% if transfer.to_account == 'bank' %}<span class="b-sub">{{ transfer.to_bank_reference }}</span>{% endif %}</td>
+                        <td class="k-num"><strong>{{ transfer.amount|money }}</strong><span class="b-sub">#{{ transfer.voucher_id|default:'-' }}</span></td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="3" class="k-empty">No transfers posted yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% include "accounts/_pagination.html" with page_obj=recent_transfers anchor="transfers" %}
+    </section>
 </div>
 {% endblock %}
-
-
-

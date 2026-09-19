@@ -1,0 +1,165 @@
+/* Return flow: the add-in-place side panel, the "restore what you were typing" bar,
+   and the brief highlight on the row the user just came back to. Tokens only. */
+
+/* ---------- add in place ---------- */
+
+.rf-panel {
+    position: fixed;
+    top: var(--k-head-h);
+    right: 0;
+    bottom: 0;
+    z-index: var(--k-z-drawer);
+    display: flex;
+    flex-direction: column;
+    gap: var(--k-4);
+    width: min(360px, 100vw);
+    padding: var(--k-5);
+    overflow-y: auto;
+    overscroll-behavior: contain;
+    background: var(--k-panel);
+    border-left: var(--k-hair) solid var(--k-border);
+    box-shadow: var(--k-shadow-pop);
+}
+
+.rf-panel[hidden],
+.rf-panel-form[hidden],
+.rf-feedback[hidden],
+.rf-draft[hidden] {
+    display: none;
+}
+
+.rf-panel-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--k-3);
+}
+
+.rf-panel-title {
+    margin: 0;
+    color: var(--k-ink-title);
+    font-size: var(--k-text-lg);
+    font-weight: 600;
+}
+
+.rf-panel-form {
+    display: flex;
+    flex-direction: column;
+    gap: var(--k-4);
+}
+
+.rf-panel-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--k-2);
+    padding-top: var(--k-2);
+}
+
+.rf-feedback {
+    padding: var(--k-2) var(--k-3);
+    border-radius: var(--k-radius);
+    background: var(--k-out-wash);
+    color: var(--k-out-ink);
+    font-size: var(--k-text-sm);
+}
+
+.rf-feedback ul {
+    margin: 0;
+    padding-left: var(--k-4);
+}
+
+/* The "Add brand" style links beside a field: quiet text buttons in the accent. */
+.rf-add {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-1);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--k-accent);
+    font: inherit;
+    font-size: var(--k-text-sm);
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.rf-add:hover {
+    color: var(--k-accent-hover);
+    text-decoration: underline;
+}
+
+.rf-add:focus-visible {
+    outline: var(--k-focus-ring);
+    outline-offset: var(--k-focus-offset);
+    border-radius: var(--k-radius-sm);
+}
+
+.rf-add-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--k-2) var(--k-4);
+    margin-bottom: var(--k-3);
+}
+
+/* Wide screens: the page makes room so the form stays in view beside the panel. */
+@media (min-width: 1200px) {
+    body.rf-panel-open .k-body {
+        padding-right: 360px;
+    }
+}
+
+/* Phones: the panel rises from the bottom as a sheet. */
+@media (max-width: 767.98px) {
+    .rf-panel {
+        top: auto;
+        left: 0;
+        width: 100%;
+        max-height: 85vh;
+        padding: var(--k-4);
+        border-left: 0;
+        border-top: var(--k-hair) solid var(--k-border);
+        border-radius: var(--k-radius-lg) var(--k-radius-lg) 0 0;
+    }
+}
+
+/* ---------- unsaved typing ---------- */
+
+.rf-draft {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-2) var(--k-3);
+    margin-bottom: var(--k-4);
+    padding: var(--k-3) var(--k-4);
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius);
+    background: var(--k-accent-tint);
+    color: var(--k-ink);
+}
+
+.rf-draft-text {
+    flex: 1 1 16rem;
+    margin: 0;
+}
+
+/* ---------- the row you came back to ---------- */
+
+.rf-touched,
+tr.rf-touched > td {
+    background-color: var(--k-selected);
+    transition: background-color var(--k-dur) var(--k-ease-out);
+}
+
+.rf-touched.rf-touched-out,
+tr.rf-touched.rf-touched-out > td {
+    background-color: transparent;
+}
+
+.rf-live {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+    white-space: nowrap;
+}

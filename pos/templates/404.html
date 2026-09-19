@@ -1,0 +1,26 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Page not found | {{ brand_name|default:"ZehnMS" }}</title>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/tokens.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/components.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/auth.css' %}" rel="stylesheet">
+</head>
+<body>
+<main class="k-lone">
+    <div class="k-lone-sheet">
+        <p class="k-lone-code"><span class="k-badge k-badge--lg">404 &middot; Not found</span></p>
+        <h1>There is no page at this address</h1>
+        <p>The record may have been deleted, or the link was typed wrong. Nothing in your books has changed.</p>
+        <div class="k-actions">
+            <a class="btn btn-primary" href="/"><i class="bi bi-house" aria-hidden="true"></i>Go to the start page</a>
+        </div>
+    </div>
+</main>
+</body>
+</html>

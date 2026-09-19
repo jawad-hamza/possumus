@@ -1,0 +1,26 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Something went wrong | {{ brand_name|default:"ZehnMS" }}</title>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/tokens.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/components.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/auth.css' %}" rel="stylesheet">
+</head>
+<body>
+<main class="k-lone">
+    <div class="k-lone-sheet">
+        <p class="k-lone-code"><span class="k-badge k-badge--red k-badge--lg">500 &middot; Error</span></p>
+        <h1>The page could not be opened</h1>
+        <p>The fault is on our side and nothing was saved twice. Go back and try once more. If it keeps happening, take a backup from Settings and contact support.</p>
+        <div class="k-actions">
+            <a class="btn btn-primary" href="/"><i class="bi bi-house" aria-hidden="true"></i>Go to the start page</a>
+        </div>
+    </div>
+</main>
+</body>
+</html>

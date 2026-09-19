@@ -1,6 +1,7 @@
 ﻿from django import forms
 from django.contrib.auth import get_user_model
 from django.db.models import F
+from django.utils import timezone
 
 from accounts.models import (
     BankAccount,
@@ -10,11 +11,16 @@ from accounts.models import (
     ExpensePayment,
     MoneyTransfer,
 )
+from accounts.services.books_lock import assert_books_open
 from accounts.services.cash_bank import bank_account_queryset
+from accounts.services.party_opening import DIRECTION_CHOICES, THEY_OWE_US, WE_OWE_THEM
 
 
 class StyledModelForm(forms.ModelForm):
     def _apply_bootstrap(self):
+        from pos.forms import plain_empty_choices
+
+        plain_empty_choices(self.fields)
         for field in self.fields.values():
             widget = field.widget
             if isinstance(widget, forms.CheckboxInput):
@@ -28,6 +34,19 @@ class StyledModelForm(forms.ModelForm):
             else:
                 css = widget.attrs.get("class", "")
                 widget.attrs["class"] = (css + " form-control").strip()
+
+
+class BooksLockDateMixin:
+    """Says on the date field, in plain words, that the chosen day falls in a closed period."""
+
+    def clean_date(self):
+        value = self.cleaned_data.get("date")
+        if value:
+            try:
+                assert_books_open(value, action="record this")
+            except ValueError as exc:
+                raise forms.ValidationError(str(exc)) from exc
+        return value
 
 
 class BankAccountForm(StyledModelForm):
@@ -100,7 +119,7 @@ class ExpenseCategoryForm(StyledModelForm):
         return cleaned_data
 
 
-class ExpenseForm(StyledModelForm):
+class ExpenseForm(BooksLockDateMixin, StyledModelForm):
     class Meta:
         model = Expense
         fields = [
@@ -170,7 +189,7 @@ class ExpenseForm(StyledModelForm):
         return cleaned_data
 
 
-class ExpensePaymentForm(StyledModelForm):
+class ExpensePaymentForm(BooksLockDateMixin, StyledModelForm):
     class Meta:
         model = ExpensePayment
         fields = [
@@ -221,7 +240,7 @@ class ExpensePaymentForm(StyledModelForm):
         return cleaned_data
 
 
-class CapitalEntryForm(StyledModelForm):
+class CapitalEntryForm(BooksLockDateMixin, StyledModelForm):
     class Meta:
         model = CapitalEntry
         fields = [
@@ -270,7 +289,7 @@ class CapitalEntryForm(StyledModelForm):
         return cleaned_data
 
 
-class MoneyTransferForm(StyledModelForm):
+class MoneyTransferForm(BooksLockDateMixin, StyledModelForm):
     class Meta:
         model = MoneyTransfer
         fields = [
@@ -338,5 +357,54 @@ class MoneyTransferForm(StyledModelForm):
         return cleaned_data
 
 
+class BooksLockForm(forms.Form):
+    books_locked_until = forms.DateField(
+        required=False,
+        label="Lock the books up to",
+        widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date", "class": "form-control"}),
+        help_text="Nothing dated on or before this day can be posted, edited or returned. Leave empty to reopen.",
+    )
+
+    def clean_books_locked_until(self):
+        value = self.cleaned_data.get("books_locked_until")
+        if value and value > timezone.localdate():
+            raise forms.ValidationError("The lock date cannot be in the future.")
+        return value
 
 
+class PartyOpeningBalanceForm(forms.Form):
+    amount = forms.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        min_value=0,
+        label="Opening balance",
+        widget=forms.NumberInput(attrs={"class": "form-control", "step": "0.01", "min": "0", "inputmode": "decimal"}),
+        help_text="Enter 0 to remove a previously recorded opening balance.",
+    )
+    direction = forms.ChoiceField(
+        choices=DIRECTION_CHOICES,
+        label="Who owes whom",
+        widget=forms.Select(attrs={"class": "form-select"}),
+    )
+    date = forms.DateField(
+        label="As of",
+        widget=forms.DateInput(format="%Y-%m-%d", attrs={"type": "date", "class": "form-control"}),
+    )
+
+    def __init__(self, *args, party_kind="customer", **kwargs):
+        super().__init__(*args, **kwargs)
+        if not self.is_bound:
+            self.fields["direction"].initial = self.initial.get("direction") or (
+                THEY_OWE_US if party_kind == "customer" else WE_OWE_THEM
+            )
+            self.fields["date"].initial = self.initial.get("date") or timezone.localdate()
+
+    def clean_date(self):
+        value = self.cleaned_data.get("date")
+        if value and value > timezone.localdate():
+            raise forms.ValidationError("An opening balance cannot be dated in the future.")
+        try:
+            assert_books_open(value, action="record an opening balance")
+        except ValueError as exc:
+            raise forms.ValidationError(str(exc)) from exc
+        return value

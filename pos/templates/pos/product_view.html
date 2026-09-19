@@ -1,151 +1,136 @@
-﻿{% extends "pos/base.html" %}
+{% extends "pos/base.html" %}
+{% load static %}
+{% load currency_tags %}
 {% load barcode_tags %}
 
-{% block title %}{{ product.name }}{% endblock %}
+{% block title %}{{ product.display_name }}{% endblock %}
+{% block page_title %}{{ product.display_name }}{% endblock %}
+{% block page_help %}Stock, prices and recent movement for this product. Press F2 to edit it.{% endblock %}
+
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet">{% endblock %}
+
+{% block page_actions %}<a href="{% url 'product_edit' product.id %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary" data-k-key="F2" data-k-key-label="Edit this product"><i class="bi bi-pencil" aria-hidden="true"></i> Edit</a>{% if product.track_stock %}{% if feature_modules.stock_control %}<a href="{% url 'stock_adjustments' %}?product={{ product.id }}&amp;next={{ request.get_full_path|urlencode }}" class="btn btn-outline-secondary"><i class="bi bi-boxes" aria-hidden="true"></i> Adjust stock</a>{% endif %}{% if nav_access.reports %}<a href="{% url 'report_stock_card' %}?product={{ product.id }}" class="btn btn-outline-secondary"><i class="bi bi-card-list" aria-hidden="true"></i> Stock card</a>{% endif %}{% endif %}{% if feature_modules.variants %}<a href="{% url 'product_add' %}?copy={{ product.id }}&amp;next={{ request.get_full_path|urlencode }}" class="btn btn-outline-secondary" data-tip="Same item in another size or pack, with its own price and stock"><i class="bi bi-copy" aria-hidden="true"></i> Add another size</a>{% endif %}<a href="{% url 'product_delete' product.id %}{% if next_url %}?next={{ next_url|urlencode }}{% endif %}" class="btn btn-outline-danger"><i class="bi bi-trash" aria-hidden="true"></i> Delete</a><a href="{{ back_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Products</a>{% endblock %}
 
 {% block content %}
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-    <div>
-        <h2 class="mb-1">{{ product.name }}</h2>
-        <p class="text-muted mb-0">SKU {{ product.sku }}{% if product.barcode %} | Barcode {{ product.barcode }}{% endif %}</p>
+<section class="k-section" aria-label="Summary">
+    <div class="k-section-head">
+        <h2 class="k-section-title">SKU {{ product.sku }}{% if product.barcode %} <span class="k-section-note">&middot; Barcode {{ product.barcode }}</span>{% endif %}</h2>
+        {% if not product.is_active %}<span class="k-badge">Inactive</span>{% endif %}
     </div>
-    <div class="d-flex gap-2">
-        <a href="{% url 'stock_adjustments' %}?product={{ product.id }}&next={% url 'product_view' product.id %}" class="btn btn-outline-warning"><i class="bi bi-boxes"></i> Adjust Stock</a>
-        <a href="{% url 'product_edit' product.id %}" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i> Edit</a>
-        <a href="{% url 'product_delete' product.id %}" class="btn btn-outline-danger"><i class="bi bi-trash"></i> Delete</a>
-    </div>
-</div>
-
-<div class="row g-4 mb-4">
-    <div class="col-lg-4">
-        <div class="page-card p-4 h-100">
-            <div class="mb-3 text-center">{% barcode_image product.barcode|default:product.sku 220 %}</div>
-            <dl class="row mb-0">
-                <dt class="col-5 text-muted">Brand</dt><dd class="col-7">{{ product.brand|default:"-" }}</dd>
-                <dt class="col-5 text-muted">Category</dt><dd class="col-7">{{ product.category|default:"-" }}</dd>
-                <dt class="col-5 text-muted">Supplier</dt><dd class="col-7">{{ product.supplier|default:"-" }}</dd>
-                <dt class="col-5 text-muted">Location</dt><dd class="col-7">{{ product.location|default:"-" }}</dd>
-                <dt class="col-5 text-muted">Expiry</dt><dd class="col-7">{{ product.expiry_date|date:"d M Y"|default:"-" }}</dd>
-                <dt class="col-5 text-muted">Status</dt>
-                <dd class="col-7">
-                    {% if product.is_active %}
-                    <span class="status-chip healthy">Active</span>
-                    {% else %}
-                    <span class="status-chip clear">Inactive</span>
-                    {% endif %}
-                </dd>
-            </dl>
+    <div class="st-stats">
+        <div class="k-balance{% if product.track_stock and product.stock <= product.low_stock_threshold %} k-balance--due{% endif %}">
+            <div class="k-balance-label">Current stock</div>
+            <div class="k-balance-figure">{% if not product.track_stock %}<span class="st-dim">{{ product.stock_display }}</span>{% else %}{{ product.stock_display }}{% endif %}</div>
+            <div class="k-balance-note">{% if product.track_stock %}{% if product.stock <= 0 %}<span class="k-badge k-badge--red">Out</span> {% elif product.stock <= product.low_stock_threshold %}<span class="k-badge k-badge--amber">Low</span> {% endif %}{% endif %}<span data-tip="Low stock threshold">Low at {{ product.low_stock_threshold|qty }} {{ product.unit }}</span></div>
+        </div>
+        <div class="k-balance">
+            <div class="k-balance-label">Sale price</div>
+            <div class="k-balance-figure">{{ product.price|money }}</div>
+            <div class="k-balance-note">{% if product|per_unit %}per {{ product.unit }}{% endif %}{% if product.has_markup %}{% if product|per_unit %} &middot; {% endif %}{{ product.markup_display }}{% endif %}</div>
+        </div>
+        <div class="k-balance">
+            <div class="k-balance-label">Cost price</div>
+            <div class="k-balance-figure">{{ product.cost_price|money }}</div>
+            <div class="k-balance-note">{% if product|per_unit %}per {{ product.unit }}{% endif %}</div>
+        </div>
+        <div class="k-balance{% if product.margin_status == 'below' %} k-balance--due{% endif %}">
+            <div class="k-balance-label">Current margin</div>
+            <div class="k-balance-figure">{% if product.current_margin_percent is not None %}{{ product.current_margin_percent|floatformat:2 }}%{% else %}<span class="st-dim">&ndash;</span>{% endif %}</div>
+            <div class="k-balance-note">{% if product.margin_status == 'below' %}Below the minimum. {% endif %}Minimum sale {{ product.minimum_sale_price|money }}</div>
+        </div>
+        <div class="k-balance">
+            <div class="k-balance-label">Total purchased</div>
+            <div class="k-balance-figure">{{ total_purchased|qty_unit:product.unit }}</div>
+        </div>
+        <div class="k-balance">
+            <div class="k-balance-label">Total sold</div>
+            <div class="k-balance-figure">{{ total_sold|qty_unit:product.unit }}</div>
         </div>
     </div>
-
-    <div class="col-lg-8">
-        <div class="row g-3">
-            <div class="col-md-3">
-                <div class="page-card p-3 h-100">
-                    <div class="text-muted small">Cost Price</div>
-                    <div class="fs-4 fw-semibold">Rs {{ product.cost_price|floatformat:2 }}</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="page-card p-3 h-100">
-                    <div class="text-muted small">Sale Price</div>
-                    <div class="fs-4 fw-semibold">Rs {{ product.price|floatformat:2 }}</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="page-card p-3 h-100">
-                    <div class="text-muted small">Minimum Sale</div>
-                    <div class="fs-4 fw-semibold">Rs {{ product.minimum_sale_price|floatformat:2 }}</div>
-                </div>
-            </div>
-            <div class="col-md-3">
-                <div class="page-card p-3 h-100">
-                    <div class="text-muted small">Current Margin</div>
-                    <div class="fs-4 fw-semibold">
-                        {% if product.current_margin_percent is not None %}
-                        {{ product.current_margin_percent|floatformat:2 }}%
-                        {% else %}
-                        -
-                        {% endif %}
-                    </div>
-                    <div class="mt-2"><span class="status-chip {{ product.margin_status }}">{{ product.margin_status|title }}</span></div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="page-card p-3 h-100">
-                    <div class="text-muted small">Current Stock</div>
-                    <div class="fs-4 fw-semibold">{{ product.stock }}</div>
-                    <div class="small text-muted">Low stock threshold {{ product.low_stock_threshold }}</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="page-card p-3 h-100">
-                    <div class="text-muted small">Total Purchased</div>
-                    <div class="fs-4 fw-semibold">{{ total_purchased }}</div>
-                </div>
-            </div>
-            <div class="col-md-4">
-                <div class="page-card p-3 h-100">
-                    <div class="text-muted small">Total Sold</div>
-                    <div class="fs-4 fw-semibold">{{ total_sold }}</div>
-                </div>
-            </div>
-        </div>
-    </div>
-</div>
+</section>
 
 <div class="row g-4">
-    <div class="col-lg-6">
-        <div class="page-card p-4 h-100">
-            <h5 class="mb-3">Recent Sales</h5>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr><th>Invoice</th><th>Date</th><th class="text-end">Qty</th><th class="text-end">Rate</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for sale_item in recent_sales %}
-                        <tr>
-                            <td><a href="{% url 'invoice' sale_item.sale.id %}">#{{ sale_item.sale.id }}</a></td>
-                            <td>{{ sale_item.sale.created_at|date:"d M Y" }}</td>
-                            <td class="text-end">{{ sale_item.quantity }}</td>
-                            <td class="text-end">Rs {{ sale_item.price|floatformat:2 }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="4" class="text-center text-muted py-3">No sales yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+    <div class="col-lg-4">
+        <section class="k-section" aria-labelledby="details-title">
+            <div class="k-section-head"><h2 class="k-section-title" id="details-title">Details</h2></div>
+            <div class="st-barcode">{% barcode_image product.barcode|default:product.sku 220 %}</div>
+            <dl class="st-dl">
+                <div><dt>Brand</dt><dd>{{ product.brand|default:"–" }}</dd></div>
+                <div><dt>Category</dt><dd>{{ product.category|default:"–" }}</dd></div>
+                <div><dt>Supplier</dt><dd>{{ product.supplier|default:"–" }}</dd></div>
+                <div><dt>Location</dt><dd>{{ product.location|default:"–" }}</dd></div>
+                <div><dt>Expiry</dt><dd>{{ product.expiry_date|date:"d M Y"|default:"–" }}</dd></div>
+                <div><dt>Status</dt><dd>{% if product.is_active %}<span class="k-badge k-badge--green">Active</span>{% else %}<span class="k-badge">Inactive</span>{% endif %}</dd></div>
+            </dl>
+        </section>
     </div>
-    <div class="col-lg-6">
-        <div class="page-card p-4 h-100">
-            <h5 class="mb-3">Recent Purchases</h5>
+    <div class="col-lg-8">
+        {% if variant_siblings %}
+        <section class="k-section" aria-labelledby="sizes-title">
+            <div class="k-section-head"><h2 class="k-section-title" id="sizes-title">Sizes and variants</h2></div>
             <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr><th>Purchase</th><th>Date</th><th class="text-end">Qty</th><th class="text-end">Cost</th><th class="text-end">Sale</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for purchase_item in recent_purchases %}
-                        <tr>
-                            <td><a href="{% url 'purchase_detail' purchase_item.purchase.id %}">#{{ purchase_item.purchase.id }}</a></td>
-                            <td>{{ purchase_item.purchase.created_at|date:"d M Y" }}</td>
-                            <td class="text-end">{{ purchase_item.quantity }}</td>
-                            <td class="text-end">Rs {{ purchase_item.cost_price|floatformat:2 }}</td>
-                            <td class="text-end">Rs {{ purchase_item.sale_price|floatformat:2 }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="5" class="text-center text-muted py-3">No purchases yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+            <table class="k-ledger">
+                <thead>
+                    <tr><th scope="col">Size</th><th scope="col">SKU</th><th scope="col" class="text-end">Cost</th><th scope="col" class="text-end">Price</th><th scope="col" class="text-end">Stock</th></tr>
+                </thead>
+                <tbody>
+                    {% for sibling in variant_siblings %}
+                    <tr{% if sibling.pk == product.pk %} aria-current="true" class="is-selected"{% endif %}>
+                        <td>{% if sibling.pk == product.pk %}<strong>{{ sibling.variant_label }}</strong> <span class="k-badge k-badge--blue">this one</span>{% else %}<a href="{% url 'product_view' sibling.pk %}">{{ sibling.variant_label }}</a>{% endif %}</td>
+                        <td>{{ sibling.sku }}</td>
+                        <td class="k-num text-end">{{ sibling.cost_price|money }}</td>
+                        <td class="k-num text-end">{{ sibling.price|money }}</td>
+                        <td class="k-num text-end">{{ sibling.stock_display }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
             </div>
-        </div>
+        </section>
+        {% endif %}
+
+        <section class="k-section" aria-labelledby="sales-title">
+            <div class="k-section-head"><h2 class="k-section-title" id="sales-title">Recent sales</h2></div>
+            <table class="k-ledger k-ledger--stack">
+                <thead>
+                    <tr><th scope="col" data-k="what">Invoice</th><th scope="col" data-k="meta">Date</th><th scope="col" class="text-end" data-k="balance">Qty</th><th scope="col" class="text-end" data-k="amount">Rate</th></tr>
+                </thead>
+                <tbody>
+                    {% for sale_item in recent_sales %}
+                    <tr>
+                        <td data-k="what"><a href="{% url 'invoice' sale_item.sale.id %}">{{ sale_item.sale.display_number }}</a></td>
+                        <td data-k="meta">{{ sale_item.sale.created_at|date:"d M Y" }}</td>
+                        <td class="k-num text-end" data-k="balance">{{ sale_item.quantity|qty_short:product.unit }}</td>
+                        <td class="k-num text-end" data-k="amount">{{ sale_item.price|money }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="k-empty" data-k="note">No sales yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <section class="k-section" aria-labelledby="purchases-title">
+            <div class="k-section-head"><h2 class="k-section-title" id="purchases-title">Recent purchases</h2></div>
+            <table class="k-ledger k-ledger--stack">
+                <thead>
+                    <tr><th scope="col" data-k="what">Purchase</th><th scope="col" data-k="meta">Date</th><th scope="col" class="text-end" data-k="balance">Qty</th><th scope="col" class="text-end" data-k="amount">Cost</th><th scope="col" class="text-end" data-k="more">Sale</th></tr>
+                </thead>
+                <tbody>
+                    {% for purchase_item in recent_purchases %}
+                    <tr>
+                        <td data-k="what"><a href="{% url 'purchase_detail' purchase_item.purchase.id %}">#{{ purchase_item.purchase.id }}</a></td>
+                        <td data-k="meta">{{ purchase_item.purchase.created_at|date:"d M Y" }}</td>
+                        <td class="k-num text-end" data-k="balance">{{ purchase_item.quantity|qty_short:product.unit }}</td>
+                        <td class="k-num text-end" data-k="amount">{{ purchase_item.cost_price|money }}</td>
+                        <td class="k-num text-end" data-k="more" data-label="Sale">{{ purchase_item.sale_price|money }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="5" class="k-empty" data-k="note">No purchases yet.</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
     </div>
 </div>
 {% endblock %}
-
-
-

@@ -1,0 +1,47 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#f3f4f6">
+    <title>{% block title %}Account{% endblock %} | {{ brand_name|default:"ZehnMS" }}</title>
+    <link rel="preload" href="{% static 'zehnms/fonts/public-sans-latin-var.woff2' %}" as="font" type="font/woff2" crossorigin>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/tokens.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/components.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/auth.css' %}" rel="stylesheet">
+    {% block extra_css %}{% endblock %}
+</head>
+<body class="k-auth">
+<main class="k-auth-page">
+    <div class="k-auth-brand">
+        <span class="k-auth-mark" aria-hidden="true">{{ brand_name|default:"ZehnMS"|slice:":1"|upper }}</span>
+        <span class="k-auth-brand-text">
+            <span class="k-auth-brand-name">{{ brand_name|default:"ZehnMS" }}</span>
+        </span>
+    </div>
+    <div class="k-auth-sheet {% block sheet_class %}{% endblock %}">
+        <h1 class="k-auth-title">{% block heading %}{% endblock %}</h1>
+        <p class="k-auth-intro">{% block intro %}{% endblock %}</p>
+
+        {% if messages %}
+        {% for message in messages %}
+        <div class="alert alert-{% if message.tags == 'error' %}danger{% else %}{{ message.tags|default:'info' }}{% endif %}">{{ message }}</div>
+        {% endfor %}
+        {% endif %}
+
+        {% block body %}{% endblock %}
+
+        {% block foot %}
+        <div class="k-auth-foot">
+            <a href="{% url 'login' %}"><i class="bi bi-arrow-left" aria-hidden="true"></i>Back to sign in</a>
+        </div>
+        {% endblock %}
+    </div>
+    <div class="k-auth-aside">{% block cover %}{% endblock %}</div>
+</main>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

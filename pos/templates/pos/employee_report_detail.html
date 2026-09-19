@@ -1,116 +1,112 @@
-﻿{% extends "pos/base.html" %}
-{% block title %}Employee Detail{% endblock %}
+{% extends "pos/reports/_shell.html" %}
+{% load currency_tags %}
+{% block title %}Employee detail{% endblock %}
 
-{% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon success"><i class="bi bi-person-workspace"></i></span>
-        <div>
-            <h1 class="page-title">{{ employee.get_full_name|default:employee.username }}</h1>
-            <p class="page-subtitle">Role {{ metrics.role_label }} | {{ metrics.sales_count }} sales | {{ metrics.total_time_display }} total logged time.</p>
-        </div>
-    </div>
-    <div class="page-actions">
-        <a href="{% url 'employee_report_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> All Employees</a>
-    </div>
-</div>
+{% block report_header_actions %}<a href="{% url 'employee_report_list' %}{% if page_querystring %}?{{ page_querystring }}{% endif %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> All employees</a>{% endblock %}
 
-<div class="row g-3 mb-4">
-    <div class="col-md-3"><div class="metric-card primary"><div class="metric-label">Net Sales</div><div class="metric-value">Rs {{ metrics.sales_totals.net_sales|floatformat:2 }}</div></div></div>
-    <div class="col-md-3"><div class="metric-card success"><div class="metric-label">Gross Profit</div><div class="metric-value">Rs {{ metrics.sales_totals.gross_profit|floatformat:2 }}</div></div></div>
-    <div class="col-md-3"><div class="metric-card warning"><div class="metric-label">Wages Paid</div><div class="metric-value">Rs {{ metrics.wages_paid|floatformat:2 }}</div></div></div>
-    <div class="col-md-3"><div class="metric-card slate"><div class="metric-label">Open Sessions</div><div class="metric-value">{{ metrics.active_sessions }}</div><div class="metric-meta">Total time {{ metrics.total_time_display }}</div></div></div>
-</div>
+{% block report_body %}
+<section class="k-section rp-sums" aria-label="Summary">
+    <div class="k-balance rp-sum">
+        <div class="k-balance-label">Net sales</div>
+        <div class="k-balance-figure">{{ metrics.sales_totals.net_sales|money }}</div>
+        <div class="k-balance-note">{{ metrics.sales_count }} invoices, returns {{ metrics.sales_totals.returns_net|money }}</div>
+    </div>
+    <div class="k-balance rp-sum{% if metrics.sales_totals.gross_profit < 0 %} k-balance--out{% elif metrics.sales_totals.gross_profit > 0 %} k-balance--in{% endif %}">
+        <div class="k-balance-label">Gross profit {% include "pos/partials/_help_tip.html" with tip_id="tipRpEmpProfit" tip_name="Gross profit" tip_text="After returns of this user's invoices." %}</div>
+        <div class="k-balance-figure">{{ metrics.sales_totals.gross_profit|money }}</div>
+    </div>
+    <div class="k-balance rp-sum{% if metrics.wages_paid > 0 %} k-balance--out{% endif %}">
+        <div class="k-balance-label">Wages paid</div>
+        <div class="k-balance-figure">{{ metrics.wages_paid|money }}</div>
+        <div class="k-balance-note">Booked {{ metrics.wages_booked|money }}, still due {{ metrics.wages_due|money }}</div>
+    </div>
+    <div class="k-balance rp-sum">
+        <div class="k-balance-label">Open sessions</div>
+        <div class="k-balance-figure">{{ metrics.active_sessions }}</div>
+        <div class="k-balance-note">Total time {{ metrics.total_time_display }}</div>
+    </div>
+</section>
 
-<div class="row g-4">
-    <div class="col-xl-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon"><i class="bi bi-clock-history"></i></span>
-                    <div>
-                        <h2 class="section-title">Session Logs</h2>
-                        <p class="section-copy">Login and logout history for this user.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead><tr><th>Login</th><th>Logout</th><th class="text-end">Duration</th></tr></thead>
-                    <tbody>
-                        {% for log in session_logs %}
-                        <tr>
-                            <td>{{ log.login_at|date:"d M Y H:i" }}</td>
-                            <td>{% if log.logout_at %}{{ log.logout_at|date:"d M Y H:i" }}{% else %}<span class="text-success fw-semibold">Active</span>{% endif %}</td>
-                            <td class="text-end">{{ log.duration_display }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="3" class="text-center text-muted py-4">No session logs yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+<section class="k-section" aria-labelledby="rp-emp-sales-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="rp-emp-sales-title">Recent sales {% include "pos/partials/_help_tip.html" with tip_id="tipRpEmpSales" tip_name="Recent sales" tip_text="Latest invoices handled by this user." %}</h2>
     </div>
-    <div class="col-xl-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-warning"><i class="bi bi-wallet2"></i></span>
-                    <div>
-                        <h2 class="section-title">Wage / Staff Payments</h2>
-                        <p class="section-copy">Expense documents linked to this user.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead><tr><th>Expense</th><th>Date</th><th class="text-end">Booked</th><th class="text-end">Paid</th></tr></thead>
-                    <tbody>
-                        {% for expense in wage_expenses %}
-                        <tr>
-                            <td>{{ expense.display_title }}<div class="small text-muted">{{ expense.category.name }}</div></td>
-                            <td>{{ expense.date|date:"d M Y" }}</td>
-                            <td class="text-end">Rs {{ expense.amount|floatformat:2 }}</td>
-                            <td class="text-end">Rs {{ expense.paid_amount|floatformat:2 }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="4" class="text-center text-muted py-4">No staff-linked expenses yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="page-card p-4 mt-4">
-    <div class="section-heading mb-3">
-        <div class="section-heading-copy">
-            <span class="section-title-icon section-icon-success"><i class="bi bi-receipt"></i></span>
-            <div>
-                <h2 class="section-title">Recent Sales</h2>
-                <p class="section-copy">Latest invoices handled by this user.</p>
-            </div>
-        </div>
-    </div>
-    <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
-            <thead><tr><th>Invoice</th><th>Date</th><th>Customer</th><th class="text-end">Total</th><th class="text-end">Profit</th></tr></thead>
+    <div class="k-ledger-scroll rp-table">
+        <table class="k-table k-ledger--stack">
+            <thead><tr><th scope="col" data-k="what">Invoice</th><th scope="col" data-k="meta">Customer</th><th scope="col" class="k-num" data-k="amount">Total</th><th scope="col" class="k-num" data-k="more">Returned</th><th scope="col" class="k-num" data-k="balance">Profit after returns</th></tr></thead>
             <tbody>
                 {% for sale in recent_sales %}
                 <tr>
-                    <td><a href="{% url 'invoice' sale.id %}" class="fw-semibold text-decoration-none">#{{ sale.id }}</a></td>
-                    <td>{{ sale.created_at|date:"d M Y H:i" }}</td>
-                    <td>{{ sale.customer.name|default:"Walk-in" }}</td>
-                    <td class="text-end">Rs {{ sale.total_amount|floatformat:2 }}</td>
-                    <td class="text-end">Rs {{ sale.report_gross_profit|default:0|floatformat:2 }}</td>
+                    <td class="rp-lead text-nowrap"><a href="{% url 'invoice' sale.id %}">{{ sale.report_number }}</a><div class="rp-cell-note">{{ sale.created_at|date:"d M Y H:i" }}</div></td>
+                    <td data-label="Customer">{{ sale.customer.name|default:"Walk-in" }}</td>
+                    <td class="k-num" data-label="Total">{{ sale.total_amount|money }}</td>
+                    <td class="k-num{% if sale.report_returned_total %} k-out{% else %} rp-none{% endif %}" data-label="Returned">{{ sale.report_returned_total|money }}</td>
+                    <td class="k-num" data-label="Profit after returns">{{ sale.report_net_gross_profit|default:0|money }}</td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="5" class="text-center text-muted py-4">No sales recorded by this user yet.</td></tr>
+                <tr>
+                    <td colspan="5" class="k-empty">
+                        <p class="k-empty-title">No sales by this user in this period</p>
+                        <p>Sales saved at the till under this login are listed here. Pick a wider range above to look further back.</p>
+                    </td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+</section>
+
+<div class="rp-pair">
+    <section class="k-section" aria-labelledby="rp-emp-log-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="rp-emp-log-title">Session logs {% include "pos/partials/_help_tip.html" with tip_id="tipRpEmpLog" tip_name="Session logs" tip_text="Login and logout history for this user." %}</h2>
+        </div>
+        <table class="k-table k-ledger--stack">
+            <thead><tr><th scope="col" data-k="what">Login</th><th scope="col" data-k="meta">Logout</th><th scope="col" class="k-num" data-k="amount">Duration</th></tr></thead>
+            <tbody>
+                {% for log in session_logs %}
+                <tr>
+                    <td class="text-nowrap" data-label="Login">{{ log.login_at|date:"d M Y H:i" }}</td>
+                    <td class="text-nowrap" data-label="Logout">{% if log.logout_at %}{{ log.logout_at|date:"d M Y H:i" }}{% else %}<span class="k-badge k-badge--blue">Active</span>{% endif %}</td>
+                    <td class="k-num" data-label="Duration">{{ log.duration_display }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="3" class="k-empty">
+                        <p class="k-empty-title">No session logs yet</p>
+                        <p>A line is written each time this user signs in and out.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% include "pos/reports/_pagination.html" with page_obj=session_logs %}
+    </section>
+    <section class="k-section" aria-labelledby="rp-emp-wage-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="rp-emp-wage-title">Wages and staff payments {% include "pos/partials/_help_tip.html" with tip_id="tipRpEmpWage" tip_name="Wages and staff payments" tip_text="Expense documents linked to this user." %}</h2>
+        </div>
+        <table class="k-table k-ledger--stack">
+            <thead><tr><th scope="col" data-k="what">Expense</th><th scope="col" data-k="meta">Date</th><th scope="col" class="k-num" data-k="more">Booked</th><th scope="col" class="k-num" data-k="amount">Paid</th></tr></thead>
+            <tbody>
+                {% for expense in wage_expenses %}
+                <tr>
+                    <td class="rp-lead">{{ expense.display_title }}<div class="rp-cell-note">{{ expense.category.name }}</div></td>
+                    <td class="text-nowrap" data-label="Date">{{ expense.date|date:"d M Y" }}</td>
+                    <td class="k-num" data-label="Booked">{{ expense.amount|money }}</td>
+                    <td class="k-num" data-label="Paid">{{ expense.paid_amount|money }}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="k-empty">
+                        <p class="k-empty-title">No staff payments yet</p>
+                        <p>Record a wage or advance in Expenses and choose this user as the employee.</p>
+                        {% if nav_access.expenses %}<a href="{% url 'expense_list' %}" class="btn btn-outline-secondary btn-sm">Open expenses</a>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
 </div>
 {% endblock %}

@@ -1,0 +1,835 @@
+/* ---------- public product page (hosted mode only) ---------- */
+
+html {
+    scroll-padding-top: calc(var(--k-head-h) + var(--k-4));
+}
+
+@media (prefers-reduced-motion: no-preference) {
+    html {
+        scroll-behavior: smooth;
+    }
+}
+
+body.l-body {
+    min-height: 100vh;
+    margin: 0;
+    background: var(--k-ground);
+    color: var(--k-ink);
+    font-family: var(--k-font);
+    font-size: var(--k-text-lg);
+    line-height: var(--k-leading);
+}
+
+.l-wrap {
+    width: 100%;
+    max-width: 1180px;
+    margin: 0 auto;
+    padding: 0 var(--k-gutter);
+}
+
+.l-skip {
+    position: absolute;
+    left: var(--k-4);
+    top: var(--k-2);
+    z-index: var(--k-z-flash);
+    padding: var(--k-2) var(--k-3);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-accent);
+    color: var(--k-on-accent);
+    font-weight: 600;
+    transform: translateY(-300%);
+}
+
+.l-skip:focus {
+    transform: none;
+    color: var(--k-on-accent);
+}
+
+.l-body a:focus-visible,
+.l-body summary:focus-visible {
+    outline: var(--k-focus-ring);
+    outline-offset: var(--k-focus-offset);
+    border-radius: var(--k-radius-sm);
+}
+
+/* ---------- top bar ---------- */
+
+.l-top {
+    position: sticky;
+    top: 0;
+    z-index: var(--k-z-head);
+    background: var(--k-panel);
+    border-bottom: var(--k-hair) solid var(--k-border);
+}
+
+.l-top-inner {
+    display: flex;
+    align-items: center;
+    gap: var(--k-6);
+    min-height: var(--k-head-h);
+}
+
+.l-brand {
+    color: var(--k-ink-title);
+    font-size: var(--k-text-xl);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-decoration: none;
+}
+
+.l-brand:hover {
+    color: var(--k-ink-title);
+}
+
+.l-nav {
+    display: flex;
+    gap: var(--k-5);
+}
+
+.l-nav a,
+.l-top-link {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-md);
+    font-weight: 500;
+    text-decoration: none;
+    transition: color var(--k-dur) var(--k-ease-out);
+}
+
+.l-nav a:hover,
+.l-top-link:hover {
+    color: var(--k-ink-title);
+}
+
+.l-top-actions {
+    display: flex;
+    align-items: center;
+    gap: var(--k-4);
+    margin-left: auto;
+}
+
+/* ---------- opening: the offer beside the till ---------- */
+
+.l-hero {
+    padding: var(--k-8) 0 var(--k-7);
+}
+
+.l-hero-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: var(--k-7);
+    align-items: center;
+}
+
+.l-offer h1 {
+    margin: 0 0 var(--k-4);
+    color: var(--k-ink-title);
+    font-size: clamp(var(--k-text-3xl), 1.2rem + 2.4vw, var(--k-text-5xl));
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    line-height: 1.08;
+    text-wrap: balance;
+}
+
+.l-offer > p {
+    max-width: 46ch;
+    margin: 0 0 var(--k-5);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-xl);
+}
+
+.l-offer-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-3) var(--k-4);
+}
+
+.l-offer-note {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-md);
+}
+
+.l-shot {
+    margin: 0;
+    min-width: 0;
+}
+
+.l-shot figcaption {
+    margin-top: var(--k-3);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    text-align: center;
+}
+
+/* the till, drawn in markup at a reduced scale */
+.l-app {
+    overflow: hidden;
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius-lg);
+    background: var(--k-ground);
+    box-shadow: var(--k-shadow-pop);
+    font-size: var(--k-text-sm);
+    line-height: 1.35;
+    user-select: none;
+}
+
+.l-app-body {
+    display: grid;
+    grid-template-columns: 132px minmax(0, 1fr);
+    min-height: 360px;
+}
+
+.l-app-rail {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: var(--k-3) var(--k-2);
+    background: var(--k-panel);
+    border-right: var(--k-hair) solid var(--k-border);
+}
+
+.l-app-rail > span {
+    display: flex;
+    align-items: center;
+    gap: var(--k-2);
+    padding: 6px var(--k-2);
+    border-radius: var(--k-radius-sm);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-xs);
+    font-weight: 500;
+}
+
+.l-app-rail > .l-app-brand {
+    margin-bottom: var(--k-2);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-sm);
+    font-weight: 700;
+}
+
+.l-app-rail > .is-on {
+    background: var(--k-accent-tint);
+    color: var(--k-accent-ink);
+}
+
+.l-app-main {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.l-app-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: var(--k-2) var(--k-4);
+    background: var(--k-panel);
+    border-bottom: var(--k-hair) solid var(--k-border);
+    color: var(--k-ink-title);
+}
+
+.l-app-work {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 168px;
+    gap: var(--k-3);
+    padding: var(--k-3);
+    flex: 1;
+}
+
+.l-app-bill,
+.l-app-pay {
+    min-width: 0;
+    padding: var(--k-3);
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius);
+    background: var(--k-panel);
+}
+
+.l-app-scan {
+    display: flex;
+    align-items: center;
+    gap: var(--k-2);
+    padding: 7px var(--k-3);
+    border: var(--k-hair) solid var(--k-accent);
+    border-radius: var(--k-radius-sm);
+    box-shadow: var(--k-focus-halo);
+    color: var(--k-ink-faint);
+}
+
+.l-app-scan .bi {
+    color: var(--k-ink-soft);
+}
+
+.l-app-lines {
+    width: 100%;
+    margin-top: var(--k-2);
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.l-app-lines th {
+    padding: 6px var(--k-1);
+    border-bottom: var(--k-hair) solid var(--k-border);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-2xs);
+    font-weight: 500;
+    text-align: left;
+}
+
+.l-app-lines td {
+    padding: 7px var(--k-1);
+    border-bottom: var(--k-hair) solid var(--k-divider);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-xs);
+    vertical-align: top;
+}
+
+.l-app-lines tr:last-child td {
+    border-bottom: 0;
+}
+
+.l-app-lines .k-num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.l-app-lines small {
+    display: block;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-2xs);
+}
+
+.l-app-pay {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.l-app-label {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-2xs);
+}
+
+.l-app-total {
+    margin-bottom: var(--k-2);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-2xl);
+    font-weight: 700;
+    letter-spacing: -0.015em;
+    line-height: 1.1;
+}
+
+.l-app-row {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--k-2);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-2xs);
+}
+
+.l-app-row > :last-child {
+    color: var(--k-ink-title);
+    font-weight: 600;
+}
+
+.l-app-row + .l-app-btn {
+    margin-top: var(--k-2);
+}
+
+.l-app-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 5px var(--k-3);
+    border: var(--k-hair) solid var(--k-border-strong);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-panel);
+    color: var(--k-ink);
+    font-size: var(--k-text-xs);
+    font-weight: 500;
+}
+
+.l-app-btn--primary {
+    border-color: var(--k-accent);
+    background: var(--k-accent);
+    color: var(--k-on-accent);
+}
+
+/* ---------- bands ---------- */
+
+.l-band {
+    padding: var(--k-7) 0;
+    background: var(--k-panel);
+    border-top: var(--k-hair) solid var(--k-border);
+}
+
+.l-band--plain {
+    background: var(--k-ground);
+}
+
+.l-band h2,
+.l-last h2 {
+    margin: 0;
+    color: var(--k-ink-title);
+    font-size: var(--k-text-3xl);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1.2;
+    text-wrap: balance;
+}
+
+.l-band-head {
+    max-width: 60ch;
+    margin-bottom: var(--k-6);
+}
+
+.l-band-head p,
+.l-split-head p {
+    margin: var(--k-3) 0 0;
+    color: var(--k-ink-soft);
+}
+
+.l-split {
+    display: grid;
+    grid-template-columns: minmax(0, 4fr) minmax(0, 8fr);
+    gap: var(--k-7);
+    align-items: start;
+}
+
+.l-split-head {
+    position: sticky;
+    top: calc(var(--k-head-h) + var(--k-5));
+}
+
+.l-panel {
+    min-width: 0;
+    padding: var(--k-5);
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius);
+    background: var(--k-panel);
+    box-shadow: var(--k-shadow-panel);
+}
+
+/* what it records: a plain two-column table */
+.l-does {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: var(--k-text-md);
+}
+
+.l-does th {
+    padding: 0 var(--k-3) var(--k-3) 0;
+    border-bottom: var(--k-hair) solid var(--k-border);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+    text-align: left;
+}
+
+.l-does td {
+    padding: var(--k-4) var(--k-3) var(--k-4) 0;
+    border-bottom: var(--k-hair) solid var(--k-divider);
+    vertical-align: top;
+}
+
+.l-does tr:last-child td {
+    border-bottom: 0;
+    padding-bottom: 0;
+}
+
+.l-does td:first-child {
+    width: 42%;
+    color: var(--k-ink-title);
+    font-weight: 600;
+}
+
+.l-does td:last-child {
+    color: var(--k-ink-soft);
+}
+
+/* how it fits a trade: definition pairs in two columns */
+.l-terms {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--k-6) var(--k-6);
+    margin: 0;
+}
+
+.l-terms dt {
+    margin-bottom: var(--k-1);
+    color: var(--k-ink-title);
+    font-weight: 600;
+}
+
+.l-terms dd {
+    margin: 0;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-md);
+}
+
+/* two ways to run it */
+.l-ways {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--k-5);
+}
+
+.l-way h3 {
+    display: flex;
+    align-items: center;
+    gap: var(--k-3);
+    margin: 0 0 var(--k-3);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-xl);
+    font-weight: 600;
+}
+
+.l-way h3 .bi {
+    color: var(--k-accent);
+    font-size: 1.25em;
+}
+
+.l-way p,
+.l-way li {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-md);
+}
+
+.l-way p {
+    margin: 0 0 var(--k-4);
+}
+
+.l-way ul,
+.l-plan ul {
+    margin: 0 0 var(--k-4);
+    padding: 0;
+    list-style: none;
+}
+
+.l-way li {
+    position: relative;
+    padding: var(--k-1) 0 var(--k-1) var(--k-5);
+}
+
+.l-way li::before {
+    content: "";
+    position: absolute;
+    left: 4px;
+    top: 0.85em;
+    width: 6px;
+    height: 6px;
+    border-radius: var(--k-radius-pill);
+    background: var(--k-border-strong);
+}
+
+.l-way .l-way-foot {
+    margin: 0;
+    padding-top: var(--k-4);
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+
+/* plans */
+.l-plans {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--k-5);
+    align-items: stretch;
+}
+
+.l-plan {
+    display: flex;
+    flex-direction: column;
+}
+
+/* line the prices and buttons up across the plans */
+@supports (grid-template-rows: subgrid) {
+    .l-plan {
+        display: grid;
+        grid-row: span 5;
+        grid-template-rows: subgrid;
+        row-gap: 0;
+    }
+}
+
+.l-plan.is-featured {
+    border-color: var(--k-accent);
+    box-shadow: 0 0 0 1px var(--k-accent), var(--k-shadow-panel);
+}
+
+.l-plan h3 {
+    margin: 0 0 var(--k-2);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-xl);
+    font-weight: 600;
+}
+
+.l-plan-copy {
+    margin: 0 0 var(--k-4);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-md);
+}
+
+.l-plan-price {
+    display: flex;
+    align-items: baseline;
+    gap: var(--k-2);
+    margin: 0 0 var(--k-4);
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.l-plan-price strong {
+    color: var(--k-ink-title);
+    font-size: var(--k-text-4xl);
+    font-weight: 700;
+    letter-spacing: -0.02em;
+    line-height: 1;
+}
+
+.l-plan-price span {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-md);
+}
+
+.l-plan > .btn {
+    width: 100%;
+    margin-bottom: var(--k-5);
+}
+
+.l-plan ul {
+    margin: 0;
+    padding-top: var(--k-4);
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+
+.l-plan li {
+    display: flex;
+    gap: var(--k-2);
+    padding: var(--k-1) 0;
+    color: var(--k-ink);
+    font-size: var(--k-text-md);
+}
+
+.l-plan li .bi {
+    flex: none;
+    color: var(--k-accent);
+}
+
+/* questions */
+.l-faq {
+    padding-top: var(--k-2);
+    padding-bottom: var(--k-2);
+}
+
+.l-faq details + details {
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+
+.l-faq summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--k-4);
+    padding: var(--k-4) 0;
+    color: var(--k-ink-title);
+    font-weight: 600;
+    cursor: pointer;
+    list-style: none;
+}
+
+.l-faq summary::-webkit-details-marker {
+    display: none;
+}
+
+.l-faq summary::after {
+    content: "";
+    flex: none;
+    width: 8px;
+    height: 8px;
+    margin-right: var(--k-1);
+    border-right: 2px solid var(--k-ink-soft);
+    border-bottom: 2px solid var(--k-ink-soft);
+    transform: rotate(45deg) translateY(-2px);
+    transition: transform var(--k-dur) var(--k-ease-out);
+}
+
+.l-faq details[open] summary::after {
+    transform: rotate(-135deg) translateY(-2px);
+}
+
+.l-faq details p {
+    margin: 0;
+    padding: 0 0 var(--k-4);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-md);
+}
+
+/* closing call */
+.l-last {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--k-4);
+    padding: var(--k-6);
+}
+
+/* footer */
+.l-foot {
+    padding: var(--k-6) 0;
+    background: var(--k-panel);
+    border-top: var(--k-hair) solid var(--k-border);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-md);
+}
+
+.l-foot-inner {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--k-2) var(--k-5);
+}
+
+.l-foot p {
+    margin: 0;
+}
+
+.l-foot p:last-child {
+    margin-left: auto;
+}
+
+/* ---------- narrower screens ---------- */
+
+@media (max-width: 1099.98px) {
+    .l-hero-grid,
+    .l-split {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--k-6);
+    }
+
+    .l-split-head {
+        position: static;
+        max-width: 60ch;
+    }
+
+    .l-plans {
+        grid-template-columns: minmax(0, 1fr);
+        max-width: 560px;
+    }
+}
+
+@media (max-width: 767.98px) {
+    .l-nav {
+        display: none;
+    }
+
+    .l-hero {
+        padding: var(--k-6) 0 var(--k-6);
+    }
+
+    .l-band {
+        padding: var(--k-6) 0;
+    }
+
+    .l-band h2,
+    .l-last h2 {
+        font-size: var(--k-text-2xl);
+    }
+
+    .l-terms,
+    .l-ways {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--k-5);
+    }
+
+    .l-does thead {
+        display: none;
+    }
+
+    .l-does tr {
+        display: block;
+        padding: var(--k-3) 0;
+        border-bottom: var(--k-hair) solid var(--k-divider);
+    }
+
+    .l-does tr:first-child {
+        padding-top: 0;
+    }
+
+    .l-does tr:last-child {
+        border-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .l-does td {
+        display: block;
+        width: auto !important;
+        padding: 0;
+        border: 0;
+    }
+
+    .l-does td + td {
+        margin-top: var(--k-1);
+    }
+
+    .l-panel {
+        padding: var(--k-4);
+    }
+
+    .l-last {
+        padding: var(--k-5);
+    }
+
+    .l-foot p:last-child {
+        margin-left: 0;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .l-top-inner {
+        gap: var(--k-3);
+    }
+
+    .l-top-actions {
+        gap: var(--k-3);
+    }
+
+    .l-offer > p {
+        font-size: var(--k-text-lg);
+    }
+
+    .l-offer-actions .btn {
+        width: 100%;
+    }
+
+    .l-app-body {
+        grid-template-columns: minmax(0, 1fr);
+        min-height: 0;
+    }
+
+    .l-app-rail {
+        display: none;
+    }
+
+    .l-app-work {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .l-app-pay {
+        display: grid;
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+    }
+
+    .l-app-label,
+    .l-app-total,
+    .l-app-row {
+        grid-column: 1 / -1;
+    }
+
+    .l-app-total {
+        margin-bottom: var(--k-1);
+    }
+
+    .l-last .btn {
+        width: 100%;
+    }
+}

@@ -1,0 +1,75 @@
+{% extends "pos/base.html" %}
+{% load static accounting_tags %}
+
+{% block title %}Day book{% endblock %}
+{% block page_title %}Day book{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}{% include "accounts/_report_actions.html" %}{% endblock %}
+
+{% block content %}
+<header class="b-print-head">
+    <h2>{{ active_company.name|default:brand_name }}</h2>
+    <p>Day Book. {{ period_label }}.</p>
+</header>
+
+{% include "accounts/_report_header.html" with extra_filter_name="type" extra_filter_label="Entry type" extra_filter_all="entry types" extra_filter_choices=voucher_types extra_filter_value=voucher_type %}
+
+<div class="b-balances">
+    <div class="k-balance">
+        <div class="k-balance-label">Entries</div>
+        <div class="k-balance-figure">{{ voucher_count }}</div>
+    </div>
+    <div class="k-balance">
+        <div class="k-balance-label">Total debit</div>
+        <div class="k-balance-figure">{{ total_debit|money }}</div>
+    </div>
+    <div class="k-balance {% if total_debit != total_credit %}k-balance--out{% endif %}">
+        <div class="k-balance-label">Total credit</div>
+        <div class="k-balance-figure">{{ total_credit|money }}</div>
+        {% if total_debit != total_credit %}<div class="k-balance-note">Does not match the debit total. One of these entries is unbalanced.</div>{% endif %}
+    </div>
+</div>
+
+<section class="k-section" aria-labelledby="daybook-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="daybook-title">{{ period_label }} <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About the day book" aria-describedby="tipDaybook" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipDaybook" role="tooltip" hidden>Every accounting entry in the order it was posted.</span></span></h2>
+        <span class="k-badge">{{ voucher_count }} entr{{ voucher_count|pluralize:"y,ies" }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="k-table b-daybook">
+            <thead>
+                <tr>
+                    <th scope="col">Date</th>
+                    <th scope="col">Voucher and accounts</th>
+                    <th scope="col" class="k-num">Debit</th>
+                    <th scope="col" class="k-num">Credit</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for voucher in page_obj %}
+                <tr class="b-voucher">
+                    <td title="{{ voucher.date }}">{{ voucher.date|date:"d M y" }}</td>
+                    <td colspan="3">
+                        #{{ voucher.id }} &middot; {{ voucher.get_voucher_type_display }}
+                        <span class="b-sub">{{ voucher.narration|default:"No narration" }}{% if voucher.created_by_id %} &middot; by {{ voucher.created_by }}{% endif %}</span>
+                    </td>
+                </tr>
+                {% for line in voucher.lines.all %}
+                <tr class="b-line">
+                    <td></td>
+                    <td><a href="{% url 'account_ledger' line.account_id %}" class="text-decoration-none">{{ line.account.title }}</a></td>
+                    <td class="k-num">{% if line.debit %}{{ line.debit|money }}{% endif %}</td>
+                    <td class="k-num">{% if line.credit %}{{ line.credit|money }}{% endif %}</td>
+                </tr>
+                {% endfor %}
+                {% empty %}
+                <tr>
+                    <td colspan="4" class="k-empty"><p class="k-empty-title">Nothing was posted in this period.</p><p>Widen the dates, or clear the entry type, to see sales, purchases, payments and expenses as they were written.</p></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include "accounts/_pagination.html" %}
+</section>
+{% endblock %}

@@ -1,109 +1,98 @@
 {% extends "pos/base.html" %}
+{% load static %}
+{% load currency_tags %}
 
 {% block title %}Purchase #{{ purchase.id }}{% endblock %}
+{% block page_title %}Purchase #{{ purchase.id }}{% endblock %}
+{% block page_help %}What was received on this purchase, what it cost and what is still owed. Press F2 to edit it.{% endblock %}
+
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet">{% endblock %}
+
+{% block page_actions %}<a href="{% url 'purchase_edit' purchase.id %}" class="btn btn-primary" data-k-key="F2" data-k-key-label="Edit this purchase"><i class="bi bi-pencil" aria-hidden="true"></i> Edit</a>{% if feature_modules.returns %}<a href="{% url 'purchase_return' purchase.id %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-return-left" aria-hidden="true"></i> Return</a>{% endif %}<a href="{% url 'purchase_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>{% endblock %}
 
 {% block content %}
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-    <div>
-        <h2 class="mb-1">Purchase #{{ purchase.id }}</h2>
-        <p class="text-muted mb-0">Recorded on {{ purchase.created_at|date:"d M Y, g:i A" }}</p>
+<section class="k-section" aria-label="Summary">
+    <div class="k-section-head">
+        <h2 class="k-section-title">{{ purchase.supplier|default:"Cash purchase" }}</h2>
+        {% if purchase.report_payment_status == 'paid' %}<span class="k-badge k-badge--green">Paid</span>{% elif purchase.report_payment_status == 'partial' %}<span class="k-badge k-badge--amber">Part paid</span>{% elif purchase.report_payment_status == 'credit' %}<span class="k-badge k-badge--amber">Credit</span>{% else %}<span class="k-badge">{{ purchase.report_payment_status|title }}</span>{% endif %}
+        <span class="k-section-note">Recorded on {{ purchase.created_at|date:"d M Y, g:i A" }}{% if purchase.supplier_invoice_number or purchase.bill_date %} &middot; Supplier bill {{ purchase.supplier_invoice_number|default:"" }}{% if purchase.bill_date %} dated {{ purchase.bill_date|date }}{% endif %}{% endif %}</span>
     </div>
-    <div class="d-flex gap-2">
-        <a href="{% url 'purchase_return' purchase.id %}" class="btn btn-outline-warning"><i class="bi bi-arrow-return-left"></i> Return</a>
-        <a href="{% url 'purchase_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back</a>
-        <a href="{% url 'purchase_edit' purchase.id %}" class="btn btn-outline-primary"><i class="bi bi-pencil-square"></i> Edit</a>
+    <div class="st-stats">
+        <div class="k-balance">
+            <div class="k-balance-label">Total</div>
+            <div class="k-balance-figure">{{ purchase.total_amount|money }}</div>
+        </div>
+        <div class="k-balance">
+            <div class="k-balance-label">Paid</div>
+            <div class="k-balance-figure">{{ purchase.report_paid_amount|money }}</div>
+            {% if purchase.report_settlement_paid > 0 %}<div class="k-balance-note">Later supplier payments {{ purchase.report_settlement_paid|money }}</div>{% endif %}
+        </div>
+        <div class="k-balance{% if purchase.report_balance_due > 0 %} k-balance--due{% endif %}">
+            <div class="k-balance-label">Balance</div>
+            <div class="k-balance-figure">{{ purchase.report_balance_due|money }}</div>
+        </div>
+        <div class="k-balance">
+            <div class="k-balance-label">Payment method</div>
+            <div class="k-balance-figure k-balance-figure--text">{{ purchase.get_payment_method_display }}</div>
+        </div>
     </div>
-</div>
+</section>
 
-<div class="row g-4 mb-4">
-    <div class="col-lg-3">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Supplier</div>
-            <div class="fs-5 fw-semibold">{{ purchase.supplier|default:"Cash Purchase" }}</div>
-        </div>
-    </div>
-    <div class="col-lg-3">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Payment Method</div>
-            <div class="fs-5 fw-semibold">{{ purchase.get_payment_method_display }}</div>
-        </div>
-    </div>
-    <div class="col-lg-2">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Total</div>
-            <div class="fs-5 fw-semibold">Rs {{ purchase.total_amount|floatformat:2 }}</div>
-        </div>
-    </div>
-    <div class="col-lg-2">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Paid</div>
-            <div class="fs-5 fw-semibold">Rs {{ purchase.report_paid_amount|floatformat:2 }}</div>
-            {% if purchase.report_settlement_paid > 0 %}
-            <div class="small text-muted mt-2">Later supplier payments Rs {{ purchase.report_settlement_paid|floatformat:2 }}</div>
-            {% endif %}
-        </div>
-    </div>
-    <div class="col-lg-2">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Balance</div>
-            <div class="fs-5 fw-semibold">Rs {{ purchase.report_balance_due|floatformat:2 }}</div>
-            <div class="mt-2"><span class="status-chip {% if purchase.report_payment_status == 'paid' %}healthy{% elif purchase.report_payment_status == 'partial' %}advance{% else %}payable{% endif %}">{{ purchase.report_payment_status|title }}</span></div>
-        </div>
-    </div>
-</div>
-
-<div class="page-card p-0 overflow-hidden mb-4">
-    <div class="table-responsive">
-        <table class="table align-middle mb-0">
-            <thead class="table-light">
-                <tr>
-                    <th class="ps-4">Product</th>
-                    <th class="text-end">Qty</th>
-                    <th class="text-end">Cost</th>
-                    <th class="text-end">Sale</th>
-                    <th class="text-end pe-4">Line Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in purchase.items.all %}
-                <tr>
-                    <td class="ps-4">{{ item.product.name }}</td>
-                    <td class="text-end">{{ item.quantity }}</td>
-                    <td class="text-end">Rs {{ item.cost_price|floatformat:2 }}</td>
-                    <td class="text-end">Rs {{ item.sale_price|floatformat:2 }}</td>
-                    <td class="text-end pe-4">Rs {{ item.line_total|floatformat:2 }}</td>
-                </tr>
-                {% empty %}
-                <tr><td colspan="5" class="text-center text-muted py-4">No items in this purchase.</td></tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
+<section class="k-section" aria-labelledby="items-title">
+    <div class="k-section-head"><h2 class="k-section-title" id="items-title">Items received</h2></div>
+    <table class="k-ledger k-ledger--stack">
+        <thead>
+            <tr>
+                <th scope="col" data-k="what">Product</th>
+                <th scope="col" class="text-end" data-k="meta">Qty</th>
+                <th scope="col" class="text-end" data-k="more">Cost</th>
+                <th scope="col" class="text-end" data-k="more">Sale</th>
+                <th scope="col" class="text-end" data-k="amount">Line total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in purchase.items.all %}
+            <tr>
+                <td class="st-wrap" data-k="what">{% if nav_access.products %}<a href="{% url 'product_view' item.product.id %}" class="st-name">{{ item.product.display_name }}</a>{% else %}<span class="st-name">{{ item.product.display_name }}</span>{% endif %}</td>
+                <td class="k-num text-end" data-k="meta" data-label="Qty">{{ item.quantity|qty_short:item.product.unit }}</td>
+                <td class="k-num text-end" data-k="more" data-label="Cost">{{ item.cost_price|money }}</td>
+                <td class="k-num text-end" data-k="more" data-label="Sale">{{ item.sale_price|money }}</td>
+                <td class="k-num text-end" data-k="amount" data-label="Line total">{{ item.line_total|money }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="5" class="k-empty" data-k="note">No items in this purchase.</td></tr>
+            {% endfor %}
+        </tbody>
+        {% if purchase.items.all %}
+        <tfoot>
+            <tr>
+                <td colspan="4" data-k="what">Total</td>
+                <td class="k-num text-end" data-k="amount">{{ purchase.total_amount|money }}</td>
+            </tr>
+        </tfoot>
+        {% endif %}
+    </table>
+</section>
 
 {% if purchase.edit_logs.exists %}
-<div class="page-card p-4">
-    <h5 class="mb-3">Edit Log</h5>
-    <div class="table-responsive">
-        <table class="table table-sm align-middle mb-0">
-            <thead>
-                <tr><th>Date</th><th>User</th><th>Reason</th><th class="text-end">Old</th><th class="text-end">New</th></tr>
-            </thead>
-            <tbody>
-                {% for log in purchase.edit_logs.all %}
-                <tr>
-                    <td>{{ log.edited_at|date:"d M Y H:i" }}</td>
-                    <td>{{ log.edited_by|default:"System" }}</td>
-                    <td>{{ log.reason }}</td>
-                    <td class="text-end">Rs {{ log.old_total|floatformat:2 }}</td>
-                    <td class="text-end">Rs {{ log.new_total|floatformat:2 }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-    </div>
-</div>
+<section class="k-section" aria-labelledby="log-title">
+    <div class="k-section-head"><h2 class="k-section-title" id="log-title">Edit log</h2></div>
+    <table class="k-ledger k-ledger--stack">
+        <thead>
+            <tr><th scope="col" data-k="meta">Date</th><th scope="col" data-k="more">User</th><th scope="col" data-k="what">Reason</th><th scope="col" class="text-end" data-k="more">Old</th><th scope="col" class="text-end" data-k="amount">New</th></tr>
+        </thead>
+        <tbody>
+            {% for log in purchase.edit_logs.all %}
+            <tr>
+                <td data-k="meta" data-label="Date">{{ log.edited_at|date:"d M Y H:i" }}</td>
+                <td data-k="more" data-label="User">{{ log.edited_by|default:"System" }}</td>
+                <td data-k="what" class="st-wrap">{{ log.reason }}</td>
+                <td class="k-num text-end" data-k="more" data-label="Old">{{ log.old_total|money }}</td>
+                <td class="k-num text-end" data-k="amount" data-label="New">{{ log.new_total|money }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
 {% endif %}
 {% endblock %}
-
-

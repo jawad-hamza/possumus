@@ -1,444 +1,268 @@
-﻿{% extends "pos/base.html" %}
-{% load accounting_tags %}
+{% extends "pos/base.html" %}
+{% load static accounting_tags %}
 
 {% block title %}Expenses{% endblock %}
-
-{% block extra_css %}
-<style>
-    .expense-type-grid,
-    .reminder-grid {
-        display: grid;
-        gap: 14px;
-        grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-    }
-
-    .expense-type-card,
-    .reminder-card,
-    .expense-outstanding-card {
-        border: 1px solid #dbe6f3;
-        border-radius: 18px;
-        background: linear-gradient(180deg, #ffffff 0%, #f8fbff 100%);
-        padding: 16px;
-    }
-
-    .expense-type-card {
-        text-decoration: none;
-        color: inherit;
-        display: block;
-        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-    }
-
-    .expense-type-card:hover,
-    .expense-type-card.active {
-        border-color: #1d4ed8;
-        box-shadow: 0 14px 28px rgba(37, 99, 235, 0.12);
-        transform: translateY(-2px);
-    }
-
-    .expense-type-meta {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        margin-top: 12px;
-    }
-
-    .expense-mini-note {
-        border-radius: 16px;
-        border: 1px dashed #d7e2f1;
-        padding: 14px;
-        background: #fbfdff;
-        color: var(--text-soft);
-        font-size: 0.92rem;
-    }
-
-    .reminder-card.overdue {
-        border-color: rgba(220, 38, 38, 0.25);
-        background: linear-gradient(180deg, #fffafa 0%, #fff3f2 100%);
-    }
-
-    .reminder-card.due_soon,
-    .reminder-card.today {
-        border-color: rgba(245, 158, 11, 0.25);
-        background: linear-gradient(180deg, #fffaf2 0%, #fff6e8 100%);
-    }
-
-    .rule-form-shell,
-    .selected-bill-shell {
-        border: 1px solid #e2e8f0;
-        border-radius: 18px;
-        padding: 16px;
-        background: linear-gradient(180deg, #ffffff, #f8fbff);
-    }
-
-    .selected-bill-shell .small-label {
-        font-size: 0.78rem;
-        letter-spacing: 0.08em;
-        text-transform: uppercase;
-        color: var(--text-soft);
-        font-weight: 700;
-    }
-</style>
-{% endblock %}
+{% block page_title %}Expenses{% endblock %}
+{% block page_help %}Track recurring bills, one-off costs, and later payments with proper account linkage.{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/return-flow.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="#record-expense" class="btn btn-primary" data-k-key="F2" data-k-key-label="Record expense bill"><i class="bi bi-plus-lg" aria-hidden="true"></i> Record bill</a><a href="{{ money_desk_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left-right" aria-hidden="true"></i> Money desk</a>{% if nav_access.accounts %}<a href="{% url 'accounts_home' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Accounts</a>{% endif %}{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon danger"><i class="bi bi-receipt-cutoff"></i></span>
-        <div>
-            <h1 class="page-title">Expenses</h1>
-            <p class="page-subtitle">Track recurring bills, one-off costs, and later payments with proper account linkage.</p>
-        </div>
+<div class="b-balances b-balances--tight">
+    <div class="k-balance {% if month_total %}k-balance--out{% endif %}">
+        <div class="k-balance-label">This month expense</div>
+        <div class="k-balance-figure">{{ month_total|money }}</div>
+        <div class="k-balance-note">Total bills recorded this month.</div>
     </div>
-    <div class="page-actions expense-actions">
-        <a href="{{ money_desk_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left-right"></i> Money Desk</a>
-        <a href="{% url 'accounts_home' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Accounts</a>
+    <div class="k-balance">
+        <div class="k-balance-label">Paid this month</div>
+        <div class="k-balance-figure">{{ month_paid|money }}</div>
+        <div class="k-balance-note">Cash and bank cleared so far.</div>
     </div>
-</div>
-
-<div class="row g-3 mb-4">
-    <div class="col-md-6 col-xl">
-        <div class="metric-card danger">
-            <div class="metric-label">This Month Expense</div>
-            <div class="metric-value">{{ month_total|money }}</div>
-            <div class="metric-meta">Total bills recorded this month.</div>
-        </div>
+    <div class="k-balance {% if open_expense_count %}k-balance--due{% endif %}">
+        <div class="k-balance-label">Bills still due</div>
+        <div class="k-balance-figure">{{ outstanding_total|money }}</div>
+        <div class="k-balance-note">{{ open_expense_count }} unpaid or partially paid bills.</div>
     </div>
-    <div class="col-md-6 col-xl">
-        <div class="metric-card success">
-            <div class="metric-label">Paid This Month</div>
-            <div class="metric-value">{{ month_paid|money }}</div>
-            <div class="metric-meta">Cash and bank cleared so far.</div>
-        </div>
+    <div class="k-balance">
+        <div class="k-balance-label">Bills to record</div>
+        <div class="k-balance-figure">{{ expense_alert_count }}</div>
+        <div class="k-balance-note">{{ expense_overdue_count }} overdue, {{ expense_due_soon_count }} upcoming</div>
     </div>
-    <div class="col-md-6 col-xl">
-        <div class="metric-card warning">
-            <div class="metric-label">Bills Still Due</div>
-            <div class="metric-value">{{ outstanding_total|money }}</div>
-            <div class="metric-meta">{{ open_expense_count }} unpaid or partially paid bills.</div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl">
-        <div class="metric-card primary">
-            <div class="metric-label">Bills To Record</div>
-            <div class="metric-value">{{ expense_alert_count }}</div>
-            <div class="metric-meta">{{ expense_overdue_count }} overdue, {{ expense_due_soon_count }} upcoming reminders.</div>
-        </div>
-    </div>
-    <div class="col-md-6 col-xl">
-        <div class="metric-card slate">
-            <div class="metric-label">Expense Payable</div>
-            <div class="metric-value">{{ expense_payable_balance|money }}</div>
-            <div class="metric-meta">Current liability sitting in accounts.</div>
-        </div>
+    <div class="k-balance">
+        <div class="k-balance-label">Expense payable</div>
+        <div class="k-balance-figure">{{ expense_payable_balance|money }}</div>
+        <div class="k-balance-note">Current liability sitting in accounts.</div>
     </div>
 </div>
 
-<div class="page-card p-4 mb-4">
-    <div class="section-heading mb-3">
-        <div class="section-heading-copy">
-            <span class="section-title-icon section-icon-warning"><i class="bi bi-calendar-event"></i></span>
-            <div>
-                <h2 class="section-title">Recurring Bill Alerts</h2>
-                <p class="section-copy">Once you set a monthly due day, the system starts reminding staff before the bill date arrives.</p>
-            </div>
-        </div>
-        <span class="status-chip clear">7-day alerts supported</span>
-    </div>
-    {% if expense_reminders %}
-    <div class="reminder-grid">
-        {% for reminder in expense_reminders %}
-        <div class="reminder-card {{ reminder.status }}">
-            <div class="d-flex justify-content-between align-items-start gap-3 mb-2">
-                <div>
-                    <div class="fw-semibold">{{ reminder.category.name }}</div>
-                    <div class="small text-muted">{{ reminder.category.pattern_label }}{% if reminder.category.default_due_day %} | Due every month on {{ reminder.category.default_due_day }}{% endif %}</div>
-                </div>
-                {% if reminder.status == 'overdue' %}
-                <span class="status-chip below">Overdue</span>
-                {% elif reminder.status == 'today' %}
-                <span class="status-chip advance">Due today</span>
-                {% else %}
-                <span class="status-chip advance">Upcoming</span>
-                {% endif %}
-            </div>
-            <div class="small text-muted mb-2">{{ reminder.timing_label }} | Target date {{ reminder.due_date|date:"d M Y" }}</div>
-            <div class="expense-mini-note mb-3">
-                {{ reminder.prompt }}
-                {% if reminder.amount_hint %}<div class="mt-2"><strong>Suggested amount:</strong> {{ reminder.amount_hint|money }}</div>{% elif reminder.needs_amount %}<div class="mt-2"><strong>Amount:</strong> Enter this month's actual bill.</div>{% endif %}
-            </div>
-            <a href="{{ reminder.record_url }}" class="btn btn-sm btn-dark"><i class="bi bi-plus-circle"></i> Record Bill</a>
-        </div>
-        {% endfor %}
-    </div>
-    {% else %}
-    <div class="expense-mini-note">No recurring bill reminders right now. Set a monthly due day on a type like Rent or Electricity to start getting alerts.</div>
-    {% endif %}
-</div>
-
-<div class="page-card p-4 mb-4">
-    <div class="section-heading mb-3">
-        <div class="section-heading-copy">
-            <span class="section-title-icon section-icon-warning"><i class="bi bi-tags"></i></span>
-            <div>
-                <h2 class="section-title">Expense Types</h2>
-                <p class="section-copy">Tap a type to both configure its billing rule and start a new bill from it.</p>
-            </div>
-        </div>
-    </div>
-    <div class="expense-type-grid">
-        {% for expense_type in default_expense_types %}
-        <a href="{% url 'expense_list' %}?category={{ expense_type.id }}&type={{ expense_type.id }}#record-expense" class="expense-type-card {% if selected_type_id == expense_type.id|stringformat:'s' %}active{% endif %}">
-            <div class="d-flex justify-content-between align-items-start gap-3">
-                <div>
-                    <div class="fw-semibold">{{ expense_type.name }}</div>
-                    <div class="small text-muted">{{ expense_type.pattern_label }}</div>
-                </div>
-                <span class="status-chip clear">Default</span>
-            </div>
-            <div class="expense-type-meta">
-                <span class="status-chip clear"><i class="bi bi-calendar3"></i> {% if expense_type.default_due_day %}Day {{ expense_type.default_due_day }}{% else %}Set due day{% endif %}</span>
-                <span class="status-chip clear"><i class="bi bi-bell"></i> {{ expense_type.alert_days_before|default:7 }} days</span>
-                <span class="status-chip clear"><i class="bi bi-cash-stack"></i> {% if expense_type.default_amount %}{{ expense_type.default_amount|money }}{% else %}Variable{% endif %}</span>
-            </div>
-        </a>
-        {% endfor %}
-    </div>
-    <div class="expense-mini-note mt-3">
-        Every bill debits its expense account. Any unpaid amount credits <strong>Expense Payable</strong>. Paying later debits <strong>Expense Payable</strong> and credits <strong>Cash</strong> or <strong>Bank</strong>.
-    </div>
-</div>
-
-<div class="row g-4 mb-4">
-    <div class="col-xl-7">
-        <div id="record-expense" class="page-card p-4 p-lg-5 h-100">
-            <div class="section-heading mb-4">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-danger"><i class="bi bi-pencil-square"></i></span>
-                    <div>
-                        <h2 class="section-title">Record Expense Bill</h2>
-                        <p class="section-copy">Choose a type, enter the bill, and decide how much you are paying now.</p>
-                    </div>
-                </div>
-                {% if selected_category %}
-                <span class="status-chip advance">Using saved rule</span>
-                {% else %}
-                <span class="status-chip clear">Linked to accounts</span>
-                {% endif %}
-            </div>
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="add_expense">
-                <div class="row g-3">
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_form.category %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_form.title %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_form.vendor %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_form.employee %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_form.payment_method %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_form.bank_account %}</div>
-                    <div class="col-md-4">{% include "pos/partials/_field.html" with field=expense_form.date %}</div>
-                    <div class="col-md-4">{% include "pos/partials/_field.html" with field=expense_form.due_date %}</div>
-                    <div class="col-md-4">{% include "pos/partials/_field.html" with field=expense_form.amount %}</div>
-                    <div class="col-md-4">{% include "pos/partials/_field.html" with field=expense_form.paid_amount %}</div>
-                    <div class="col-12">{% include "pos/partials/_field.html" with field=expense_form.notes %}</div>
-                </div>
-                <div class="expense-mini-note mt-4">
-                    Use <strong>Employee / Staff</strong> when the bill is a wage or staff payment. That keeps employee reports and accounts aligned from the same document.
-                </div>
-                <div class="d-flex justify-content-end mt-4">
-                    <button type="submit" class="btn btn-dark"><i class="bi bi-save"></i> Save Expense</button>
-                </div>
-            </form>
-        </div>
-    </div>
-    <div class="col-xl-5 d-flex flex-column gap-4">
-        <div id="pay-expense" class="page-card p-4 h-100">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-success"><i class="bi bi-wallet2"></i></span>
-                    <div>
-                        <h2 class="section-title">Pay Outstanding Bill</h2>
-                        <p class="section-copy">Load any unpaid bill here and clear it from cash or bank.</p>
-                    </div>
-                </div>
-            </div>
-            {% if selected_expense and selected_expense.balance_due > 0 %}
-            <div class="selected-bill-shell mb-3">
-                <div class="small-label mb-1">Selected Bill</div>
-                <div class="fw-semibold">{{ selected_expense.display_title }}</div>
-                <div class="small text-muted mt-1">Due {{ selected_expense.balance_due|money }} | {{ selected_expense.category.name }}{% if selected_expense.employee %} | {{ selected_expense.employee.get_full_name|default:selected_expense.employee.username }}{% endif %}</div>
-            </div>
-            {% endif %}
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="pay_expense">
-                <div class="row g-3">
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.expense %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.date %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.amount %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.payment_method %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=expense_payment_form.bank_account %}</div>
-                    <div class="col-12">{% include "pos/partials/_field.html" with field=expense_payment_form.notes %}</div>
-                </div>
-                <div class="d-flex justify-content-end mt-4">
-                    <button type="submit" class="btn btn-dark"><i class="bi bi-cash-stack"></i> Save Payment</button>
-                </div>
-            </form>
-        </div>
-
-        <div class="page-card p-4">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon"><i class="bi bi-sliders"></i></span>
-                    <div>
-                        <h2 class="section-title">Expense Type Rules</h2>
-                        <p class="section-copy">Create a new type or fine-tune an existing one with monthly reminders.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="rule-form-shell mb-3">
-                {% if selected_type %}
-                <div class="fw-semibold">Editing {{ selected_type.name }}</div>
-                <div class="small text-muted">Change billing style, monthly due day, and alert timing here.</div>
-                {% else %}
-                <div class="fw-semibold">Create a new type</div>
-                <div class="small text-muted">Use custom for one-off expenses like maintenance, freight, or repairs.</div>
-                {% endif %}
-            </div>
-            <form method="post">
-                {% csrf_token %}
-                <input type="hidden" name="action" value="add_category">
-                <input type="hidden" name="type_id" value="{{ selected_type_id }}">
-                <div class="row g-3">
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=category_form.name %}</div>
-                    <div class="col-md-6">{% include "pos/partials/_field.html" with field=category_form.expense_pattern %}</div>
-                    <div class="col-md-4">{% include "pos/partials/_field.html" with field=category_form.default_due_day %}</div>
-                    <div class="col-md-4">{% include "pos/partials/_field.html" with field=category_form.default_amount %}</div>
-                    <div class="col-md-4">{% include "pos/partials/_field.html" with field=category_form.alert_days_before %}</div>
-                </div>
-                <div class="d-flex justify-content-between align-items-center gap-3 mt-3">
-                    <div class="small text-muted">Rent and wages are usually monthly fixed. Electricity is usually monthly variable.</div>
-                    <div class="d-flex gap-2">
-                        {% if selected_type %}<a href="{% url 'expense_list' %}" class="btn btn-outline-secondary">Clear</a>{% endif %}
-                        <button type="submit" class="btn btn-outline-dark"><i class="bi bi-check2-square"></i> Save Rule</button>
-                    </div>
-                </div>
-            </form>
-            {% if custom_expense_types %}
-            <div class="border-top pt-3 mt-3 d-flex flex-wrap gap-2">
-                {% for expense_type in custom_expense_types %}
-                <a href="{% url 'expense_list' %}?type={{ expense_type.id }}&category={{ expense_type.id }}#record-expense" class="status-chip clear text-decoration-none">{{ expense_type.name }}</a>
-                {% endfor %}
-            </div>
-            {% endif %}
-        </div>
-    </div>
-</div>
-
-<div class="row g-4 mb-4">
-    <div class="col-xl-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-warning"><i class="bi bi-list-check"></i></span>
-                    <div>
-                        <h2 class="section-title">Outstanding Bills</h2>
-                        <p class="section-copy">Tap a bill to load it into the payment panel above.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="d-grid gap-3">
-                {% for expense in open_expenses %}
-                <div class="expense-outstanding-card d-flex justify-content-between align-items-center gap-3">
-                    <div>
-                        <div class="fw-semibold">{{ expense.display_title }}</div>
-                        <div class="small text-muted">{{ expense.category.name }} | Due {{ expense.balance_due|money }}{% if expense.employee %} | {{ expense.employee.get_full_name|default:expense.employee.username }}{% elif expense.vendor %} | {{ expense.vendor }}{% endif %}</div>
-                    </div>
-                    <a href="{% url 'expense_list' %}?expense={{ expense.id }}#pay-expense" class="btn btn-sm btn-outline-primary">Pay Now</a>
-                </div>
-                {% empty %}
-                <div class="text-muted">No outstanding bills right now.</div>
-                {% endfor %}
-            </div>
-        </div>
-    </div>
-    <div class="col-xl-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon"><i class="bi bi-clock-history"></i></span>
-                    <div>
-                        <h2 class="section-title">Recent Expense Payments</h2>
-                        <p class="section-copy">Recent payments and the account each payment left from.</p>
-                    </div>
-                </div>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead><tr><th>Bill</th><th>From</th><th>Voucher</th><th class="text-end">Amount</th></tr></thead>
-                    <tbody>
-                        {% for payment in recent_expense_payments %}
-                        <tr>
-                            <td>{{ payment.expense.display_title }}<div class="small text-muted">{{ payment.expense.category.name }}</div></td>
-                            <td>{{ payment.from_account_title }}</td>
-                            <td>{% if payment.voucher_id %}#{{ payment.voucher_id }}{% else %}-{% endif %}</td>
-                            <td class="text-end">{{ payment.amount|money }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="4" class="text-center text-muted py-4">No payments recorded yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</div>
-
-<div class="page-card p-4">
-    <div class="section-heading mb-3">
-        <div class="section-heading-copy">
-            <span class="section-title-icon"><i class="bi bi-journal-text"></i></span>
-            <div>
-                <h2 class="section-title">Recent Expense Documents</h2>
-                <p class="section-copy">Latest bills with category, employee/vendor, current due, and voucher link.</p>
-            </div>
-        </div>
+{% if expense_reminders %}
+<section class="k-section" aria-labelledby="reminders-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="reminders-title">Recurring bill alerts <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Recurring bill alerts" aria-describedby="tipRemind" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipRemind" role="tooltip" hidden>Once you set a monthly due day, the system starts reminding staff before the bill date arrives.</span></span></h2>
     </div>
     <div class="table-responsive">
-        <table class="table align-middle mb-0">
+        <table class="k-table k-ledger--stack">
             <thead>
                 <tr>
-                    <th>Date</th>
-                    <th>Expense</th>
-                    <th>Party</th>
-                    <th class="text-end">Total</th>
-                    <th class="text-end">Paid</th>
-                    <th class="text-end">Due</th>
-                    <th>Status</th>
-                    <th>Voucher</th>
+                    <th scope="col" data-k="what">Bill</th>
+                    <th scope="col" data-k="flag">When</th>
+                    <th scope="col" data-k="note">What to do</th>
+                    <th scope="col" class="k-num" data-k="amount">Suggested amount</th>
+                    <th scope="col" data-k="field"><span class="visually-hidden">Record</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for reminder in expense_reminders %}
+                <tr>
+                    <td class="b-stack-title"><strong>{{ reminder.category.name }}</strong><span class="b-sub">{{ reminder.category.pattern_label }}{% if reminder.category.default_due_day %} &middot; Due every month on {{ reminder.category.default_due_day }}{% endif %}</span></td>
+                    <td data-label="When">
+                        {% if reminder.status == 'overdue' %}<span class="k-badge k-badge--red">Overdue</span>
+                        {% elif reminder.status == 'today' %}<span class="k-badge k-badge--amber">Due today</span>
+                        {% else %}<span class="k-badge k-badge--blue">Upcoming</span>{% endif %}
+                        <span class="b-sub">{{ reminder.timing_label }} &middot; {{ reminder.due_date|date:"d M Y" }}</span>
+                    </td>
+                    <td data-label="What to do">{{ reminder.prompt }}</td>
+                    <td class="k-num" data-label="Suggested amount">{% if reminder.amount_hint %}{{ reminder.amount_hint|money }}{% elif reminder.needs_amount %}<span class="text-muted">Enter this month's actual bill.</span>{% endif %}</td>
+                    <td class="text-end"><a href="{{ reminder.record_url }}" class="btn btn-sm btn-outline-secondary">Record bill</a></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+<div class="b-grid">
+    <section id="record-expense" class="k-section" aria-labelledby="record-expense-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="record-expense-title">Record expense bill <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Record expense bill" aria-describedby="tipRecord" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipRecord" role="tooltip" hidden>Choose a type, enter the bill, and decide how much you are paying now.<br>Use <strong>Employee / staff</strong> when the bill is a wage or staff payment. That keeps employee reports and accounts aligned from the same document.<br>Every bill debits its expense account. Any unpaid amount credits <strong>Expense Payable</strong>. Paying later debits <strong>Expense Payable</strong> and credits <strong>Cash</strong> or <strong>Bank</strong>.<br>Press F2 to jump here.</span></span></h2>
+            {% if selected_category %}
+            <span class="k-badge k-badge--blue">Using saved rule</span>
+            {% endif %}
+        </div>
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="add_expense">
+            <div class="k-form-grid">
+                <div>{% include "pos/partials/_field.html" with field=expense_form.category %}{% if quick_add_kinds.expense_type %}<div class="rf-add-row mt-2 mb-0"><button type="button" class="rf-add" data-rf-quick="expense_type" data-rf-target="{{ expense_form.category.id_for_label }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add expense type</button></div>{% endif %}</div>
+                {% include "pos/partials/_field.html" with field=expense_form.title %}
+                {% include "pos/partials/_field.html" with field=expense_form.vendor %}
+                {% include "pos/partials/_field.html" with field=expense_form.employee %}
+                {% include "pos/partials/_field.html" with field=expense_form.date %}
+                {% include "pos/partials/_field.html" with field=expense_form.due_date %}
+                {% include "pos/partials/_field.html" with field=expense_form.amount %}
+                {% include "pos/partials/_field.html" with field=expense_form.paid_amount %}
+                {% include "pos/partials/_field.html" with field=expense_form.payment_method %}
+                <div>{% include "pos/partials/_field.html" with field=expense_form.bank_account %}{% if quick_add_kinds.bank %}<div class="rf-add-row mt-2 mb-0"><button type="button" class="rf-add" data-rf-quick="bank" data-rf-target="{{ expense_form.bank_account.id_for_label }}" data-rf-also="{{ expense_payment_form.bank_account.id_for_label }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add bank account</button></div>{% endif %}</div>
+                <div class="k-span-2">{% include "pos/partials/_field.html" with field=expense_form.notes %}</div>
+            </div>
+            {% if expense_form.non_field_errors %}<div class="k-error mt-3" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ expense_form.non_field_errors|join:', ' }}</div>{% endif %}
+            <div class="k-form-actions">
+                <button type="submit" class="btn btn-primary"><i class="bi bi-save" aria-hidden="true"></i> Save expense</button>
+            </div>
+        </form>
+    </section>
+
+    <aside id="pay-expense" class="k-side" aria-labelledby="pay-expense-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="pay-expense-title">Pay outstanding bill <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Pay outstanding bill" aria-describedby="tipPayBill" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipPayBill" role="tooltip" hidden>Load any unpaid bill here and clear it from cash or bank.</span></span></h2>
+        </div>
+        {% if selected_expense and selected_expense.balance_due > 0 %}
+        <div class="alert alert-warning">
+            <strong>Selected bill</strong>: {{ selected_expense.display_title }}
+            <span class="b-sub">Due {{ selected_expense.balance_due|money }} &middot; {{ selected_expense.category.name }}{% if selected_expense.employee %} &middot; {{ selected_expense.employee.get_full_name|default:selected_expense.employee.username }}{% endif %}</span>
+        </div>
+        {% endif %}
+        <form method="post">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="pay_expense">
+            <div class="k-form-grid">
+                <div class="k-span-2">{% include "pos/partials/_field.html" with field=expense_payment_form.expense %}</div>
+                {% include "pos/partials/_field.html" with field=expense_payment_form.amount %}
+                {% include "pos/partials/_field.html" with field=expense_payment_form.date %}
+                {% include "pos/partials/_field.html" with field=expense_payment_form.payment_method %}
+                <div>{% include "pos/partials/_field.html" with field=expense_payment_form.bank_account %}{% if quick_add_kinds.bank %}<div class="rf-add-row mt-2 mb-0"><button type="button" class="rf-add" data-rf-quick="bank" data-rf-target="{{ expense_payment_form.bank_account.id_for_label }}" data-rf-also="{{ expense_form.bank_account.id_for_label }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add bank account</button></div>{% endif %}</div>
+                <div class="k-span-2">{% include "pos/partials/_field.html" with field=expense_payment_form.notes %}</div>
+            </div>
+            {% if expense_payment_form.non_field_errors %}<div class="k-error mt-3" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ expense_payment_form.non_field_errors|join:', ' }}</div>{% endif %}
+            <div class="k-form-actions">
+                <button type="submit" class="btn btn-primary w-100"><i class="bi bi-cash-stack" aria-hidden="true"></i> Save payment</button>
+            </div>
+        </form>
+
+        <div class="k-section-head mt-4">
+            <h2 class="k-section-title">Outstanding bills <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Outstanding bills" aria-describedby="tipOpenBills" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipOpenBills" role="tooltip" hidden>Tap a bill to load it into the payment form above.</span></span></h2>
+        </div>
+        <span id="outstanding-bills"></span>
+        <ul class="b-links">
+            {% for expense in open_expenses %}
+            <li><a href="{% url 'expense_list' %}?expense={{ expense.id }}#pay-expense"{% if selected_expense_id == expense.id|stringformat:'s' %} aria-current="true"{% endif %} data-tip="Pay Now">
+                <strong>{{ expense.display_title }}</strong>
+                <span class="b-links-aside k-due">{{ expense.balance_due|money }}</span>
+                <span class="b-sub">{{ expense.category.name }}{% if expense.employee %} &middot; {{ expense.employee.get_full_name|default:expense.employee.username }}{% elif expense.vendor %} &middot; {{ expense.vendor }}{% endif %}</span>
+            </a></li>
+            {% empty %}
+            <li class="k-empty">No outstanding bills right now.</li>
+            {% endfor %}
+        </ul>
+        {% include "accounts/_pagination.html" with page_obj=open_expenses anchor="outstanding-bills" %}
+    </aside>
+</div>
+
+<section class="k-section" aria-labelledby="expense-log-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="expense-log-title">Recent expense documents <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Recent expense documents" aria-describedby="tipExpenseLog" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipExpenseLog" role="tooltip" hidden>Latest bills with category, employee/vendor, current due, and voucher link.</span></span></h2>
+    </div>
+    <span id="expense-log"></span>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack b-bahi">
+            <thead>
+                <tr>
+                    <th scope="col" data-k="meta">Date</th>
+                    <th scope="col" data-k="what">Expense</th>
+                    <th scope="col" data-k="more">Party</th>
+                    <th scope="col" class="k-num" data-k="amount">Total</th>
+                    <th scope="col" class="k-num" data-k="more">Paid</th>
+                    <th scope="col" class="k-num" data-k="balance">Due</th>
+                    <th scope="col" data-k="flag">Status</th>
                 </tr>
             </thead>
             <tbody>
                 {% for expense in expenses %}
                 <tr>
-                    <td>{{ expense.date|date:"d M Y" }}</td>
-                    <td>{{ expense.display_title }}<div class="small text-muted">{{ expense.category.name }}</div></td>
-                    <td>{% if expense.employee %}{{ expense.employee.get_full_name|default:expense.employee.username }}{% else %}{{ expense.vendor|default:"-" }}{% endif %}</td>
-                    <td class="text-end">{{ expense.amount|money }}</td>
-                    <td class="text-end">{{ expense.paid_amount|money }}</td>
-                    <td class="text-end">{{ expense.balance_due|money }}</td>
-                    <td>
-                        {% if expense.payment_status == 'paid' %}<span class="status-chip healthy">Paid</span>
-                        {% elif expense.payment_status == 'partial' %}<span class="status-chip advance">Partial</span>
-                        {% else %}<span class="status-chip below">Unpaid</span>{% endif %}
+                    <td data-label="Date">{{ expense.date|date:"d M Y" }}</td>
+                    <td class="b-stack-title">{{ expense.display_title }}<span class="b-sub">{{ expense.category.name }}{% if expense.voucher_id %} &middot; #{{ expense.voucher_id }}{% endif %}</span></td>
+                    <td data-label="Party">{% if expense.employee %}{{ expense.employee.get_full_name|default:expense.employee.username }}{% else %}{{ expense.vendor|default:"-" }}{% endif %}</td>
+                    <td class="k-num b-bal" data-label="Total">{{ expense.amount|money }}</td>
+                    <td class="k-num" data-label="Paid">{{ expense.paid_amount|money }}</td>
+                    <td class="k-num {% if expense.balance_due %}k-due{% endif %}" data-label="Due">{% if expense.balance_due %}{{ expense.balance_due|money }}{% endif %}</td>
+                    <td data-label="Status">
+                        {% if expense.payment_status == 'paid' %}<span class="k-badge k-badge--green">Paid</span>
+                        {% elif expense.payment_status == 'partial' %}<span class="k-badge k-badge--amber">Partial</span>
+                        {% else %}<span class="k-badge k-badge--amber">Unpaid</span>{% endif %}
                     </td>
-                    <td>{% if expense.voucher_id %}#{{ expense.voucher_id }}{% else %}-{% endif %}</td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="8" class="text-center text-muted py-5">No expenses recorded yet.</td></tr>
+                <tr><td colspan="7" class="k-empty"><p class="k-empty-title">No expenses recorded yet.</p><p>Record the first bill above. It posts to the books and is listed here with what is still due.</p></td></tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
+    {% include "accounts/_pagination.html" with page_obj=expenses anchor="expense-log" %}
+</section>
+
+<div class="b-grid b-grid--even">
+    <section class="k-section" aria-labelledby="expense-types-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="expense-types-title">Expense types <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Expense types" aria-describedby="tipTypes" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipTypes" role="tooltip" hidden>Tap a type to both configure its billing rule and start a new bill from it.</span></span></h2>
+        </div>
+        <ul class="b-links">
+            {% for expense_type in default_expense_types %}
+            <li><a href="{% url 'expense_list' %}?category={{ expense_type.id }}&type={{ expense_type.id }}#record-expense"{% if selected_type_id == expense_type.id|stringformat:'s' %} aria-current="true"{% endif %}>
+                <strong>{{ expense_type.name }}</strong>
+                <span class="b-links-aside">{% if expense_type.default_amount %}{{ expense_type.default_amount|money }}{% else %}Variable{% endif %}</span>
+                <span class="b-sub">{{ expense_type.pattern_label }} &middot; {% if expense_type.default_due_day %}Day {{ expense_type.default_due_day }}{% else %}Set due day{% endif %} &middot; Alert {{ expense_type.alert_days_before|default:7 }} days before</span>
+            </a></li>
+            {% endfor %}
+            {% for expense_type in custom_expense_types %}
+            <li><a href="{% url 'expense_list' %}?type={{ expense_type.id }}&category={{ expense_type.id }}#record-expense"{% if selected_type_id == expense_type.id|stringformat:'s' %} aria-current="true"{% endif %}>
+                <strong>{{ expense_type.name }}</strong>
+                <span class="b-links-aside">Custom</span>
+            </a></li>
+            {% endfor %}
+        </ul>
+    </section>
+
+    <div>
+        <section class="k-section" aria-labelledby="type-rules-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="type-rules-title">{% if selected_type %}Edit {{ selected_type.name }}{% else %}Expense type rules{% endif %} <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Expense type rules" aria-describedby="tipTypeRules" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipTypeRules" role="tooltip" hidden>{% if selected_type %}Editing {{ selected_type.name }}. Change billing style, monthly due day, and alert timing here.{% else %}Create a new type. Use custom for one-off expenses like maintenance, freight, or repairs.{% endif %} Rent and wages are usually monthly fixed. Electricity is usually monthly variable.</span></span></h2>
+            </div>
+            <form method="post">
+                {% csrf_token %}
+                <input type="hidden" name="action" value="add_category">
+                <input type="hidden" name="type_id" value="{{ selected_type_id }}">
+                <div class="k-form-grid">
+                    {% include "pos/partials/_field.html" with field=category_form.name %}
+                    {% include "pos/partials/_field.html" with field=category_form.expense_pattern %}
+                    {% include "pos/partials/_field.html" with field=category_form.default_due_day %}
+                    {% include "pos/partials/_field.html" with field=category_form.default_amount %}
+                    {% include "pos/partials/_field.html" with field=category_form.alert_days_before %}
+                </div>
+                <div class="k-form-actions">
+                    <button type="submit" class="btn btn-outline-secondary"><i class="bi bi-check2-square" aria-hidden="true"></i> Save rule</button>
+                    {% if selected_type %}<a href="{% url 'expense_list' %}" class="btn btn-link">Clear</a>{% endif %}
+                </div>
+            </form>
+        </section>
+
+        <section class="k-section" aria-labelledby="expense-payments-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="expense-payments-title">Recent expense payments <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Recent expense payments" aria-describedby="tipRecentPay" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipRecentPay" role="tooltip" hidden>Recent payments and the account each payment left from.</span></span></h2>
+            </div>
+            <span id="expense-payments"></span>
+            <div class="table-responsive">
+                <table class="k-table k-table--dense">
+                    <thead><tr><th scope="col">Bill</th><th scope="col">From</th><th scope="col" class="k-num">Amount</th></tr></thead>
+                    <tbody>
+                        {% for payment in recent_expense_payments %}
+                        <tr>
+                            <td>{{ payment.expense.display_title }}<span class="b-sub">{{ payment.expense.category.name }}</span></td>
+                            <td>{{ payment.from_account_title }}<span class="b-sub">{% if payment.voucher_id %}#{{ payment.voucher_id }}{% else %}-{% endif %}</span></td>
+                            <td class="k-num k-out">{{ payment.amount|money }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr><td colspan="3" class="k-empty">No payments recorded yet.</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            {% include "accounts/_pagination.html" with page_obj=recent_expense_payments anchor="expense-payments" %}
+        </section>
+    </div>
 </div>
+{% include "pos/partials/_quick_add_panel.html" %}
 {% endblock %}
 
+{% block extra_js %}<script src="{% static 'zehnms/js/return-flow.js' %}"></script>{% endblock %}

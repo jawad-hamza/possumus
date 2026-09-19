@@ -1,0 +1,2364 @@
+/* ---------- base ---------- */
+
+*,
+*::before,
+*::after {
+    box-sizing: border-box;
+}
+
+html {
+    font-size: 16px;
+    -webkit-text-size-adjust: 100%;
+}
+
+body {
+    margin: 0;
+    background: var(--k-ground);
+    color: var(--k-ink);
+    font-family: var(--k-font);
+    font-size: var(--k-text-md);
+    line-height: var(--k-leading);
+    font-variant-numeric: tabular-nums lining-nums;
+    font-feature-settings: "tnum" 1, "lnum" 1;
+    caret-color: var(--k-accent);
+    accent-color: var(--k-accent);
+    -webkit-font-smoothing: antialiased;
+    text-rendering: optimizeLegibility;
+}
+
+::selection {
+    background: var(--k-badge-blue-bg);
+    color: var(--k-ink-title);
+}
+
+* {
+    scrollbar-width: thin;
+    scrollbar-color: var(--k-border-strong) transparent;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+    background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--k-border-strong);
+    border: 2px solid transparent;
+    border-radius: var(--k-radius-pill);
+    background-clip: padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+    background-color: var(--k-border-field);
+}
+
+:focus-visible {
+    outline: var(--k-focus-ring);
+    outline-offset: var(--k-focus-offset);
+}
+
+:focus:not(:focus-visible) {
+    outline: 0;
+}
+
+a {
+    color: var(--k-accent-ink);
+    text-decoration: none;
+    text-decoration-thickness: 1px;
+    text-underline-offset: 0.2em;
+    transition: color var(--k-dur) var(--k-ease-out);
+}
+
+a:hover {
+    color: var(--k-accent-active);
+    text-decoration: underline;
+}
+
+h1, h2, h3, h4, h5, h6,
+.h1, .h2, .h3, .h4, .h5, .h6 {
+    color: var(--k-ink-title);
+    font-weight: 600;
+    line-height: var(--k-leading-tight);
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+    margin: 0 0 var(--k-2);
+}
+
+h1, .h1 { font-size: var(--k-text-2xl); }
+h2, .h2 { font-size: var(--k-text-xl); }
+h3, .h3 { font-size: var(--k-text-lg); }
+h4, .h4 { font-size: var(--k-text-lg); }
+h5, .h5 { font-size: var(--k-text-md); }
+h6, .h6 { font-size: var(--k-text-sm); }
+
+p {
+    margin: 0 0 var(--k-3);
+}
+
+small,
+.small {
+    font-size: var(--k-text-sm);
+}
+
+strong,
+b {
+    font-weight: 600;
+}
+
+hr {
+    border: 0;
+    border-top: var(--k-hair) solid var(--k-border);
+    opacity: 1;
+    margin: var(--k-5) 0;
+}
+
+code,
+kbd,
+pre,
+samp {
+    font-family: var(--k-font-mono);
+    font-size: 0.92em;
+    color: var(--k-ink);
+}
+
+kbd {
+    background: transparent;
+    padding: 0;
+}
+
+input[type="number"] {
+    -moz-appearance: textfield;
+    appearance: textfield;
+}
+
+input[type="number"]::-webkit-outer-spin-button,
+input[type="number"]::-webkit-inner-spin-button {
+    -webkit-appearance: none;
+    margin: 0;
+}
+
+input[type="search"]::-webkit-search-cancel-button {
+    -webkit-appearance: none;
+}
+
+/* ---------- figures and money meaning ---------- */
+
+.k-num,
+.k-figure {
+    font-variant-numeric: tabular-nums lining-nums;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.k-figure {
+    color: var(--k-ink-title);
+    font-weight: 600;
+    line-height: 1.1;
+    letter-spacing: -0.015em;
+}
+.k-figure--xl { font-size: var(--k-text-4xl); }
+
+.k-in,
+.text-success { color: var(--k-in) !important; }
+
+.k-out,
+.text-danger { color: var(--k-out) !important; }
+
+.k-due,
+.text-warning { color: var(--k-due) !important; }
+
+.text-primary,
+.text-info { color: var(--k-accent-ink) !important; }
+
+.k-muted,
+.text-muted,
+.text-secondary,
+.text-body-secondary { color: var(--k-ink-soft) !important; }
+
+.text-dark,
+.text-body { color: var(--k-ink) !important; }
+
+.text-white-50 { color: var(--k-ink-soft) !important; }
+
+.bg-white,
+.bg-body { background-color: var(--k-panel) !important; }
+
+.bg-light,
+.bg-body-tertiary,
+.bg-body-secondary { background-color: var(--k-sunk) !important; }
+
+.bg-dark { background-color: var(--k-ink) !important; color: var(--k-on-ink); }
+.bg-primary { background-color: var(--k-accent) !important; color: var(--k-on-accent); }
+
+.shadow,
+.shadow-lg { box-shadow: var(--k-shadow-pop) !important; }
+.shadow-sm { box-shadow: var(--k-shadow-panel) !important; }
+
+.rounded,
+.rounded-1,
+.rounded-2,
+.rounded-top,
+.rounded-bottom { border-radius: var(--k-radius-sm) !important; }
+.rounded-3 { border-radius: var(--k-radius) !important; }
+.rounded-4,
+.rounded-5 { border-radius: var(--k-radius-lg) !important; }
+
+.border,
+.border-top,
+.border-bottom,
+.border-start,
+.border-end { border-color: var(--k-border) !important; }
+.border-success { border-color: var(--k-in) !important; }
+.border-danger { border-color: var(--k-out) !important; }
+.border-warning { border-color: var(--k-due) !important; }
+
+/* ---------- pill badges ---------- */
+
+.k-badge,
+.badge,
+.k-state,
+.status-chip {
+    --k-badge-bg: var(--k-badge-neutral-bg);
+    --k-badge-ink: var(--k-badge-neutral-ink);
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    max-width: 100%;
+    padding: 2px 9px;
+    border: 0;
+    border-radius: var(--k-radius-pill);
+    background: var(--k-badge-bg) !important;
+    color: var(--k-badge-ink) !important;
+    font-family: var(--k-font);
+    font-size: var(--k-text-xs);
+    font-weight: 600;
+    line-height: 1.45;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+    vertical-align: middle;
+    transform: none;
+}
+
+.k-badge--blue,
+.badge.bg-primary,
+.badge.bg-info,
+.badge.text-bg-primary,
+.badge.text-bg-info,
+.status-chip.advance {
+    --k-badge-bg: var(--k-badge-blue-bg);
+    --k-badge-ink: var(--k-badge-blue-ink);
+}
+
+.k-badge--green,
+.k-state--in,
+.badge.bg-success,
+.badge.text-bg-success,
+.status-chip.healthy {
+    --k-badge-bg: var(--k-badge-green-bg);
+    --k-badge-ink: var(--k-badge-green-ink);
+}
+
+.k-badge--amber,
+.k-state--due,
+.badge.bg-warning,
+.badge.text-bg-warning,
+.status-chip.below,
+.status-chip.payable,
+.status-chip.receivable {
+    --k-badge-bg: var(--k-badge-amber-bg);
+    --k-badge-ink: var(--k-badge-amber-ink);
+}
+
+.k-badge--red,
+.k-state--out,
+.badge.bg-danger,
+.badge.text-bg-danger {
+    --k-badge-bg: var(--k-badge-red-bg);
+    --k-badge-ink: var(--k-badge-red-ink);
+}
+
+.k-state--none,
+.status-chip.clear,
+.status-chip.unknown {
+    --k-badge-ink: var(--k-ink-soft);
+}
+
+.k-badge--lg {
+    padding: 4px 12px;
+    font-size: var(--k-text-sm);
+}
+
+/* ---------- buttons ---------- */
+
+.btn {
+    --bs-btn-border-radius: var(--k-radius-sm);
+    --bs-btn-font-size: var(--k-text-md);
+    --bs-btn-font-weight: 600;
+    --bs-btn-padding-x: 0.875rem;
+    --bs-btn-padding-y: 0;
+    --bs-btn-box-shadow: none;
+    --bs-btn-focus-box-shadow: none;
+    --bs-btn-color: var(--k-ink);
+    --bs-btn-bg: var(--k-panel);
+    --bs-btn-border-color: var(--k-border-strong);
+    --bs-btn-hover-color: var(--k-ink-title);
+    --bs-btn-hover-bg: var(--k-sunk);
+    --bs-btn-hover-border-color: var(--k-border-field);
+    --bs-btn-active-color: var(--k-ink-title);
+    --bs-btn-active-bg: var(--k-border);
+    --bs-btn-active-border-color: var(--k-border-field);
+    --bs-btn-disabled-color: var(--k-ink-disabled);
+    --bs-btn-disabled-bg: var(--k-sunk);
+    --bs-btn-disabled-border-color: var(--k-border);
+    --bs-btn-disabled-opacity: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.45rem;
+    min-height: var(--k-control-h);
+    border-radius: var(--k-radius-sm);
+    border-width: var(--k-hair);
+    box-shadow: none !important;
+    background-image: none !important;
+    font-family: var(--k-font);
+    line-height: 1.15;
+    letter-spacing: 0;
+    white-space: nowrap;
+    text-decoration: none !important;
+    transition: background-color var(--k-dur) var(--k-ease-out), color var(--k-dur) var(--k-ease-out), border-color var(--k-dur) var(--k-ease-out);
+}
+
+.btn:focus-visible {
+    outline: var(--k-focus-ring);
+    outline-offset: 2px;
+}
+
+.btn:disabled,
+.btn.disabled {
+    cursor: not-allowed;
+    pointer-events: auto;
+}
+
+.btn.is-loading,
+.btn[aria-busy="true"] {
+    opacity: 0.7;
+    cursor: progress;
+    pointer-events: none;
+}
+
+.btn-sm,
+.btn-group-sm > .btn {
+    --bs-btn-padding-x: 0.625rem;
+    --bs-btn-font-size: var(--k-text-sm);
+    --bs-btn-border-radius: var(--k-radius-sm);
+    min-height: var(--k-control-h-sm);
+}
+
+.btn-lg,
+.btn-group-lg > .btn {
+    --bs-btn-padding-x: 1.25rem;
+    --bs-btn-font-size: var(--k-text-lg);
+    --bs-btn-border-radius: var(--k-radius);
+    min-height: var(--k-control-h-lg);
+    border-radius: var(--k-radius);
+}
+
+/* primary: the one filled blue button of a page or a panel */
+.btn-primary,
+.btn-success,
+.btn-dark {
+    --bs-btn-color: var(--k-on-accent);
+    --bs-btn-bg: var(--k-accent);
+    --bs-btn-border-color: var(--k-accent);
+    --bs-btn-hover-color: var(--k-on-accent);
+    --bs-btn-hover-bg: var(--k-accent-hover);
+    --bs-btn-hover-border-color: var(--k-accent-hover);
+    --bs-btn-active-color: var(--k-on-accent);
+    --bs-btn-active-bg: var(--k-accent-active);
+    --bs-btn-active-border-color: var(--k-accent-active);
+    --bs-btn-disabled-color: var(--k-ink-disabled);
+    --bs-btn-disabled-bg: var(--k-sunk);
+    --bs-btn-disabled-border-color: var(--k-border);
+}
+
+/* secondary: the neutral outline. Every other Bootstrap variant lands here. */
+.btn-secondary,
+.btn-light,
+.btn-info,
+.btn-outline-primary,
+.btn-outline-secondary,
+.btn-outline-dark,
+.btn-outline-info,
+.btn-outline-light,
+.btn-outline-success {
+    --bs-btn-color: var(--k-ink);
+    --bs-btn-bg: var(--k-panel);
+    --bs-btn-border-color: var(--k-border-strong);
+}
+
+/* tertiary: text only */
+.btn-link {
+    --bs-btn-color: var(--k-accent-ink);
+    --bs-btn-bg: transparent;
+    --bs-btn-border-color: transparent;
+    --bs-btn-hover-color: var(--k-accent-active);
+    --bs-btn-hover-bg: var(--k-accent-tint);
+    --bs-btn-hover-border-color: transparent;
+    --bs-btn-active-color: var(--k-accent-active);
+    --bs-btn-active-bg: var(--k-accent-tint);
+    --bs-btn-active-border-color: transparent;
+    --bs-btn-disabled-bg: transparent;
+    --bs-btn-disabled-border-color: transparent;
+}
+
+/* asking for a delete is a neutral button that turns red under the pointer; the filled red one confirms it */
+.btn-outline-danger {
+    --bs-btn-color: var(--k-ink);
+    --bs-btn-bg: var(--k-panel);
+    --bs-btn-border-color: var(--k-border-strong);
+    --bs-btn-hover-color: var(--k-out-ink);
+    --bs-btn-hover-bg: var(--k-out-wash);
+    --bs-btn-hover-border-color: var(--k-out-wash);
+    --bs-btn-active-color: var(--k-out-ink);
+    --bs-btn-active-bg: var(--k-out-wash);
+    --bs-btn-active-border-color: var(--k-out-wash);
+}
+
+.btn-danger {
+    --bs-btn-color: var(--k-on-accent);
+    --bs-btn-bg: var(--k-out);
+    --bs-btn-border-color: var(--k-out);
+    --bs-btn-hover-color: var(--k-on-accent);
+    --bs-btn-hover-bg: var(--k-out-ink);
+    --bs-btn-hover-border-color: var(--k-out-ink);
+    --bs-btn-active-color: var(--k-on-accent);
+    --bs-btn-active-bg: var(--k-out-ink);
+    --bs-btn-active-border-color: var(--k-out-ink);
+}
+
+/* green buttons are retired: green means money figures only. A stray btn-success reads as the
+   blue primary and btn-outline-success as the neutral secondary (see above). */
+
+.btn-warning,
+.btn-outline-warning {
+    --bs-btn-color: var(--k-due-ink);
+    --bs-btn-bg: var(--k-panel);
+    --bs-btn-border-color: var(--k-border-strong);
+    --bs-btn-hover-color: var(--k-due-ink);
+    --bs-btn-hover-bg: var(--k-due-wash);
+    --bs-btn-hover-border-color: var(--k-due-wash);
+    --bs-btn-active-color: var(--k-due-ink);
+    --bs-btn-active-bg: var(--k-due-wash);
+    --bs-btn-active-border-color: var(--k-due-wash);
+}
+
+/* a chosen toggle */
+.btn-check:checked + .btn,
+.btn.active,
+.btn.show {
+    color: var(--k-accent-ink);
+    background: var(--k-accent-tint);
+    border-color: var(--k-accent);
+}
+
+.btn-primary.active,
+.btn-primary.show {
+    color: var(--k-on-accent);
+    background: var(--k-accent-active);
+    border-color: var(--k-accent-active);
+}
+
+.btn-check:focus-visible + .btn {
+    outline: var(--k-focus-ring);
+    outline-offset: 2px;
+}
+
+/* an icon alone: square, quiet */
+.k-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: var(--k-control-h-sm);
+    height: var(--k-control-h-sm);
+    padding: 0;
+    border: 0;
+    border-radius: var(--k-radius-sm);
+    background: none;
+    color: var(--k-ink-soft);
+    font-size: 1rem;
+    text-decoration: none !important;
+    transition: background-color var(--k-dur) var(--k-ease-out), color var(--k-dur) var(--k-ease-out);
+}
+
+.k-icon-btn:hover,
+.k-icon-btn[aria-expanded="true"] {
+    background: var(--k-sunk);
+    color: var(--k-ink-title);
+}
+
+.btn-close {
+    --bs-btn-close-bg: none;
+    position: relative;
+    flex: none;
+    width: 30px;
+    height: 30px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--k-radius-sm);
+    background: none;
+    color: var(--k-ink-soft);
+    opacity: 1;
+    transition: background-color var(--k-dur) var(--k-ease-out), color var(--k-dur) var(--k-ease-out);
+}
+
+.btn-close::before,
+.btn-close::after {
+    content: "";
+    position: absolute;
+    left: 8px;
+    right: 8px;
+    top: 50%;
+    height: 1.5px;
+    margin-top: -0.75px;
+    border-radius: 1px;
+    background: currentColor;
+    transform: rotate(45deg);
+}
+
+.btn-close::after {
+    transform: rotate(-45deg);
+}
+
+.btn-close:hover {
+    background: var(--k-sunk);
+    color: var(--k-ink-title);
+    opacity: 1;
+}
+
+.btn-close:focus {
+    box-shadow: none;
+}
+
+.btn-close-white {
+    filter: none;
+    color: var(--k-ink);
+}
+
+/* the key a control answers to. Printed inside buttons on the till only; elsewhere the key is told by the
+   control's tooltip and the shortcut sheet. */
+.k-key {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.6em;
+    padding: 0 5px;
+    border: var(--k-hair) solid var(--k-border-strong);
+    border-radius: var(--k-radius-xs);
+    background: var(--k-panel);
+    color: var(--k-ink-soft);
+    font-family: var(--k-font);
+    font-size: var(--k-text-2xs);
+    font-weight: 600;
+    line-height: 1.5;
+    letter-spacing: 0;
+    text-transform: none;
+}
+
+.btn .k-key {
+    display: none;
+}
+
+/* :where keeps this at the weight of `.btn .k-key`, so a till layout can hide the chips with one class */
+:where(body.k-till) .btn .k-key {
+    display: inline-flex;
+    border-color: currentColor;
+    background: transparent;
+    color: inherit;
+    opacity: 0.8;
+}
+
+@media (hover: none) and (pointer: coarse), (max-width: 575.98px) {
+    :where(body.k-till) .btn .k-key {
+        display: none;
+    }
+}
+
+/* ---------- fields ---------- */
+
+.form-label,
+.col-form-label,
+.k-label {
+    display: inline-block;
+    margin: 0 0 6px;
+    color: var(--k-ink);
+    font-size: var(--k-text-sm);
+    font-weight: 600;
+    line-height: 1.35;
+}
+
+.form-text {
+    margin-top: 6px;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.form-control,
+.form-select {
+    min-height: var(--k-control-h);
+    padding: 0.4rem 0.75rem;
+    border: var(--k-hair) solid var(--k-border-field);
+    border-radius: var(--k-radius-sm);
+    background-color: var(--k-panel);
+    color: var(--k-ink);
+    font-family: var(--k-font);
+    font-size: var(--k-text-md);
+    font-variant-numeric: tabular-nums lining-nums;
+    line-height: 1.4;
+    box-shadow: none;
+    transition: border-color var(--k-dur) var(--k-ease-out), box-shadow var(--k-dur) var(--k-ease-out);
+}
+
+@media (max-width: 991.98px) {
+    .form-control,
+.form-select {
+        font-size: 1rem;
+    }
+}
+
+.form-control::placeholder {
+    color: var(--k-ink-faint);
+    opacity: 1;
+}
+
+.form-control:hover,
+.form-select:hover {
+    border-color: var(--k-ink-faint);
+}
+
+.form-control:focus,
+.form-select:focus {
+    border-color: var(--k-accent);
+    background-color: var(--k-panel);
+    color: var(--k-ink);
+    box-shadow: var(--k-focus-halo);
+    outline: 0;
+}
+
+.form-control:disabled,
+.form-control[readonly],
+.form-select:disabled {
+    border-color: var(--k-border);
+    background-color: var(--k-sunk);
+    color: var(--k-ink-soft);
+    opacity: 1;
+}
+
+.form-control-sm,
+.form-select-sm {
+    min-height: var(--k-control-h-sm);
+    padding: 0.2rem 0.6rem;
+    border-radius: var(--k-radius-sm);
+    font-size: var(--k-text-sm);
+}
+
+.form-control-lg,
+.form-select-lg {
+    min-height: var(--k-control-h-lg);
+    padding: 0.5rem 0.875rem;
+    border-radius: var(--k-radius);
+    font-size: var(--k-text-lg);
+}
+
+textarea.form-control {
+    min-height: 88px;
+    line-height: var(--k-leading);
+    resize: vertical;
+}
+
+/* a notes box left at the framework's ten rows opens short and grows when dragged */
+textarea.form-control[rows="10"] {
+    height: 88px;
+}
+
+.form-select {
+    padding-right: 2.25rem;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath fill='none' stroke='%235b6472' stroke-width='1.6' stroke-linecap='round' stroke-linejoin='round' d='m4 6.5 4 4 4-4'/%3E%3C/svg%3E");
+    background-position: right 0.7rem center;
+    background-size: 14px 14px;
+}
+
+/* dates: same height, radius and ink as any field; the calendar glyph drawn like the select's chevron.
+   An empty date reads as an empty field: its dd-mm-yyyy format is placeholder-grey (the shell marks
+   an empty one with is-empty). */
+.form-control[type="date"],
+.form-control[type="datetime-local"],
+.form-control[type="month"] {
+    min-width: 0;
+    padding-top: 0;
+    padding-bottom: 0;
+    line-height: calc(var(--k-control-h) - 2px);
+}
+
+.form-control-sm[type="date"] {
+    line-height: calc(var(--k-control-h-sm) - 2px);
+}
+
+.form-control[type="date"]::-webkit-date-and-time-value {
+    text-align: left;
+}
+
+.form-control[type="date"]::-webkit-datetime-edit {
+    padding: 0;
+}
+
+.form-control[type="date"]::-webkit-datetime-edit-fields-wrapper {
+    padding: 0;
+}
+
+.form-control[type="date"].is-empty,
+.form-control[type="date"].is-empty::-webkit-datetime-edit,
+.form-control[type="date"].is-empty::-webkit-datetime-edit-text,
+.form-control[type="date"].is-empty::-webkit-datetime-edit-day-field,
+.form-control[type="date"].is-empty::-webkit-datetime-edit-month-field,
+.form-control[type="date"].is-empty::-webkit-datetime-edit-year-field {
+    color: var(--k-ink-faint);
+}
+
+/* An empty, unfocused date hides the browser's format text; the shell lays a designed placeholder over it. */
+.form-control[type="date"].is-empty.has-date-ph:not(:focus)::-webkit-datetime-edit,
+.form-control[type="date"].is-empty.has-date-ph:not(:focus)::-webkit-datetime-edit-text,
+.form-control[type="date"].is-empty.has-date-ph:not(:focus)::-webkit-datetime-edit-day-field,
+.form-control[type="date"].is-empty.has-date-ph:not(:focus)::-webkit-datetime-edit-month-field,
+.form-control[type="date"].is-empty.has-date-ph:not(:focus)::-webkit-datetime-edit-year-field {
+    color: transparent;
+}
+
+.k-date-ph {
+    position: absolute;
+    z-index: 1;
+    display: flex;
+    align-items: center;
+    color: var(--k-ink-faint);
+    font-size: var(--k-text-md);
+    font-variant-numeric: tabular-nums lining-nums;
+    white-space: nowrap;
+    pointer-events: none;
+}
+
+.k-date-ph[hidden] {
+    display: none;
+}
+
+.form-control[type="date"]:focus::-webkit-datetime-edit-day-field:focus,
+.form-control[type="date"]:focus::-webkit-datetime-edit-month-field:focus,
+.form-control[type="date"]:focus::-webkit-datetime-edit-year-field:focus {
+    border-radius: 3px;
+    background: var(--k-accent-tint);
+    color: var(--k-accent-ink);
+}
+
+.form-control[type="date"]::-webkit-calendar-picker-indicator {
+    width: 16px;
+    height: 16px;
+    margin-left: var(--k-2);
+    padding: 0;
+    background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cg fill='none' stroke='%235b6472' stroke-width='1.4' stroke-linecap='round' stroke-linejoin='round'%3E%3Crect x='2.2' y='3.2' width='11.6' height='10.6' rx='1.6'/%3E%3Cpath d='M2.2 6.6h11.6M5.3 1.8v2.6M10.7 1.8v2.6'/%3E%3C/g%3E%3C/svg%3E") center / 15px 15px no-repeat;
+    opacity: 1;
+    cursor: pointer;
+}
+
+.form-control[type="date"]:hover::-webkit-calendar-picker-indicator {
+    background-color: var(--k-sunk);
+    border-radius: 3px;
+}
+
+.form-select[multiple],
+.form-select[size]:not([size="1"]) {
+    background-image: none;
+    padding-right: 0.75rem;
+}
+
+.form-control[type="file"] {
+    padding: 0;
+    line-height: calc(var(--k-control-h) - 2px);
+    overflow: hidden;
+}
+
+.form-control::file-selector-button {
+    height: 100%;
+    margin: 0 0.75rem 0 0;
+    padding: 0 0.875rem;
+    border: 0;
+    border-right: var(--k-hair) solid var(--k-border);
+    border-radius: 0;
+    background: var(--k-sunk);
+    color: var(--k-ink);
+    font-weight: 600;
+    transition: background-color var(--k-dur) var(--k-ease-out);
+}
+
+.form-control:hover:not(:disabled):not([readonly])::file-selector-button {
+    background: var(--k-border);
+    color: var(--k-ink-title);
+}
+
+.form-control-color {
+    padding: 4px;
+    width: 3rem;
+}
+
+.form-control-plaintext {
+    color: var(--k-ink);
+}
+
+.input-group > .form-control:focus,
+.input-group > .form-select:focus {
+    z-index: 5;
+}
+
+.input-group-text {
+    min-height: var(--k-control-h);
+    padding: 0 0.75rem;
+    border: var(--k-hair) solid var(--k-border-field);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-sunk);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+.form-floating > label {
+    color: var(--k-ink-soft);
+}
+
+.form-floating > .form-control:focus ~ label::after,
+.form-floating > .form-control:not(:placeholder-shown) ~ label::after,
+.form-floating > .form-select ~ label::after {
+    background: transparent;
+}
+
+.form-check {
+    min-height: 1.5rem;
+    padding-left: 1.875rem;
+    margin-bottom: 0.375rem;
+}
+
+.form-check .form-check-input {
+    margin-left: -1.875rem;
+}
+
+.form-check-input {
+    width: 1.125rem;
+    height: 1.125rem;
+    margin-top: 0.16rem;
+    border: var(--k-hair) solid var(--k-border-field);
+    background-color: var(--k-panel);
+    box-shadow: none;
+    cursor: pointer;
+    transition: background-color var(--k-dur) var(--k-ease-out), border-color var(--k-dur) var(--k-ease-out), box-shadow var(--k-dur) var(--k-ease-out);
+}
+
+.form-check-input[type="checkbox"] {
+    border-radius: var(--k-radius-xs);
+}
+
+.form-check-input:hover {
+    border-color: var(--k-ink-faint);
+}
+
+.form-check-input:checked,
+.form-check-input:indeterminate {
+    border-color: var(--k-accent);
+    background-color: var(--k-accent);
+}
+
+.form-check-input:focus {
+    border-color: var(--k-accent);
+    box-shadow: none;
+}
+
+.form-check-input:focus-visible {
+    box-shadow: var(--k-focus-halo);
+    outline: 0;
+}
+
+.form-check-input:disabled {
+    border-color: var(--k-border);
+    background-color: var(--k-sunk);
+    opacity: 1;
+}
+
+.form-check-input:disabled:checked {
+    background-color: var(--k-border-field);
+    border-color: var(--k-border-field);
+}
+
+.form-check-input:disabled ~ .form-check-label {
+    color: var(--k-ink-disabled);
+    opacity: 1;
+}
+
+.form-check-label {
+    color: var(--k-ink);
+    cursor: pointer;
+}
+
+.form-switch {
+    padding-left: 3rem;
+}
+
+.form-switch .form-check-input {
+    width: 2.25rem;
+    height: 1.25rem;
+    margin-top: 0.1rem;
+    margin-left: -3rem;
+    border-color: var(--k-border-field);
+    border-radius: var(--k-radius-pill);
+    background-color: var(--k-border-field);
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3E%3Ccircle r='3' fill='%23fff'/%3E%3C/svg%3E");
+    background-position: left center;
+    background-size: contain;
+    transition: background-position var(--k-dur) var(--k-ease-out), background-color var(--k-dur) var(--k-ease-out), border-color var(--k-dur) var(--k-ease-out);
+}
+
+.form-switch .form-check-input:focus {
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='-4 -4 8 8'%3E%3Ccircle r='3' fill='%23fff'/%3E%3C/svg%3E");
+}
+
+.form-switch .form-check-input:checked {
+    border-color: var(--k-accent);
+    background-color: var(--k-accent);
+    background-position: right center;
+}
+
+.form-switch .form-check-input:disabled {
+    background-color: var(--k-border);
+    border-color: var(--k-border);
+}
+
+.form-range {
+    accent-color: var(--k-accent);
+}
+
+.was-validated .form-control:invalid,
+.form-control.is-invalid,
+.was-validated .form-select:invalid,
+.form-select.is-invalid {
+    border-color: var(--k-out);
+    background-image: none;
+    box-shadow: none;
+    padding-right: 0.75rem;
+}
+
+.form-control.is-invalid:focus,
+.form-select.is-invalid:focus {
+    box-shadow: 0 0 0 3px var(--k-out-wash);
+}
+
+.was-validated .form-control:valid,
+.form-control.is-valid,
+.was-validated .form-select:valid,
+.form-select.is-valid {
+    border-color: var(--k-border-field);
+    background-image: none;
+    box-shadow: none;
+    padding-right: 0.75rem;
+}
+
+/* an error stays on the page, under its field */
+.invalid-feedback,
+.errorlist,
+.k-error {
+    margin: 6px 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--k-out);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+.k-error > .bi {
+    margin-right: 5px;
+}
+
+.valid-feedback {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+fieldset {
+    min-width: 0;
+    margin: 0;
+    padding: 0;
+    border: 0;
+}
+
+legend {
+    float: none;
+    width: auto;
+    margin: 0 0 var(--k-3);
+    padding: 0;
+    color: var(--k-ink-title);
+    font-size: var(--k-text-md);
+    font-weight: 600;
+}
+
+/* form layout: label above field, two columns at most */
+.k-form {
+    max-width: 920px;
+}
+
+.k-form-grid {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--k-4) var(--k-5);
+    align-items: start;
+}
+
+.k-form-grid > .k-span-2 {
+    grid-column: 1 / -1;
+}
+
+.k-form-field {
+    min-width: 0;
+}
+
+.k-form-row {
+    display: block;
+    margin: 0 0 var(--k-4);
+}
+
+.k-form-row > .k-label,
+.k-form-row > label:first-child {
+    margin: 0 0 6px;
+}
+
+.k-form-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-2);
+    margin-top: var(--k-5);
+}
+
+/* a long form keeps its actions in reach */
+.k-form-actions--sticky {
+    position: sticky;
+    bottom: 0;
+    z-index: var(--k-z-sticky);
+    margin: var(--k-5) calc(-1 * var(--k-gutter)) calc(-1 * var(--k-7));
+    padding: var(--k-3) var(--k-gutter);
+    border-top: var(--k-hair) solid var(--k-border);
+    background: var(--k-panel);
+}
+
+@media (max-width: 767.98px) {
+    .k-form-grid {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+@media (max-width: 991.98px) {
+    .k-form-actions--sticky {
+        margin-bottom: calc(-1 * var(--k-6));
+    }
+}
+
+/* ---------- help in a tooltip ---------- */
+
+.k-tip {
+    display: inline-flex;
+    align-items: center;
+    vertical-align: middle;
+    margin-left: 4px;
+}
+
+.k-tip-btn {
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 20px;
+    height: 20px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--k-radius-pill);
+    background: none;
+    color: var(--k-ink-faint);
+    font-size: 0.875rem;
+    line-height: 1;
+    cursor: help;
+    transition: background-color var(--k-dur) var(--k-ease-out), color var(--k-dur) var(--k-ease-out);
+}
+
+/* the target is larger than the glyph */
+.k-tip-btn::after {
+    content: "";
+    position: absolute;
+    inset: -6px;
+}
+
+.k-tip-btn:hover,
+.k-tip-btn[aria-expanded="true"] {
+    background: var(--k-accent-tint);
+    color: var(--k-accent-ink);
+}
+
+.k-tip-body[hidden] {
+    display: none !important;
+}
+
+.k-tip:has(> .k-tip-body:empty) {
+    display: none;
+}
+
+.k-tip-pop {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: var(--k-z-tip);
+    width: max-content;
+    max-width: min(300px, calc(100vw - 24px));
+    padding: 8px 12px;
+    border-radius: var(--k-radius);
+    background: var(--k-ink);
+    color: var(--k-on-ink);
+    box-shadow: var(--k-shadow-pop);
+    font-size: var(--k-text-sm);
+    font-weight: 400;
+    line-height: 1.45;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    opacity: 0;
+    transform: translateY(2px);
+    transition: opacity var(--k-dur) var(--k-ease-out), transform var(--k-dur) var(--k-ease-out);
+    pointer-events: none;
+}
+
+.k-tip-pop.is-open {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+}
+
+.k-tip-pop[hidden] {
+    display: none;
+}
+
+.k-tip-pop * {
+    color: inherit !important;
+}
+
+.k-tip-pop a {
+    text-decoration: underline;
+}
+
+.k-tip-pop :is(.form-text, .helptext) {
+    margin: 0;
+    font-size: inherit;
+}
+
+.k-tip-pop p,
+.k-tip-pop ul,
+.k-tip-pop ol {
+    margin: 0;
+}
+
+.k-tip-pop p + p,
+.k-tip-pop p + ul,
+.k-tip-pop ul + p {
+    margin-top: 6px;
+}
+
+.k-tip-pop ul,
+.k-tip-pop ol {
+    padding-left: 1.1rem;
+}
+
+.k-tip-pop kbd {
+    padding: 0 4px;
+    border: var(--k-hair) solid currentColor;
+    border-radius: var(--k-radius-xs);
+    font-family: var(--k-font);
+    font-size: var(--k-text-2xs);
+    font-weight: 600;
+    opacity: 0.85;
+}
+
+@media (hover: none) and (pointer: coarse) {
+    .k-tip-btn {
+        width: 24px;
+        height: 24px;
+        font-size: 1rem;
+    }
+
+    .k-tip-btn::after {
+        inset: -10px;
+    }
+}
+
+/* a title that carries its help: <h2 class="k-section-title">Stock <span class="k-tip">...</span></h2> */
+:is(h1, h2, h3, h4, .k-section-title, .form-label, .k-label, legend) > .k-tip {
+    margin-left: 6px;
+    vertical-align: -0.2em;
+}
+
+/* a label's info button must not make its field sit lower than the field beside it */
+:is(.form-label, .k-label) > .k-tip {
+    margin-block: -4px;
+}
+
+/* ---------- panel: the one container ---------- */
+
+.k-panel,
+.k-section,
+.k-side,
+.card {
+    --k-table-edge: var(--k-panel-pad);
+    position: relative;
+    min-width: 0;
+    margin: 0 0 var(--k-panel-gap);
+    padding: var(--k-panel-pad);
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius);
+    background: var(--k-panel);
+    box-shadow: var(--k-shadow-panel);
+    color: var(--k-ink);
+}
+
+:is(.k-panel, .k-section, .k-side, .card):last-child {
+    margin-bottom: 0;
+}
+
+/* a grid already spaces its children */
+:is(.row, .d-grid, .d-flex) > :is(.k-panel, .k-section, .k-side, .card) {
+    margin-bottom: 0;
+}
+
+.row > * > :is(.k-panel, .k-section, .k-side, .card):only-child {
+    height: 100%;
+    margin-bottom: 0;
+}
+
+/* never a panel inside a panel: an inner one is only a group, set apart by space */
+:is(.k-panel, .k-section, .k-side, .card, .modal-content, .dropdown-menu) :is(.k-panel, .k-section, .k-side, .card) {
+    --k-table-edge: 12px;
+    margin: var(--k-5) 0 0;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+    box-shadow: none;
+}
+
+:is(.k-panel, .k-section, .k-side, .card) :is(.k-panel, .k-section, .k-side, .card):first-child {
+    margin-top: 0;
+}
+
+.card-header,
+.card-footer {
+    padding: 0 0 var(--k-3);
+    border: 0;
+    background: transparent;
+    color: var(--k-ink-title);
+    font-weight: 600;
+}
+
+.card-footer {
+    padding: var(--k-3) 0 0;
+}
+
+.card-body {
+    padding: 0;
+}
+
+.card-title {
+    color: var(--k-ink-title);
+    font-size: var(--k-text-lg);
+    font-weight: 600;
+}
+
+/* the head of a panel: title (with its help),
+a short note,
+then actions at the end */
+.k-section-head,
+.k-panel-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-2) var(--k-3);
+    min-width: 0;
+    margin: 0 0 var(--k-4);
+}
+
+.k-section-title,
+.k-panel-title {
+    margin: 0;
+    color: var(--k-ink-title);
+    font-size: var(--k-text-lg);
+    font-weight: 600;
+    letter-spacing: -0.005em;
+    line-height: var(--k-leading-tight);
+}
+
+.k-section-note,
+.k-panel-note {
+    min-width: 0;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.k-section-head > :is(.k-actions, .k-panel-actions, .btn, .section-link),
+.k-panel-head > :is(.k-actions, .k-panel-actions, .btn) {
+    margin-left: auto;
+}
+
+.section-link {
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+/* a heading on the ground, above a group of panels */
+.k-heading {
+    margin: var(--k-6) 0 var(--k-3);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-lg);
+    font-weight: 600;
+}
+
+.k-heading:first-child {
+    margin-top: 0;
+}
+
+/* a row of actions (section heads, in-page toolbars) */
+
+.k-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-2);
+}
+
+.k-measure {
+    max-width: 72ch;
+}
+
+/* ---------- stat: a label over one figure ---------- */
+
+.k-balance,
+.k-stat {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    min-width: 0;
+}
+
+.k-balance-label,
+.k-stat-label {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+    line-height: 1.35;
+}
+
+.k-balance-figure,
+.k-stat-figure {
+    color: var(--k-ink-title);
+    font-size: var(--k-text-2xl);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums lining-nums;
+    letter-spacing: -0.015em;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.k-balance-note,
+.k-stat-note {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.k-balance--in .k-balance-figure { color: var(--k-in); }
+.k-balance--out .k-balance-figure { color: var(--k-out); }
+.k-balance--due .k-balance-figure { color: var(--k-due); }
+
+/* ---------- tables: no grid, faint row dividers, hover ---------- */
+
+:is(.table, .k-ledger, .k-table, .b-statement) {
+    --bs-table-bg: transparent;
+    --bs-table-color: var(--k-ink);
+    --bs-table-border-color: var(--k-divider);
+    --bs-table-striped-bg: transparent;
+    --bs-table-hover-bg: var(--k-row-hover);
+    --bs-table-active-bg: var(--k-selected);
+    width: 100%;
+    margin: 0;
+    border-collapse: collapse;
+    color: var(--k-ink);
+    font-size: var(--k-text-md);
+    font-variant-numeric: tabular-nums lining-nums;
+    caption-side: bottom;
+}
+
+:is(.table, .k-ledger, .k-table, .b-statement) > :not(caption) > tr > :is(th, td) {
+    height: var(--k-row-h);
+    padding: 10px 12px;
+    border: 0;
+    border-bottom: var(--k-hair) solid var(--k-divider);
+    background: transparent;
+    box-shadow: none;
+    color: inherit;
+    text-align: left;
+    vertical-align: middle;
+}
+
+:is(.table, .k-ledger, .k-table, .b-statement) > :not(caption) > tr > :first-child {
+    padding-left: var(--k-table-edge, 12px);
+}
+
+:is(.table, .k-ledger, .k-table, .b-statement) > :not(caption) > tr > :last-child {
+    padding-right: var(--k-table-edge, 12px);
+}
+
+:is(.table, .k-ledger, .k-table, .b-statement) > thead > tr > :is(th, td) {
+    height: 40px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+    border-bottom: var(--k-hair) solid var(--k-border);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+    letter-spacing: 0;
+    text-transform: none;
+    white-space: nowrap;
+    vertical-align: bottom;
+}
+
+:is(.table, .k-ledger, .k-table, .b-statement) > tbody > tr > th {
+    font-weight: 500;
+}
+
+:is(.table, .k-ledger, .k-table, .b-statement) > tbody > tr:last-child > * {
+    border-bottom: 0;
+}
+
+:is(.table, .k-ledger, .k-table, .b-statement) > tbody > tr > * {
+    transition: background-color var(--k-dur) var(--k-ease-out);
+}
+
+:is(.table, .k-ledger, .k-table, .b-statement) > tbody > tr:hover > * {
+    background: var(--k-row-hover);
+}
+
+:is(.table, .k-ledger, .k-table) > tbody > tr:is(.table-active, .is-selected, [aria-selected="true"]) > * {
+    background: var(--k-selected);
+}
+
+/* the totals row: semibold, a slightly stronger divider above */
+:is(.table, .k-ledger, .k-table, .b-statement) > tfoot > tr > *,
+:is(.table, .k-ledger, .k-table, .b-statement) > * > tr.k-total > * {
+    border-top: var(--k-hair) solid var(--k-border-strong);
+    border-bottom: 0;
+    color: var(--k-ink-title);
+    font-weight: 600;
+}
+
+:is(.table, .k-ledger, .k-table, .b-statement) > tfoot > tr + tr > * {
+    border-top: 0;
+}
+
+:is(.table, .k-ledger, .k-table, .b-statement) :is(th, td):is(.k-num, .text-end) {
+    text-align: right;
+    white-space: nowrap;
+}
+
+:is(.table, .k-ledger, .k-table, .b-statement) :is(th, td).text-center {
+    text-align: center;
+}
+
+.table-sm > :not(caption) > tr > :is(th, td),
+.k-table--dense > :not(caption) > tr > :is(th, td) {
+    height: 38px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+}
+
+.table-bordered > :not(caption) > * > *,
+.table-bordered > :not(caption) > * {
+    border-width: 0;
+}
+
+.table-striped > tbody > tr:nth-of-type(odd) > * {
+    --bs-table-bg-type: transparent;
+}
+
+/* a row that is only a group title or a note takes no hover */
+:is(.table, .k-ledger, .k-table) > tbody > tr:is(.k-row-plain, :has(> td.k-empty)):hover > * {
+    background: transparent;
+}
+
+.k-row-plain > * {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 600;
+}
+
+/* the old margin column: an empty one takes no room, a written one is a plain muted index */
+.k-ledger > * > tr > :is([data-k="margin"], td:first-child):empty,
+.k-ledger > thead > tr > th:first-child:has(> .visually-hidden:only-child),
+.k-ledger > thead > tr > th:first-child:empty {
+    width: 0;
+    padding: 0 !important;
+}
+
+.k-ledger > * > tr > :is([data-k="margin"], td:first-child):empty + *,
+.k-ledger > thead > tr > th:first-child:has(> .visually-hidden:only-child) + th,
+.k-ledger > thead > tr > th:first-child:empty + th {
+    padding-left: var(--k-table-edge, 12px);
+}
+
+.k-ledger > tbody > tr > td[data-k="margin"]:not(:empty) {
+    width: 1%;
+    color: var(--k-ink-faint);
+    font-size: var(--k-text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+/* row actions: shown on hover or focus, always there for a keyboard and on touch */
+.k-row-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: 4px;
+    opacity: 0;
+    transition: opacity var(--k-dur) var(--k-ease-out);
+}
+
+tr:hover .k-row-actions,
+tr:focus-within .k-row-actions,
+.k-row-actions:focus-within,
+.k-row-actions:has(.show) {
+    opacity: 1;
+}
+
+@media (hover: none) {
+    .k-row-actions {
+        opacity: 1;
+    }
+}
+
+/* a panel's table runs to the panel's edges; its first and last columns keep the panel's padding */
+:is(.k-panel, .k-section, .k-side, .card) > :is(table, .table-responsive, .k-ledger-scroll),
+:is(.k-panel, .k-section, .k-side, .card) > .card-body > :is(table, .table-responsive, .k-ledger-scroll) {
+    max-width: none;
+    margin-left: calc(-1 * var(--k-panel-pad));
+    margin-right: calc(-1 * var(--k-panel-pad));
+}
+
+:is(.k-panel, .k-section, .k-side, .card) > table {
+    width: calc(100% + 2 * var(--k-panel-pad));
+}
+
+:is(.k-panel, .k-section, .k-side, .card) > :is(table, .table-responsive, .k-ledger-scroll):last-child {
+    margin-bottom: calc(-1 * var(--k-panel-pad) + var(--k-1));
+}
+
+/* inner groups do not bleed */
+:is(.k-panel, .k-section, .k-side, .card) :is(.k-panel, .k-section, .k-side, .card) > :is(table, .table-responsive, .k-ledger-scroll) {
+    margin-left: 0;
+    margin-right: 0;
+    margin-bottom: 0;
+}
+
+:is(.k-panel, .k-section, .k-side, .card) :is(.k-panel, .k-section, .k-side, .card) > table {
+    width: 100%;
+}
+
+/* a scrolling region keeps its column heads in view */
+.k-ledger-scroll {
+    max-height: var(--k-ledger-h, none);
+    overflow: auto;
+    overscroll-behavior: contain;
+}
+
+.k-ledger-scroll > table > thead > tr > * {
+    position: sticky;
+    top: 0;
+    z-index: 1;
+    background: var(--k-panel);
+}
+
+.table-responsive {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+
+/* ---------- empty, loading ---------- */
+
+.k-empty,
+td.k-empty {
+    padding: var(--k-6) var(--k-4);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-md);
+    text-align: center;
+}
+
+td.k-empty {
+    height: auto;
+}
+
+.k-empty > :last-child {
+    margin-bottom: 0;
+}
+
+.k-empty > .bi:first-child {
+    display: block;
+    text-align: center;
+    margin-bottom: var(--k-2);
+    color: var(--k-ink-faint);
+    font-size: var(--k-text-3xl);
+}
+
+.k-empty-title {
+    margin: 0 0 var(--k-1);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-lg);
+    font-weight: 600;
+}
+
+.k-empty p {
+    max-width: 52ch;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+.k-empty .btn,
+.k-empty .k-actions {
+    margin-top: var(--k-3);
+}
+
+.k-empty .k-actions {
+    justify-content: center;
+}
+
+.k-loading {
+    padding: var(--k-5) var(--k-4);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    text-align: center;
+}
+
+.k-skeleton {
+    display: block;
+    min-height: 1em;
+    border-radius: var(--k-radius-xs);
+    background: var(--k-sunk);
+    color: transparent !important;
+}
+
+.k-skeleton * {
+    visibility: hidden;
+}
+
+[aria-busy="true"] {
+    cursor: progress;
+}
+
+/* ---------- notes and messages ---------- */
+
+.alert {
+    --bs-alert-padding-x: 16px;
+    --bs-alert-padding-y: 12px;
+    --bs-alert-margin-bottom: var(--k-4);
+    --bs-alert-border-radius: var(--k-radius);
+    position: relative;
+    padding: 12px 16px;
+    border: 0;
+    border-radius: var(--k-radius);
+    background: var(--k-accent-tint);
+    color: var(--k-badge-blue-ink);
+    font-size: var(--k-text-md);
+    line-height: 1.45;
+}
+
+.alert-success { background: var(--k-in-wash); color: var(--k-in-ink); }
+.alert-warning { background: var(--k-due-wash); color: var(--k-due-ink); }
+.alert-danger,
+.alert-error { background: var(--k-out-wash); color: var(--k-out-ink); }
+.alert-info,
+.alert-primary { background: var(--k-accent-tint); color: var(--k-badge-blue-ink); }
+.alert-secondary,
+.alert-light,
+.alert-dark,
+.alert-debug { background: var(--k-sunk); color: var(--k-ink); }
+
+.alert-heading {
+    margin: 0 0 var(--k-1);
+    color: inherit;
+    font-size: var(--k-text-md);
+    font-weight: 600;
+}
+
+.alert :is(p, ul, ol):last-child {
+    margin-bottom: 0;
+}
+
+.alert a,
+.alert .alert-link {
+    color: inherit;
+    font-weight: 600;
+    text-decoration: underline;
+}
+
+.alert > .bi:first-child {
+    margin-right: 6px;
+}
+
+.alert-dismissible {
+    padding-right: 48px;
+}
+
+.alert-dismissible .btn-close {
+    position: absolute;
+    top: 7px;
+    right: 8px;
+    padding: 0;
+    color: inherit;
+}
+
+.k-note {
+    margin: 0 0 var(--k-4);
+    padding: 12px 16px;
+    border-radius: var(--k-radius);
+    background: var(--k-sunk);
+    color: var(--k-ink);
+    font-size: var(--k-text-md);
+}
+
+.k-note > :last-child { margin-bottom: 0; }
+.k-note--in { background: var(--k-in-wash); color: var(--k-in-ink); }
+.k-note--due { background: var(--k-due-wash); color: var(--k-due-ink); }
+.k-note--out { background: var(--k-out-wash); color: var(--k-out-ink); }
+
+.toast {
+    --bs-toast-bg: var(--k-panel);
+    --bs-toast-border-color: var(--k-border);
+    --bs-toast-border-radius: var(--k-radius);
+    --bs-toast-box-shadow: var(--k-shadow-pop);
+    --bs-toast-header-bg: var(--k-panel);
+    --bs-toast-header-color: var(--k-ink-title);
+    --bs-toast-color: var(--k-ink);
+}
+
+/* ---------- tabs, pills, pagination ---------- */
+
+.nav-tabs {
+    --bs-nav-tabs-border-width: 0;
+    display: flex;
+    flex-wrap: nowrap;
+    gap: var(--k-5);
+    margin-bottom: var(--k-4);
+    overflow-x: auto;
+    overflow-y: hidden;
+    border-bottom: var(--k-hair) solid var(--k-border);
+    scrollbar-width: none;
+}
+
+.nav-tabs::-webkit-scrollbar {
+    display: none;
+}
+
+.nav-tabs .nav-link {
+    margin-bottom: 0;
+    padding: 10px 2px;
+    border: 0;
+    border-bottom: 2px solid transparent;
+    border-radius: 0;
+    background: none;
+    color: var(--k-ink-soft);
+    font-weight: 500;
+    white-space: nowrap;
+    transition: color var(--k-dur) var(--k-ease-out), border-color var(--k-dur) var(--k-ease-out);
+}
+
+.nav-tabs .nav-link:hover {
+    border-bottom-color: var(--k-border-strong);
+    color: var(--k-ink-title);
+}
+
+.nav-tabs .nav-link.active,
+.nav-tabs .nav-item.show .nav-link {
+    border-bottom-color: var(--k-accent);
+    background: none;
+    color: var(--k-accent-ink);
+    font-weight: 600;
+}
+
+.nav-pills {
+    --bs-nav-pills-border-radius: var(--k-radius-sm);
+    gap: 4px;
+}
+
+.nav-pills .nav-link {
+    padding: 6px 12px;
+    border-radius: var(--k-radius-sm);
+    color: var(--k-ink-soft);
+    font-weight: 500;
+}
+
+.nav-pills .nav-link:hover {
+    background: var(--k-sunk);
+    color: var(--k-ink-title);
+}
+
+.nav-pills .nav-link.active,
+.nav-pills .show > .nav-link {
+    background: var(--k-accent-tint);
+    color: var(--k-accent-ink);
+}
+
+.nav-link:focus-visible {
+    outline: var(--k-focus-ring);
+    outline-offset: 2px;
+    box-shadow: none;
+}
+
+.pagination {
+    --bs-pagination-border-width: 0;
+    --bs-pagination-focus-box-shadow: none;
+    flex-wrap: wrap;
+    gap: 4px;
+    margin: var(--k-4) 0 0;
+}
+
+.page-link {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 34px;
+    height: 34px;
+    margin: 0 !important;
+    padding: 0 10px;
+    border: 0;
+    border-radius: var(--k-radius-sm) !important;
+    background: transparent;
+    color: var(--k-ink);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+    transition: background-color var(--k-dur) var(--k-ease-out);
+}
+
+.page-link:hover {
+    background: var(--k-sunk);
+    color: var(--k-ink-title);
+}
+
+.page-item.active > .page-link,
+.page-link.active {
+    background: var(--k-accent-tint);
+    color: var(--k-accent-ink);
+    font-weight: 600;
+}
+
+.page-item.disabled > .page-link,
+.page-link.disabled {
+    background: transparent;
+    color: var(--k-ink-disabled);
+}
+
+/* ---------- menus, drawers, dialogs ---------- */
+
+.dropdown-menu {
+    --bs-dropdown-zindex: var(--k-z-popover);
+    --bs-dropdown-border-radius: var(--k-radius);
+    --bs-dropdown-border-color: var(--k-border);
+    --bs-dropdown-box-shadow: var(--k-shadow-pop);
+    --bs-dropdown-link-color: var(--k-ink);
+    --bs-dropdown-link-hover-color: var(--k-ink-title);
+    --bs-dropdown-link-hover-bg: var(--k-sunk);
+    --bs-dropdown-link-active-color: var(--k-accent-ink);
+    --bs-dropdown-link-active-bg: var(--k-accent-tint);
+    --bs-dropdown-divider-bg: var(--k-divider);
+    min-width: 12rem;
+    padding: 6px;
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius);
+    background: var(--k-panel);
+    box-shadow: var(--k-shadow-pop);
+    color: var(--k-ink);
+    font-size: var(--k-text-md);
+}
+
+.dropdown-item {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    min-height: 36px;
+    padding: 6px 10px;
+    border: 0;
+    border-radius: var(--k-radius-sm);
+    background: none;
+    color: var(--k-ink);
+    font-weight: 500;
+    text-align: left;
+    white-space: normal;
+}
+
+.dropdown-item > .bi {
+    flex: none;
+    width: 18px;
+    color: var(--k-ink-soft);
+    text-align: center;
+}
+
+.dropdown-item:hover,
+.dropdown-item:focus {
+    background: var(--k-sunk);
+    color: var(--k-ink-title);
+}
+
+.dropdown-item.active,
+.dropdown-item:active {
+    background: var(--k-accent-tint);
+    color: var(--k-accent-ink);
+}
+
+.dropdown-item.active > .bi {
+    color: var(--k-accent-ink);
+}
+
+.dropdown-item.disabled,
+.dropdown-item:disabled {
+    color: var(--k-ink-disabled);
+}
+
+.dropdown-divider {
+    margin: 6px 0;
+    border-top-color: var(--k-divider);
+    opacity: 1;
+}
+
+.dropdown-header {
+    padding: 6px 10px 4px;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-xs);
+    font-weight: 600;
+}
+
+.dropdown-toggle::after {
+    width: 7px;
+    height: 7px;
+    margin-left: 8px;
+    border: 0;
+    border-right: 1.5px solid currentColor;
+    border-bottom: 1.5px solid currentColor;
+    vertical-align: 0.25em;
+    transform: rotate(45deg);
+}
+
+.k-kebab.dropdown-toggle::after {
+    content: none;
+}
+
+.modal {
+    --bs-modal-zindex: 1055;
+    --bs-modal-bg: var(--k-panel);
+    --bs-modal-color: var(--k-ink);
+    --bs-modal-border-width: 0;
+    --bs-modal-border-radius: var(--k-radius-lg);
+    --bs-modal-inner-border-radius: var(--k-radius-lg);
+    --bs-modal-box-shadow: var(--k-shadow-pop);
+    --bs-modal-header-border-width: 0;
+    --bs-modal-footer-border-width: 0;
+    --bs-modal-padding: 24px;
+}
+
+.modal-backdrop {
+    --bs-backdrop-bg: var(--k-ink-title);
+    --bs-backdrop-opacity: 0.4;
+}
+
+.modal-content {
+    border: 0;
+    border-radius: var(--k-radius-lg);
+    box-shadow: var(--k-shadow-pop);
+}
+
+.modal-header {
+    padding: 20px 24px 8px;
+    border: 0;
+}
+
+.modal-title {
+    color: var(--k-ink-title);
+    font-size: var(--k-text-xl);
+    font-weight: 600;
+}
+
+.modal-body {
+    padding: 8px 24px 16px;
+}
+
+.modal-footer {
+    gap: var(--k-2);
+    padding: 8px 24px 20px;
+    border: 0;
+}
+
+.modal-footer > * {
+    margin: 0;
+}
+
+.offcanvas {
+    --bs-offcanvas-bg: var(--k-panel);
+    --bs-offcanvas-border-width: 0;
+    --bs-offcanvas-box-shadow: var(--k-shadow-pop);
+    box-shadow: var(--k-shadow-pop);
+}
+
+/* a side panel beside the content, sticky while the work scrolls */
+.k-drawer {
+    position: sticky;
+    top: 0;
+    align-self: start;
+    max-height: calc(100dvh - var(--k-head-h) - 2 * var(--k-gutter));
+    overflow: auto;
+}
+
+.list-group {
+    --bs-list-group-bg: var(--k-panel);
+    --bs-list-group-color: var(--k-ink);
+    --bs-list-group-border-color: var(--k-divider);
+    --bs-list-group-border-radius: var(--k-radius);
+    --bs-list-group-item-padding-x: 16px;
+    --bs-list-group-item-padding-y: 12px;
+    --bs-list-group-action-hover-bg: var(--k-row-hover);
+    --bs-list-group-action-hover-color: var(--k-ink-title);
+    --bs-list-group-action-active-bg: var(--k-sunk);
+    --bs-list-group-active-bg: var(--k-accent-tint);
+    --bs-list-group-active-color: var(--k-accent-ink);
+    --bs-list-group-active-border-color: var(--k-divider);
+    --bs-list-group-disabled-color: var(--k-ink-disabled);
+}
+
+.list-group-item.active {
+    font-weight: 600;
+}
+
+:is(.k-panel, .k-section, .k-side, .card) > .list-group-flush {
+    margin: 0 calc(-1 * var(--k-panel-pad));
+}
+
+.progress,
+.progress-stacked {
+    --bs-progress-height: 6px;
+    --bs-progress-bg: var(--k-sunk);
+    --bs-progress-border-radius: var(--k-radius-pill);
+    --bs-progress-bar-bg: var(--k-accent);
+    --bs-progress-bar-transition: none;
+}
+
+.progress-bar.bg-success { background-color: var(--k-in) !important; }
+.progress-bar.bg-danger { background-color: var(--k-out) !important; }
+.progress-bar.bg-warning { background-color: var(--k-due) !important; }
+
+.accordion {
+    --bs-accordion-bg: var(--k-panel);
+    --bs-accordion-color: var(--k-ink);
+    --bs-accordion-border-color: var(--k-border);
+    --bs-accordion-border-radius: var(--k-radius);
+    --bs-accordion-inner-border-radius: calc(var(--k-radius) - 1px);
+    --bs-accordion-btn-color: var(--k-ink-title);
+    --bs-accordion-btn-focus-box-shadow: var(--k-focus-halo);
+    --bs-accordion-active-bg: var(--k-panel);
+    --bs-accordion-active-color: var(--k-ink-title);
+}
+
+.accordion-button {
+    font-weight: 600;
+}
+
+details > summary {
+    color: var(--k-accent-ink);
+    font-weight: 500;
+    cursor: pointer;
+}
+
+/* ---------- helpers ---------- */
+
+.k-only-narrow {
+    display: none !important;
+}
+
+@media (max-width: 575.98px) {
+    .k-only-narrow {
+        display: revert !important;
+    }
+
+    .k-not-narrow {
+        display: none !important;
+    }
+}
+
+/* ---------- phone: a table becomes a list of two-line entries ----------
+   line one: what (left) and amount (right); line two, soft: meta (left) and balance (right).
+   Parts come from data-k on the cells; the shell fills them in from the column heads. */
+
+@media (max-width: 575.98px) {
+    table.k-ledger--stack {
+        display: block;
+        width: 100%;
+    }
+
+    :is(.k-panel, .k-section, .k-side, .card) > table.k-ledger--stack {
+        width: calc(100% + 2 * var(--k-panel-pad));
+    }
+
+    table.k-ledger--stack > :is(thead, tbody, tfoot) {
+        display: block;
+    }
+
+    /* each entry carries its own labels, so plain column heads leave the screen (screen readers keep them);
+       a head that holds sort buttons or other controls stays */
+    table.k-ledger--stack > thead:not(:has(button, a, input, select)) {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    table.k-ledger--stack > * > tr {
+        position: relative;
+        display: flex;
+        flex-wrap: wrap;
+        align-items: baseline;
+        gap: 2px var(--k-3);
+        padding: 10px var(--k-table-edge, 12px);
+        border-bottom: var(--k-hair) solid var(--k-divider);
+    }
+
+    table.k-ledger--stack > * > tr::after {
+        content: "";
+        order: 4;
+        flex: 0 0 100%;
+        height: 0;
+    }
+
+    table.k-ledger--stack > * > tr > :is(th, td) {
+        display: block;
+        min-width: 0;
+        height: auto;
+        padding: 0 !important;
+        border: 0 !important;
+        background: transparent !important;
+        text-align: left;
+        white-space: normal;
+    }
+
+    table.k-ledger--stack > * > tr > :is([data-k="margin"], [data-k="hide"]) {
+        display: none !important;
+    }
+
+    table.k-ledger--stack > * > tr > [data-k="what"] {
+        order: 1;
+        flex: 1 1 0;
+        color: var(--k-ink-title);
+        font-weight: 500;
+        overflow-wrap: anywhere;
+    }
+
+    table.k-ledger--stack > * > tr > [data-k="flag"] {
+        order: 2;
+        flex: none;
+    }
+
+    table.k-ledger--stack > * > tr > [data-k="amount"] {
+        order: 3;
+        flex: none;
+        margin-left: auto;
+        font-weight: 600;
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    table.k-ledger--stack > * > tr > [data-k="meta"] {
+        order: 5;
+        flex: 0 1 auto;
+        color: var(--k-ink-soft);
+        font-size: var(--k-text-sm);
+    }
+
+    table.k-ledger--stack > * > tr > [data-k="balance"] {
+        order: 6;
+        flex: none;
+        margin-left: auto;
+        color: var(--k-ink-soft);
+        font-size: var(--k-text-sm);
+        text-align: right;
+        white-space: nowrap;
+    }
+
+    table.k-ledger--stack > * > tr > [data-k="field"] {
+        order: 7;
+        flex: 1 1 100%;
+        padding-top: 6px !important;
+    }
+
+    table.k-ledger--stack > * > tr > [data-k="note"] {
+        order: 8;
+        flex: 1 1 100%;
+    }
+
+    table.k-ledger--stack > tbody > tr > :is(td.k-empty, [data-k="note"]) {
+        padding: var(--k-4) 0 !important;
+        text-align: center;
+    }
+
+    table.k-ledger--stack > * > tr > [data-k="more"] {
+        order: 9;
+        display: none !important;
+        flex: 1 1 100%;
+    }
+
+    table.k-ledger--stack > tbody > tr.k-open > [data-k="more"],
+    table.k-ledger--stack > tfoot > tr > [data-k="more"]:not(:empty) {
+        display: flex !important;
+        justify-content: space-between;
+        gap: var(--k-3);
+        padding-top: 4px !important;
+        font-size: var(--k-text-sm);
+    }
+
+    table.k-ledger--stack > * > tr > :is([data-k="more"], [data-k="field"])[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        flex: none;
+        color: var(--k-ink-soft);
+        font-size: var(--k-text-sm);
+        font-weight: 500;
+    }
+
+    table.k-ledger--stack > * > tr > [data-k="field"][data-label]::before {
+        margin-bottom: 4px;
+    }
+
+    table.k-ledger--stack > * > tr > [data-k-suffix]:not(:empty)::after {
+        content: " " attr(data-k-suffix);
+        color: var(--k-ink-soft);
+        font-size: var(--k-text-xs);
+        font-weight: 500;
+    }
+
+    /* the column heads are said once, in the same two-line shape */
+    table.k-ledger--stack > thead > tr {
+        padding-top: 6px;
+        padding-bottom: 6px;
+        border-bottom-color: var(--k-border);
+    }
+
+    table.k-ledger--stack > thead > tr > * {
+        color: var(--k-ink-soft) !important;
+        font-size: var(--k-text-xs) !important;
+        font-weight: 500 !important;
+    }
+
+    table.k-ledger--stack > thead > tr > :is([data-k="more"], [data-k="field"], [data-k="flag"], [data-k="note"]) {
+        display: none !important;
+    }
+
+    table.k-ledger--stack > tbody > tr:last-child {
+        border-bottom: 0;
+    }
+
+    table.k-ledger--stack > tbody > tr.k-has-more {
+        padding-right: calc(var(--k-table-edge, 12px) + 18px);
+        cursor: pointer;
+    }
+
+    table.k-ledger--stack > tbody > tr.k-has-more::before {
+        content: "";
+        position: absolute;
+        top: 17px;
+        right: var(--k-table-edge, 12px);
+        width: 7px;
+        height: 7px;
+        border-right: 1.5px solid var(--k-ink-faint);
+        border-bottom: 1.5px solid var(--k-ink-faint);
+        transform: rotate(45deg);
+        transition: transform var(--k-dur) var(--k-ease-out);
+    }
+
+    table.k-ledger--stack > tbody > tr.k-open::before {
+        transform: rotate(-135deg);
+    }
+
+    table.k-ledger--stack > tbody > tr.k-open {
+        background: var(--k-row-hover);
+    }
+
+    table.k-ledger--stack > tfoot > tr {
+        border-top: var(--k-hair) solid var(--k-border-strong);
+        border-bottom: 0;
+        color: var(--k-ink-title);
+    }
+
+    table.k-ledger--stack > tfoot > tr > * {
+        font-weight: 600;
+    }
+
+    table.k-ledger--stack .k-row-actions {
+        opacity: 1;
+    }
+}
+
+/* ---------- print ---------- */
+
+@media print {
+    body {
+        background: var(--k-panel) !important;
+    }
+
+    :is(.k-panel, .k-section, .k-side, .card) {
+        padding: 0;
+        border: 0;
+        box-shadow: none;
+    }
+
+    :is(.k-panel, .k-section, .k-side, .card) > :is(table, .table-responsive, .k-ledger-scroll) {
+        width: 100%;
+        margin-left: 0;
+        margin-right: 0;
+    }
+
+    :is(.table, .k-ledger, .k-table) > thead {
+        display: table-header-group;
+    }
+
+    :is(.table, .k-ledger, .k-table) tr {
+        break-inside: avoid;
+    }
+
+    .k-tip,
+    .k-tip-pop,
+    .k-row-actions,
+    .pagination {
+        display: none !important;
+    }
+
+    a {
+        color: inherit;
+        text-decoration: none;
+    }
+}

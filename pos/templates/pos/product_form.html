@@ -1,81 +1,145 @@
 {% extends "pos/base.html" %}
+{% load static %}
+{% load currency_tags %}
 {% block title %}{{ title }}{% endblock %}
+{% block page_title %}{{ title|lower|capfirst }}{% endblock %}
+{% block page_help %}Maintain commercial pricing, barcode, stock, and replenishment rules. Save with Ctrl+S; Esc goes back.{% endblock %}
+
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/pages/entry.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/return-flow.css' %}" rel="stylesheet">{% endblock %}
+
+{% block page_actions %}<a href="{{ back_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to products</a>{% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-    <div>
-        <h2 class="mb-1">{{ title }}</h2>
-        <p class="text-muted mb-0">Maintain commercial pricing, barcode, stock, and replenishment rules.</p>
-    </div>
-    <a href="{% url 'product_list' %}" class="btn btn-outline-secondary">
-        <i class="bi bi-arrow-left"></i> Back to Products
-    </a>
-</div>
-
-<form method="post" class="page-card p-4 p-lg-5">
+<form method="post" class="st-form" data-st-entry data-product-form{% if copy_source and not form.is_bound %} data-another-size{% endif %} data-back-url="{{ back_url }}" data-rf-draft="product"{% if form.is_bound %} data-rf-bound{% endif %} data-fractional-units='{% fractional_units_json %}' data-piece-unit="{% piece_unit %}" data-currency="{{ currency_symbol }}">
     {% csrf_token %}
+    {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+
+    {% if copy_source %}
+    <div class="alert alert-info" role="note"><i class="bi bi-info-circle" aria-hidden="true"></i><div>Another size of <strong>{{ copy_source.name }}</strong>. {% if form.variant_label %}Name this size, then type its own SKU, cost and price.{% else %}Put the size in the name, such as &ldquo;{{ copy_source.name }} Large&rdquo;, then type its own cost and price.{% endif %} Each size keeps its own stock.</div></div>
+    {% endif %}
 
     {% if form.non_field_errors %}
     <div class="alert alert-danger">{{ form.non_field_errors }}</div>
     {% endif %}
 
-    <div class="row g-4">
-        <div class="col-lg-6">
-            <h5 class="mb-3">Identity</h5>
-            <div class="row g-3">
-                <div class="col-12">{% include "pos/partials/_field.html" with field=form.name %}</div>
-                <div class="col-md-6">{% include "pos/partials/_field.html" with field=form.sku %}</div>
-                <div class="col-md-6">{% include "pos/partials/_field.html" with field=form.barcode %}</div>
-                <div class="col-md-6">{% include "pos/partials/_field.html" with field=form.brand %}</div>
-                <div class="col-md-6">{% include "pos/partials/_field.html" with field=form.category %}</div>
-                <div class="col-12">{% include "pos/partials/_field.html" with field=form.supplier %}</div>
+    <section class="k-section" aria-labelledby="group-identity">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="group-identity">Basics {% include "pos/partials/_help_tip.html" with tip_id="tipIdentity" tip_name="Basics" tip_text="What the item is called and how it is found at the till." %}</h2>
+        </div>
+        <div class="k-form-grid">
+            <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.name %}</div>
+            {% if form.variant_label %}<div>{% include "pos/partials/_entry_field.html" with field=form.variant_label %}</div>{% endif %}
+            {% if form.source_variant_label %}<div>{% include "pos/partials/_entry_field.html" with field=form.source_variant_label %}</div>{% endif %}
+            <div>{% include "pos/partials/_entry_field.html" with field=form.sku %}</div>
+            <div>{% include "pos/partials/_entry_field.html" with field=form.barcode %}</div>
+            <div>
+                {% include "pos/partials/_entry_field.html" with field=form.category %}
+                <div class="rf-add-row"><a class="rf-add" href="{% url 'category_add' %}?next={{ request.get_full_path|urlencode }}" data-rf-quick="category" data-rf-target="{{ form.category.id_for_label }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add category</a></div>
+            </div>
+            <div>
+                {% include "pos/partials/_entry_field.html" with field=form.brand %}
+                <div class="rf-add-row"><a class="rf-add" href="{% url 'brand_add' %}?next={{ request.get_full_path|urlencode }}" data-rf-quick="brand" data-rf-target="{{ form.brand.id_for_label }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add brand</a></div>
+            </div>
+            <div>
+                {% include "pos/partials/_entry_field.html" with field=form.supplier %}
+                <div class="rf-add-row"><a class="rf-add" href="{% url 'add_supplier_from_pos' %}?next={{ request.get_full_path|urlencode }}" data-rf-quick="supplier" data-rf-target="{{ form.supplier.id_for_label }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add supplier</a></div>
             </div>
         </div>
+    </section>
 
-        <div class="col-lg-6">
-            <h5 class="mb-3">Commercial Pricing</h5>
-            <div class="row g-3">
-                <div class="col-md-4">{% include "pos/partials/_field.html" with field=form.cost_price %}</div>
-                <div class="col-md-4">{% include "pos/partials/_field.html" with field=form.price %}</div>
-                <div class="col-md-4">{% include "pos/partials/_field.html" with field=form.minimum_margin_percent %}</div>
-            </div>
-            <div class="alert alert-light border mt-3 mb-0">
-                <div class="small text-muted">Commercial rule</div>
-                <div>The sale price must stay above the configured minimum margin. Purchase entries can update both cost and sale price automatically.</div>
-            </div>
+    <section class="k-section" aria-labelledby="group-pricing">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="group-pricing">Pricing <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Pricing" aria-describedby="tipPricing" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipPricing" role="tooltip" hidden>{% if form.price_by %}Type the sale price, or let it follow the cost: a percentage on cost, or a fixed amount on cost.{% else %}Type the cost and the sale price.{% endif %} The sale price must stay above the minimum margin. Purchase entries can update both cost and sale price.</span></span></h2>
         </div>
-
-        <div class="col-lg-6">
-            <h5 class="mb-3">Stock Control</h5>
-            <div class="row g-3">
-                <div class="col-md-4">{% include "pos/partials/_field.html" with field=form.stock %}</div>
-                <div class="col-md-4">{% include "pos/partials/_field.html" with field=form.low_stock_threshold %}</div>
-                <div class="col-md-4">{% include "pos/partials/_field.html" with field=form.is_active %}</div>
-                <div class="col-md-6">{% include "pos/partials/_field.html" with field=form.location %}</div>
-                <div class="col-md-6">{% include "pos/partials/_field.html" with field=form.expiry_date %}</div>
+        <div class="st-pricing">
+            <div class="k-form-grid">
+                <div>{% include "pos/partials/_entry_field.html" with field=form.unit %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=form.cost_price %}</div>
+                {% if form.price_by %}
+                <div>{% include "pos/partials/_entry_field.html" with field=form.price_by %}</div>
+                <div data-price-by-input="percent">{% include "pos/partials/_entry_field.html" with field=form.markup_percent %}</div>
+                <div data-price-by-input="amount">{% include "pos/partials/_entry_field.html" with field=form.markup_amount %}</div>
+                {% endif %}
+                <div>{% include "pos/partials/_entry_field.html" with field=form.price %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=form.minimum_margin_percent %}</div>
             </div>
-        </div>
-
-        <div class="col-lg-6">
-            <h5 class="mb-3">Quick Actions</h5>
-            <div class="page-card p-3 h-100 border-0 bg-light">
-                <p class="text-muted mb-3">Create missing master data without leaving the workflow.</p>
-                <div class="d-flex flex-wrap gap-2">
-                    <a href="{% url 'brand_add' %}" class="btn btn-outline-primary btn-sm"><i class="bi bi-tag"></i> Add Brand</a>
-                    <a href="{% url 'category_add' %}" class="btn btn-outline-primary btn-sm"><i class="bi bi-grid"></i> Add Category</a>
-                    <a href="{% url 'add_supplier_from_pos' %}" class="btn btn-outline-primary btn-sm"><i class="bi bi-building"></i> Add Supplier</a>
+            <div class="st-summary" id="pricing-preview" aria-live="polite">
+                <dl class="st-sum" aria-label="Pricing check">
+                    <div><dt>Cost</dt><dd data-sum-cost>&ndash;</dd></div>
+                    <div><dt data-sum-markup-label>Markup</dt><dd data-sum-markup>&ndash;</dd></div>
+                    <div><dt data-sum-floor-label>Lowest price</dt><dd data-sum-floor>&ndash;</dd></div>
+                    <div class="st-sum-total"><dt>Sale price <span class="st-sum-unit" data-sum-unit></span></dt><dd data-sum-sale>&ndash;</dd></div>
+                </dl>
+                <div class="st-pricing-say">
+                    <div id="pricing-preview-price">Enter the cost, then the sale price{% if form.price_by %} or a markup{% endif %}.</div>
+                    <div id="pricing-preview-margin" class="st-verdict"></div>
                 </div>
             </div>
         </div>
-    </div>
+    </section>
 
-    <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
-        <a href="{% url 'product_list' %}" class="btn btn-outline-secondary">Cancel</a>
-        <button type="submit" class="btn btn-dark">Save Product</button>
+    <section class="k-section" aria-labelledby="group-stock">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="group-stock">Stock {% include "pos/partials/_help_tip.html" with tip_id="tipStock" tip_name="Stock" tip_text="Where it is kept and when the shop should be warned to reorder." %}</h2>
+        </div>
+        <div class="k-form-grid">
+            {% if form.opening_stock %}
+            <div>{% include "pos/partials/_entry_field.html" with field=form.opening_stock %}</div>
+            {% else %}
+            <div>
+                <div class="st-field k-form-field">
+                    <span class="form-label">Current stock <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Current stock" aria-describedby="tipCurrentStock" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipCurrentStock" role="tooltip" hidden>{% if feature_modules.stock_control %}Change stock from <a href="{% url 'stock_adjustments' %}?product={{ form.instance.id }}">Stock adjustments</a> or a purchase.{% else %}Stock changes through sales and purchases.{% endif %}</span></span></span>
+                    <div class="st-readout">{{ form.instance.stock_display }}</div>
+                </div>
+            </div>
+            {% endif %}
+            <div>{% include "pos/partials/_entry_field.html" with field=form.low_stock_threshold %}</div>
+            <div>{% include "pos/partials/_entry_field.html" with field=form.location %}</div>
+            {% if form.expiry_date %}<div>{% include "pos/partials/_entry_field.html" with field=form.expiry_date %}</div>{% endif %}
+            {% if form.track_stock %}<div class="st-switch-cell">{% include "pos/partials/_entry_field.html" with field=form.track_stock %}</div>{% endif %}
+            <div class="st-switch-cell">{% include "pos/partials/_entry_field.html" with field=form.is_active %}</div>
+        </div>
+    </section>
+
+    {% if feature_modules.variants %}{% if form.instance.pk or variant_siblings %}
+    <section class="k-section" aria-labelledby="group-sizes" id="sizes">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="group-sizes">Sizes and variants {% include "pos/partials/_help_tip.html" with tip_id="tipSizes" tip_name="Sizes and variants" tip_text="One item in several sizes. Each size has its own SKU, barcode, cost, price and stock." %}</h2>
+            {% if form.instance.pk %}<div class="k-actions"><a class="btn btn-outline-secondary btn-sm" href="{% url 'product_add' %}?copy={{ form.instance.pk }}" data-add-size><i class="bi bi-plus-lg" aria-hidden="true"></i> Add a size</a></div>{% endif %}
+        </div>
+        {% if variant_siblings %}
+        <table class="k-ledger" data-variant-table>
+            <thead>
+                <tr><th scope="col">Size</th><th scope="col">SKU</th><th scope="col" class="text-end">Price</th><th scope="col" class="text-end">Stock</th></tr>
+            </thead>
+            <tbody>
+                {% for sibling in variant_siblings %}
+                <tr{% if sibling.pk == form.instance.pk %} aria-current="true" class="is-selected"{% endif %}>
+                    <td>{% if sibling.pk == form.instance.pk %}<strong>{{ sibling.variant_label }}</strong> <span class="k-badge k-badge--blue">this one</span>{% else %}<a href="{% url 'product_edit' sibling.pk %}">{{ sibling.variant_label|default:sibling.name }}</a>{% endif %}</td>
+                    <td>{{ sibling.sku }}</td>
+                    <td class="k-num text-end">{{ sibling.price|money }}</td>
+                    <td class="k-num text-end">{{ sibling.stock_display }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="st-dim mb-0">No other sizes yet.</p>
+        {% endif %}
+    </section>
+    {% endif %}{% endif %}
+
+    <div class="st-actionbar">
+        <span class="st-actionbar-note">{% if form.errors %}<span class="k-out"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> Some entries need a second look. They are marked above.</span>{% endif %}</span>
+        {# First in the markup so pressing Enter in a field means plain Save; shown last via order. #}
+        <button type="submit" class="btn btn-primary order-3" data-k-key="Ctrl+S" data-k-key-label="Save the product">Save product</button>
+        <a href="{{ back_url }}" class="btn btn-outline-secondary order-1" data-tip="Go back without saving (Esc)">Cancel</a>
+        {% if not form.instance.pk %}
+        <button type="submit" name="save_and_new" value="1" class="btn btn-outline-secondary order-2">Save and add another</button>
+        {% endif %}
     </div>
 </form>
+{% include "pos/partials/_quick_add_panel.html" %}
 {% endblock %}
 
-
-
-
+{% block extra_js %}<script src="{% static 'zehnms/js/pages/stock.js' %}"></script><script src="{% static 'zehnms/js/return-flow.js' %}"></script>{% endblock %}

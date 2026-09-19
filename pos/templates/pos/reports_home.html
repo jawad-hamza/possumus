@@ -1,319 +1,214 @@
-﻿{% extends "pos/base.html" %}
-{% block title %}Reports Centre{% endblock %}
+{% extends "pos/base.html" %}
+{% load static currency_tags %}
+{% block title %}Reports{% endblock %}
+{% block page_title %}Reports{% endblock %}
+{% block page_help %}Open the business report you need without guessing accounting terms. Reports open on this month, keep your dates when you switch to another one, and export to CSV. Sales are always shown after returns.{% endblock %}
 
 {% block extra_css %}
-<style>
-    .report-kpi,
-    .report-card {
-        text-decoration: none;
-        color: inherit;
-        display: block;
-    }
-
-    .report-card-shell {
-        position: relative;
-        overflow: hidden;
-        border-radius: 18px;
-        padding: 1.25rem;
-        border: 1px solid var(--card-border);
-        background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
-        height: 100%;
-        transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-    }
-
-    .report-card-shell:hover {
-        transform: translateY(-3px);
-        box-shadow: 0 16px 28px rgba(20, 33, 61, 0.12);
-    }
-
-    .report-card-shell::before {
-        content: "";
-        position: absolute;
-        inset: 0 0 auto 0;
-        height: 4px;
-        background: var(--card-accent, var(--accent-primary));
-    }
-
-    .report-card-shell.primary {
-        --card-accent: var(--accent-primary);
-        --card-soft: rgba(37, 99, 235, 0.12);
-    }
-
-    .report-card-shell.success {
-        --card-accent: var(--accent-success);
-        --card-soft: rgba(22, 163, 74, 0.12);
-    }
-
-    .report-card-shell.info {
-        --card-accent: var(--accent-info);
-        --card-soft: rgba(15, 118, 110, 0.12);
-    }
-
-    .report-card-shell.warning {
-        --card-accent: var(--accent-warning);
-        --card-soft: rgba(245, 158, 11, 0.14);
-    }
-
-    .report-card-shell.danger {
-        --card-accent: var(--accent-danger);
-        --card-soft: rgba(220, 38, 38, 0.12);
-    }
-
-    .report-card-shell.slate {
-        --card-accent: var(--accent-slate);
-        --card-soft: rgba(51, 65, 85, 0.12);
-    }
-
-    .report-card-badge {
-        width: 46px;
-        height: 46px;
-        border-radius: 15px;
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        background: var(--card-soft, rgba(37, 99, 235, 0.12));
-        color: var(--card-accent, var(--accent-primary));
-        font-size: 1.05rem;
-    }
-
-    .eyebrow {
-        font-size: 0.78rem;
-        letter-spacing: 0.06em;
-        text-transform: uppercase;
-        color: #64748b;
-        font-weight: 700;
-    }
-
-    .report-metric {
-        border-top: 1px solid #e2e8f0;
-        margin-top: 18px;
-        padding-top: 14px;
-    }
-
-    .report-cta {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        margin-top: 14px;
-        color: var(--card-accent, var(--accent-primary));
-        font-weight: 600;
-    }
-</style>
+<link rel="stylesheet" href="{% static 'zehnms/css/pages/reports.css' %}">
 {% endblock %}
+
+{% block page_actions %}<a href="{{ today_report_url }}" class="btn btn-primary" data-k-key="F2" data-k-key-label="Today's sales by invoice"><i class="bi bi-calendar-day" aria-hidden="true"></i> Today's sales</a>{% if nav_access.accounts %}<a href="{% url 'accounts_home' %}" class="btn btn-outline-secondary"><i class="bi bi-journal-text" aria-hidden="true"></i> Accounts</a>{% endif %}{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon success"><i class="bi bi-graph-up-arrow"></i></span>
-        <div>
-            <h1 class="page-title">Reports Centre</h1>
-            <p class="page-subtitle">Open the business report you need without guessing accounting terms.</p>
-        </div>
-    </div>
-    <div class="page-actions">
-        <a href="{{ today_report_url }}" class="btn btn-dark"><i class="bi bi-calendar-day"></i> Today Sales</a>
-        <a href="{% url 'accounts_home' %}" class="btn btn-outline-secondary"><i class="bi bi-journal-text"></i> Accounts Overview</a>
-    </div>
-</div>
-
-<div class="row g-3 mb-4">
+<section class="k-section rp-sums" aria-label="At a glance">
     {% for kpi in report_kpis %}
-    <div class="col-sm-6 col-xl-3">
-        <a href="{{ kpi.url }}" class="report-kpi">
-            <div class="metric-card {{ kpi.accent }}">
-                <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div>
-                        <div class="metric-label">{{ kpi.title }}</div>
-                        <div class="metric-value">
-                            {% if kpi.kind == 'money' %}
-                            Rs {{ kpi.value|floatformat:2 }}
-                            {% else %}
-                            {{ kpi.value }}
-                            {% endif %}
-                        </div>
-                        <div class="metric-meta">{{ kpi.meta }}</div>
-                    </div>
-                    <span class="metric-icon"><i class="bi {{ kpi.icon|default:'bi-arrow-up-right' }}"></i></span>
-                </div>
-            </div>
-        </a>
+    <div class="k-balance rp-sum{% if kpi.value %}{% if kpi.title == 'Low Stock' or kpi.title == 'Expiry Alerts' %} k-balance--due{% endif %}{% endif %}">
+        <div class="k-balance-label"><a href="{{ kpi.url }}">{{ kpi.title|lower|capfirst }}</a></div>
+        <div class="k-balance-figure">{% if kpi.kind == 'money' %}{{ kpi.value|money }}{% else %}{{ kpi.value }}{% endif %}</div>
+        <div class="k-balance-note">{{ kpi.meta }}</div>
     </div>
     {% endfor %}
+</section>
+
+<div class="rp-finder">
+    <div class="rp-search">
+        <i class="bi bi-search" aria-hidden="true"></i>
+        <label for="rp-search" class="visually-hidden">Find a report</label>
+        <input type="search" id="rp-search" class="form-control" placeholder="Find a report" autocomplete="off" data-rp-search>
+    </div>
+    <p class="rp-memory" data-rp-memory hidden>
+        <span>Opening on <strong data-rp-memory-label></strong>, the date shortcut you used last.</span>
+        <button type="button" data-rp-memory-reset>Open on this month instead</button>
+    </p>
 </div>
 
-<div class="row g-4 mb-4">
-    {% for card in report_cards %}
-    <div class="col-md-6 col-xl-4">
-        <a href="{{ card.url }}" class="report-card">
-            <div class="report-card-shell {{ card.accent|default:'primary' }}">
-                <div class="d-flex justify-content-between align-items-start gap-3">
-                    <div>
-                        <div class="eyebrow">{{ card.eyebrow }}</div>
-                        <h2 class="section-title mt-2">{{ card.title }}</h2>
-                        <p class="section-copy">{{ card.description }}</p>
-                    </div>
-                    <span class="report-card-badge"><i class="bi {{ card.icon|default:'bi-arrow-up-right' }}"></i></span>
-                </div>
-                <div class="report-metric">
-                    <div class="text-muted small">{{ card.metric_label }}</div>
-                    <div class="fs-5 fw-bold mt-1">
-                        {% if card.metric_kind == 'money' %}
-                        Rs {{ card.metric_value|floatformat:2 }}
-                        {% else %}
-                        {{ card.metric_value }}
-                        {% endif %}
-                    </div>
-                    <div class="report-cta">{{ card.cta }} <i class="bi bi-arrow-right"></i></div>
-                </div>
-            </div>
-        </a>
-    </div>
-    {% endfor %}
+{% regroup analysis_reports by group as analysis_groups %}
+<div class="rp-catalog">
+    <section class="k-section rp-group" aria-labelledby="rp-group-sales" data-rp-group>
+        <div class="k-section-head"><h2 class="k-section-title" id="rp-group-sales">Sales</h2></div>
+        <ul class="rp-list">
+            {% for card in report_cards %}{% if card.url == today_report_url %}
+            <li class="rp-item" data-rp-item data-rp-words="{{ card.title }} {{ card.description }}">
+                <a href="{{ card.url }}" class="rp-item-link" data-goto="{{ card.title }}" data-rp-ranged><i class="bi {{ card.icon|default:'bi-receipt' }}" aria-hidden="true"></i> {{ card.title }}</a>
+                {% include "pos/partials/_help_tip.html" with tip_id="tipRpCardSales" tip_name=card.title tip_text=card.description %}
+                <span class="rp-item-figure" data-label="{{ card.metric_label }}">{% if card.metric_kind == 'money' %}{{ card.metric_value|money }}{% else %}{{ card.metric_value }}{% endif %}<span class="rp-item-figure-label">{{ card.metric_label }}</span></span>
+            </li>
+            {% endif %}{% endfor %}
+            {% for group in analysis_groups %}{% if group.grouper == "Sales" %}{% for item in group.list %}
+            <li class="rp-item" data-rp-item data-rp-words="{{ item.title }} {{ item.description }}">
+                <a href="{{ item.url }}" class="rp-item-link" data-goto="{{ item.title }}" data-rp-ranged><i class="bi {{ item.icon }}" aria-hidden="true"></i> {{ item.title }}</a>
+                <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About {{ item.title }}" aria-describedby="tipRpS{{ forloop.counter }}" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipRpS{{ forloop.counter }}" role="tooltip" hidden>{{ item.description }}</span></span>
+            </li>
+            {% endfor %}{% endif %}{% endfor %}
+        </ul>
+    </section>
+
+    <section class="k-section rp-group" aria-labelledby="rp-group-stock" data-rp-group>
+        <div class="k-section-head"><h2 class="k-section-title" id="rp-group-stock">Stock</h2></div>
+        <ul class="rp-list">
+            {% for card in report_cards %}{% if card.title == "Low Stock Report" or card.title == "Near Expiry Report" %}
+            <li class="rp-item" data-rp-item data-rp-words="{{ card.title }} {{ card.description }}">
+                <a href="{{ card.url }}" class="rp-item-link" data-goto="{{ card.title }}"><i class="bi {{ card.icon|default:'bi-box' }}" aria-hidden="true"></i> {{ card.title }}</a>
+                <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About {{ card.title }}" aria-describedby="tipRpC{{ forloop.counter }}" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipRpC{{ forloop.counter }}" role="tooltip" hidden>{{ card.description }}</span></span>
+                <span class="rp-item-figure{% if card.metric_value %} k-due{% endif %}" data-label="{{ card.metric_label }}">{{ card.metric_value }}<span class="rp-item-figure-label">{{ card.metric_label }}</span></span>
+            </li>
+            {% endif %}{% endfor %}
+            {% for group in analysis_groups %}{% if group.grouper == "Stock" %}{% for item in group.list %}
+            <li class="rp-item" data-rp-item data-rp-words="{{ item.title }} {{ item.description }}">
+                <a href="{{ item.url }}" class="rp-item-link" data-goto="{{ item.title }}" data-rp-ranged><i class="bi {{ item.icon }}" aria-hidden="true"></i> {{ item.title }}</a>
+                <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About {{ item.title }}" aria-describedby="tipRpK{{ forloop.counter }}" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipRpK{{ forloop.counter }}" role="tooltip" hidden>{{ item.description }}</span></span>
+            </li>
+            {% endfor %}{% endif %}{% endfor %}
+        </ul>
+    </section>
+
+    {% for card in report_cards %}{% if card.title == "Expense Register" %}
+    <section class="k-section rp-group" aria-labelledby="rp-group-money" data-rp-group>
+        <div class="k-section-head"><h2 class="k-section-title" id="rp-group-money">Money</h2></div>
+        <ul class="rp-list">
+            <li class="rp-item" data-rp-item data-rp-words="{{ card.title }} {{ card.description }}">
+                <a href="{{ card.url }}" class="rp-item-link" data-goto="{{ card.title }}"><i class="bi {{ card.icon }}" aria-hidden="true"></i> {{ card.title }}</a>
+                {% include "pos/partials/_help_tip.html" with tip_id="tipRpCardMoney" tip_name=card.title tip_text=card.description %}
+                <span class="rp-item-figure{% if card.metric_value > 0 %} k-out{% endif %}" data-label="{{ card.metric_label }}">{{ card.metric_value|money }}<span class="rp-item-figure-label">{{ card.metric_label }}</span></span>
+            </li>
+            {% if nav_access.accounts %}
+            <li class="rp-item" data-rp-item data-rp-words="Accounts profit and loss balance sheet trial balance ledger">
+                <a href="{% url 'accounts_home' %}" class="rp-item-link"><i class="bi bi-journal-text" aria-hidden="true"></i> Accounts</a>
+                {% include "pos/partials/_help_tip.html" with tip_id="tipRpAccounts" tip_name="Accounts" tip_text="Profit and loss, balance sheet, trial balance and every ledger." %}
+            </li>
+            {% endif %}
+        </ul>
+    </section>
+    {% endif %}{% endfor %}
+
+    {% for card in report_cards %}{% if card.title == "Employee Report" %}
+    <section class="k-section rp-group" aria-labelledby="rp-group-team" data-rp-group>
+        <div class="k-section-head"><h2 class="k-section-title" id="rp-group-team">Team</h2></div>
+        <ul class="rp-list">
+            <li class="rp-item" data-rp-item data-rp-words="{{ card.title }} {{ card.description }} staff employees">
+                <a href="{{ card.url }}" class="rp-item-link" data-goto="{{ card.title }}"><i class="bi {{ card.icon }}" aria-hidden="true"></i> {{ card.title }}</a>
+                {% include "pos/partials/_help_tip.html" with tip_id="tipRpCardTeam" tip_name=card.title tip_text=card.description %}
+                <span class="rp-item-figure" data-label="{{ card.metric_label }}">{{ card.metric_value }}<span class="rp-item-figure-label">{{ card.metric_label }}</span></span>
+            </li>
+        </ul>
+    </section>
+    {% endif %}{% endfor %}
+    <p class="rp-no-match" data-rp-none hidden>No report by that name. Try "sales", "stock" or "tax".</p>
 </div>
 
-<div class="row g-4">
-    <div class="col-xl-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-success"><i class="bi bi-bag-check"></i></span>
-                    <div>
-                        <h2 class="section-title">Best Sellers This Month</h2>
-                        <p class="section-copy">Products moving fastest in the current month.</p>
-                    </div>
-                </div>
-                <a href="{{ month_report_url }}" class="section-link">Month sales</a>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr><th>Product</th><th class="text-end">Qty Sold</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for item in best_selling_month %}
-                        <tr>
-                            <td>{{ item.product__name }}</td>
-                            <td class="text-end">{{ item.total_qty }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="2" class="text-center text-muted py-4">No monthly sales yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+<h2 class="k-heading">Watchlists</h2>
+<div class="rp-pair">
+    <section class="k-section" aria-labelledby="rp-best-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="rp-best-title">Best sellers this month</h2>
+            <a href="{{ month_report_url }}" class="section-link">Month sales</a>
         </div>
-    </div>
-    <div class="col-xl-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-danger"><i class="bi bi-exclamation-triangle"></i></span>
-                    <div>
-                        <h2 class="section-title">Low Stock Watchlist</h2>
-                        <p class="section-copy">Restock these items before they interrupt counter sales.</p>
-                    </div>
-                </div>
-                <a href="{% url 'low_stock_list' %}" class="section-link">Low stock</a>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr><th>Product</th><th>Category</th><th class="text-end">Stock</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for product in top_low_stock %}
-                        <tr>
-                            <td>{{ product.name }}</td>
-                            <td>{{ product.category|default:"-" }}</td>
-                            <td class="text-end text-danger fw-semibold">{{ product.stock }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="3" class="text-center text-muted py-4">No low stock alerts right now.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+        <table class="k-table">
+            <thead><tr><th scope="col">Product</th><th scope="col" class="k-num">Sold</th></tr></thead>
+            <tbody>
+                {% for item in best_selling_month %}
+                <tr>
+                    <td>{{ item.product__name }}</td>
+                    <td class="k-num">{{ item.total_qty|qty_short:item.product__unit }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="2" class="k-empty"><p class="k-empty-title">No sales this month yet</p><p>The products that sell most this month are ranked here.</p></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    <section class="k-section" aria-labelledby="rp-low-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="rp-low-title">Low stock</h2>
+            <a href="{% url 'low_stock_list' %}" class="section-link">View all</a>
         </div>
-    </div>
-</div>
-
-<div class="row g-4 mt-1">
-    <div class="col-xl-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-warning"><i class="bi bi-hourglass-split"></i></span>
-                    <div>
-                        <h2 class="section-title">Expiry Watchlist</h2>
-                        <p class="section-copy">Products that need quick action before expiry becomes a write-off.</p>
-                    </div>
-                </div>
-                <a href="{{ expiry_report_url }}" class="section-link">Open expiry report</a>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr><th>Product</th><th>Expiry</th><th class="text-end">Days Left</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for product in near_expiry_preview %}
-                        <tr>
-                            <td>{{ product.name }}</td>
-                            <td>{{ product.expiry_date|date:"d M Y" }}</td>
-                            <td class="text-end text-warning fw-semibold">{{ product.days_to_expiry }}</td>
-                        </tr>
-                        {% empty %}
-                        {% for product in expired_preview %}
-                        <tr>
-                            <td>{{ product.name }}</td>
-                            <td>{{ product.expiry_date|date:"d M Y" }}</td>
-                            <td class="text-end text-danger fw-semibold">Expired</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="3" class="text-center text-muted py-4">No expiry alerts right now.</td></tr>
-                        {% endfor %}
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+        <table class="k-table">
+            <thead><tr><th scope="col">Product</th><th scope="col">Category</th><th scope="col" class="k-num">In stock</th></tr></thead>
+            <tbody>
+                {% for product in top_low_stock %}
+                <tr>
+                    <td>{{ product.display_name }}</td>
+                    <td class="rp-soft">{{ product.category|default:"-" }}</td>
+                    <td class="k-num">{% if product.stock <= 0 %}<span class="k-badge k-badge--red">Out</span>{% else %}<span class="k-due">{{ product.stock_display }}</span>{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="3" class="k-empty"><p class="k-empty-title">All stocked up</p><p>Products at or below their reorder level are listed here.</p></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% if show_expiry_reports %}
+    <section class="k-section" aria-labelledby="rp-expiry-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="rp-expiry-title">Expiring soon</h2>
+            <a href="{{ expiry_report_url }}" class="section-link">View all</a>
         </div>
-    </div>
-    <div class="col-xl-6">
-        <div class="page-card p-4 h-100">
-            <div class="section-heading">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-success"><i class="bi bi-people-fill"></i></span>
-                    <div>
-                        <h2 class="section-title">Employee Report</h2>
-                        <p class="section-copy">Who sold, how long they worked, what profit they generated, and what has been paid to them.</p>
-                    </div>
-                </div>
-                <a href="{{ employee_report_url }}" class="section-link">Open staff reports</a>
-            </div>
-            <div class="table-responsive">
-                <table class="table table-sm align-middle mb-0">
-                    <thead>
-                        <tr><th>User</th><th class="text-end">Sales</th><th class="text-end">Profit</th><th class="text-end">Time</th></tr>
-                    </thead>
-                    <tbody>
-                        {% for row in employee_rows %}
-                        <tr>
-                            <td>
-                                <a href="{% url 'employee_report_detail' row.user.id %}" class="fw-semibold text-decoration-none">{{ row.user.get_full_name|default:row.user.username }}</a>
-                                <div class="small text-muted">{{ row.role_label }}{% if row.wages_paid > 0 %} | Wages paid Rs {{ row.wages_paid|floatformat:2 }}{% endif %}</div>
-                            </td>
-                            <td class="text-end">Rs {{ row.sales_totals.net_sales|floatformat:2 }}</td>
-                            <td class="text-end">Rs {{ row.sales_totals.gross_profit|floatformat:2 }}</td>
-                            <td class="text-end">{{ row.total_time_display }}</td>
-                        </tr>
-                        {% empty %}
-                        <tr><td colspan="4" class="text-center text-muted py-4">No active users yet.</td></tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
+        <table class="k-table">
+            <thead><tr><th scope="col">Product</th><th scope="col">Expiry</th><th scope="col" class="k-num">Days left</th></tr></thead>
+            <tbody>
+                {% for product in near_expiry_preview %}
+                <tr>
+                    <td>{{ product.display_name }}</td>
+                    <td class="text-nowrap">{{ product.expiry_date|date:"d M Y" }}</td>
+                    <td class="k-num k-due">{{ product.days_to_expiry }}</td>
+                </tr>
+                {% empty %}
+                {% for product in expired_preview %}
+                <tr>
+                    <td>{{ product.display_name }}</td>
+                    <td class="text-nowrap">{{ product.expiry_date|date:"d M Y" }}</td>
+                    <td class="k-num"><span class="k-badge k-badge--red">Expired</span></td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="3" class="k-empty"><p class="k-empty-title">No expiry alerts</p><p>Products with an expiry date coming up are listed here.</p></td></tr>
+                {% endfor %}
+                {% endfor %}
+            </tbody>
+        </table>
+    </section>
+    {% endif %}
+    {% if show_employee_reports %}
+    <section class="k-section" aria-labelledby="rp-team-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="rp-team-title">Staff</h2>
+            <a href="{{ employee_report_url }}" class="section-link">View all</a>
         </div>
-    </div>
+        <div class="table-responsive">
+            <table class="k-table">
+                <thead><tr><th scope="col">User</th><th scope="col" class="k-num">Sales</th><th scope="col" class="k-num">Profit</th><th scope="col" class="k-num">Time</th></tr></thead>
+                <tbody>
+                    {% for row in employee_rows %}
+                    <tr>
+                        <td class="rp-lead">
+                            <a href="{% url 'employee_report_detail' row.user.id %}">{{ row.user.get_full_name|default:row.user.username }}</a>
+                            <div class="rp-cell-note">{{ row.role_label }}{% if row.wages_paid > 0 %}, wages paid {{ row.wages_paid|money }}{% endif %}</div>
+                        </td>
+                        <td class="k-num">{{ row.sales_totals.net_sales|money }}</td>
+                        <td class="k-num">{{ row.sales_totals.gross_profit|money }}</td>
+                        <td class="k-num">{{ row.total_time_display }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="4" class="k-empty"><p class="k-empty-title">No active users yet</p><p>Each staff login gets a line here.</p></td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </section>
+    {% endif %}
 </div>
 {% endblock %}
 
+{% block extra_js %}
+<script src="{% static 'zehnms/js/pages/reports.js' %}"></script>
+{% endblock %}

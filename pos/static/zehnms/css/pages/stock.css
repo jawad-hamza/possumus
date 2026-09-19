@@ -1,0 +1,1150 @@
+/* Stock side: products, purchases, stock control, returns, import. Built on the system's panels,
+   tables and forms; this file only adds what those pages need. Tokens only. */
+
+/* ---------- shared bits ---------- */
+
+.st-name {
+    color: var(--k-ink-title);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+a.st-name:hover {
+    color: var(--k-accent-ink);
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+}
+
+.st-sub {
+    display: block;
+    margin-top: 2px;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 400;
+    line-height: 1.35;
+}
+
+.st-dim {
+    color: var(--k-ink-soft);
+}
+
+.st-wrap {
+    white-space: normal !important;
+}
+
+.st-req {
+    margin-left: 2px;
+    color: var(--k-ink-soft);
+    font-weight: 400;
+}
+
+/* entry pages keep a readable width */
+.st-form {
+    max-width: 1080px;
+}
+
+.st-form--narrow {
+    max-width: 680px;
+}
+
+/* the "add" links that sit under a field */
+.st-field .rf-add-row,
+.k-form-field .rf-add-row {
+    margin: var(--k-2) 0 0;
+}
+
+.form-control[readonly]:not([type="file"]) {
+    background-color: var(--k-sunk);
+}
+
+/* ---------- product list: find panel ---------- */
+
+.st-filters {
+    display: grid;
+    grid-template-columns: minmax(220px, 2fr) repeat(2, minmax(140px, 1fr)) auto;
+    gap: var(--k-3);
+    align-items: end;
+}
+
+.st-filters .st-more-row {
+    display: grid;
+    grid-column: 1 / -1;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--k-3);
+}
+
+.st-filters.is-collapsible:not(.is-open) .st-more-row {
+    display: none;
+}
+
+.st-filters-actions {
+    display: flex;
+    gap: var(--k-2);
+}
+
+.st-search {
+    position: relative;
+}
+
+.st-search > .bi {
+    position: absolute;
+    left: 12px;
+    bottom: calc((var(--k-control-h) - 1em) / 2);
+    color: var(--k-ink-faint);
+    line-height: 1;
+    pointer-events: none;
+}
+
+.st-search > .form-control {
+    padding-left: 36px;
+}
+
+.st-tally {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-2) var(--k-4);
+    margin: var(--k-4) 0 0;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.st-tally b {
+    margin-right: 4px;
+    color: var(--k-ink-title);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.st-filter-toggle[aria-expanded="true"] {
+    border-color: var(--k-accent);
+    color: var(--k-accent-ink);
+}
+
+@media (max-width: 991.98px) {
+    .st-filters {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .st-filters > .st-search,
+    .st-filters-actions {
+        grid-column: 1 / -1;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .st-filters .st-more-row {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .st-filters.is-collapsible:not(.is-open) > .st-filter {
+        display: none;
+    }
+
+    .st-filters-actions > .btn {
+        flex: 1 1 0;
+    }
+
+    /* the search box speaks for itself through its placeholder; the label stays for screen readers */
+    .st-search > .form-label {
+        position: absolute;
+        width: 1px;
+        height: 1px;
+        overflow: hidden;
+        clip-path: inset(50%);
+        white-space: nowrap;
+    }
+
+    .st-tally {
+        gap: var(--k-1) var(--k-3);
+        margin-top: var(--k-3);
+        font-size: var(--k-text-xs);
+    }
+}
+
+/* a column heading that sorts */
+.st-sort {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: inherit;
+    font: inherit;
+    cursor: pointer;
+    transition: color var(--k-dur) var(--k-ease-out);
+}
+
+.st-sort:hover,
+.st-sort[aria-pressed="true"] {
+    color: var(--k-ink-title);
+}
+
+.st-sort:focus-visible {
+    outline: var(--k-focus-ring);
+    outline-offset: var(--k-focus-offset);
+    border-radius: var(--k-radius-sm);
+}
+
+.st-sort .bi {
+    font-size: 0.8em;
+    opacity: 0;
+    transition: opacity var(--k-dur) var(--k-ease-out);
+}
+
+.st-sort:hover .bi,
+.st-sort:focus-visible .bi {
+    opacity: 0.5;
+}
+
+.st-sort[aria-pressed="true"] .bi {
+    opacity: 1;
+    color: var(--k-accent);
+}
+
+.text-end > .st-sort {
+    flex-direction: row-reverse;
+}
+
+/* optional columns: hidden until chosen in the Columns menu */
+#product-ledger .st-opt {
+    display: none;
+}
+
+#product-ledger.st-show-brand .st-opt-brand,
+#product-ledger.st-show-supplier .st-opt-supplier,
+#product-ledger.st-show-location .st-opt-location,
+#product-ledger.st-show-cost .st-opt-cost,
+#product-ledger.st-show-margin .st-opt-margin {
+    display: table-cell;
+}
+
+.st-cols-menu {
+    min-width: 200px;
+    padding: var(--k-2);
+}
+
+.st-cols-menu .form-check {
+    margin: 0;
+    padding: 6px 8px 6px 36px;
+    border-radius: var(--k-radius-sm);
+}
+
+.st-cols-menu .form-check:hover {
+    background: var(--k-hover);
+}
+
+.st-cols-menu .form-check-label {
+    width: 100%;
+    cursor: pointer;
+}
+
+#product-ledger .st-cell-title {
+    min-width: 14rem;
+}
+
+.st-inline-badge {
+    margin-left: var(--k-2);
+    vertical-align: 1px;
+}
+
+.st-stock-line {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--k-2);
+}
+
+/* a family of sizes: one row that opens onto its sizes */
+.st-family-toggle {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-2);
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--k-ink-title);
+    font: inherit;
+    font-weight: 500;
+    text-align: left;
+    cursor: pointer;
+}
+
+.st-family-toggle .bi {
+    color: var(--k-ink-soft);
+    font-size: 0.85em;
+    transition: transform var(--k-dur) var(--k-ease-out);
+}
+
+.st-family-toggle[aria-expanded="true"] .bi {
+    transform: rotate(90deg);
+}
+
+.st-family-toggle:hover {
+    color: var(--k-accent-ink);
+}
+
+.st-family-toggle:focus-visible {
+    outline: var(--k-focus-ring);
+    outline-offset: var(--k-focus-offset);
+    border-radius: var(--k-radius-sm);
+}
+
+tr.st-variant > td {
+    background: var(--k-sunk);
+}
+
+tr.st-variant > td.st-cell-title {
+    padding-left: calc(var(--k-table-edge, 12px) + 22px);
+}
+
+.st-list-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--k-2) var(--k-4);
+    margin-top: var(--k-4);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.st-list-foot .pagination {
+    margin: 0;
+}
+
+/* ---------- stats: label over figure, in one panel ---------- */
+
+.st-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+    gap: var(--k-4) var(--k-5);
+}
+
+.st-stats .k-balance-figure {
+    font-size: var(--k-text-xl);
+}
+
+.st-stats .k-balance-figure--text {
+    font-size: var(--k-text-lg);
+}
+
+@media (max-width: 575.98px) {
+    .st-stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--k-4);
+    }
+
+    .st-stats .k-balance-figure {
+        font-size: var(--k-text-lg);
+    }
+}
+
+/* ---------- product view ---------- */
+
+.st-dl {
+    display: grid;
+    gap: var(--k-3);
+    margin: 0;
+}
+
+.st-dl > div {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--k-3);
+}
+
+.st-dl dt {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 400;
+}
+
+.st-dl dd {
+    margin: 0;
+    color: var(--k-ink-title);
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.st-barcode {
+    margin: 0 0 var(--k-4);
+    padding: var(--k-3);
+    border-radius: var(--k-radius);
+    background: var(--k-sunk);
+    text-align: center;
+}
+
+.st-barcode img,
+.st-barcode svg {
+    max-width: 100%;
+    height: auto;
+}
+
+/* ---------- entry forms ---------- */
+
+.st-field {
+    min-width: 0;
+}
+
+.st-field .form-check {
+    min-height: var(--k-control-h);
+    display: flex;
+    align-items: center;
+    gap: var(--k-2);
+    margin: 0;
+}
+
+/* a switch lines up with the fields beside it */
+.k-form-grid > .st-switch-cell {
+    align-self: end;
+}
+
+.st-readout {
+    display: flex;
+    align-items: center;
+    min-height: var(--k-control-h);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-lg);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.st-field--error :is(.form-control, .form-select) {
+    border-color: var(--k-out);
+}
+
+/* the save row: pinned to the foot of the screen on long entry pages */
+.st-actionbar {
+    position: sticky;
+    bottom: calc(-1 * var(--k-7));
+    z-index: var(--k-z-sticky);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--k-2);
+    margin: var(--k-5) calc(-1 * var(--k-gutter)) calc(-1 * var(--k-7));
+    padding: var(--k-3) var(--k-gutter) calc(var(--k-3) + var(--k-7));
+    border-top: var(--k-hair) solid var(--k-border);
+    background: var(--k-panel);
+}
+
+.st-actionbar-note {
+    margin-right: auto;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.st-actionbar-note strong {
+    color: var(--k-ink-title);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+/* a short form or a side panel keeps its buttons with it */
+.st-actionbar--inline {
+    position: static;
+    justify-content: flex-start;
+    margin: var(--k-5) 0 0;
+    padding: 0;
+    border: 0;
+    background: none;
+}
+
+@media (max-width: 575.98px) {
+    .st-actionbar {
+        bottom: calc(-1 * var(--k-6));
+        margin-bottom: calc(-1 * var(--k-6));
+        padding-bottom: calc(var(--k-3) + var(--k-6));
+    }
+
+    .st-actionbar--inline {
+        margin-bottom: 0;
+        padding-bottom: 0;
+    }
+
+    .st-actionbar--inline > .btn {
+        flex: 1 1 auto;
+    }
+}
+
+/* ---------- a small sum: pricing check, purchase totals ---------- */
+
+.st-summary {
+    padding: var(--k-4);
+    border-radius: var(--k-radius);
+    background: var(--k-sunk);
+}
+
+.st-sum {
+    display: grid;
+    gap: var(--k-2);
+    margin: 0;
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.st-sum > div {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--k-3);
+}
+
+.st-sum dt {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 400;
+}
+
+.st-sum dd {
+    margin: 0;
+    color: var(--k-ink-title);
+    font-weight: 500;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.st-sum > .st-sum-total {
+    margin-top: var(--k-1);
+    padding-top: var(--k-3);
+    border-top: var(--k-hair) solid var(--k-border-strong);
+}
+
+.st-sum > .st-sum-total dt {
+    color: var(--k-ink-title);
+    font-size: var(--k-text-md);
+    font-weight: 600;
+}
+
+.st-sum > .st-sum-total dd {
+    font-size: var(--k-text-2xl);
+    font-weight: 600;
+    line-height: 1.15;
+}
+
+.st-sum > .st-sum-field {
+    align-items: center;
+}
+
+.st-sum > .st-sum-field dt {
+    color: var(--k-ink);
+    font-weight: 500;
+}
+
+.st-sum > .st-sum-field .form-control {
+    width: 10rem;
+    max-width: 44vw;
+    background: var(--k-panel);
+    text-align: right;
+    font-weight: 600;
+}
+
+.st-sum-unit {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 400;
+}
+
+.st-pricing-say {
+    margin: var(--k-3) 0 0;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.st-pricing-say > div + div {
+    margin-top: 4px;
+}
+
+.st-verdict {
+    color: var(--k-ink);
+    font-weight: 500;
+}
+
+.st-summary-foot {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--k-2);
+    margin-top: var(--k-3);
+    font-size: var(--k-text-sm);
+}
+
+.st-summary-foot .form-text {
+    margin: 0;
+}
+
+/* ---------- product form: pricing panel ---------- */
+
+.st-pricing {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) 300px;
+    gap: var(--k-5);
+    align-items: start;
+}
+
+@media (max-width: 991.98px) {
+    .st-pricing {
+        grid-template-columns: minmax(0, 1fr);
+    }
+}
+
+/* ---------- purchase entry ---------- */
+
+.st-work {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--k-panel-gap);
+    align-items: start;
+}
+
+.st-work.is-side-open {
+    grid-template-columns: minmax(0, 1fr) 360px;
+}
+
+.st-work > .k-side {
+    position: sticky;
+    top: 0;
+    max-height: calc(100dvh - var(--k-head-h) - var(--k-6));
+    margin: 0;
+    overflow-y: auto;
+}
+
+.st-lines th.st-col-qty { width: 168px; }
+.st-lines th.st-col-money { width: 132px; }
+.st-lines th.st-col-amount { width: 120px; }
+.st-lines th.st-col-x { width: 56px; }
+
+.st-work.is-side-open .st-lines th.st-col-qty { width: 116px; }
+.st-work.is-side-open .st-lines th.st-col-money { width: 92px; }
+.st-work.is-side-open .st-lines th.st-col-amount { width: 84px; }
+.st-work.is-side-open .st-lines th.st-col-x { width: 44px; }
+.st-work.is-side-open .st-lines > * > tr > :is(th, td):not(:first-child):not(:last-child) { padding-left: 6px; padding-right: 6px; }
+.st-work.is-side-open .st-lines .input-group-text { min-width: 2.4rem; padding-left: 4px; padding-right: 4px; }
+
+.st-lines > tbody > tr > td {
+    height: auto;
+    padding-top: var(--k-3);
+    padding-bottom: var(--k-3);
+    vertical-align: top;
+}
+
+.st-lines > tbody > tr:hover > td {
+    background: transparent;
+}
+
+.st-lines > tbody > tr > td.st-line-amount {
+    padding-top: calc(var(--k-3) + (var(--k-control-h) - 1.5em) / 2);
+    color: var(--k-ink-title);
+    font-weight: 600;
+}
+
+.st-lines :is(.form-control, .form-select) {
+    min-width: 0;
+}
+
+.st-lines input[type="number"] {
+    text-align: right;
+}
+
+.st-lines .input-group {
+    flex-wrap: nowrap;
+}
+
+.st-lines .input-group-text {
+    min-width: 3rem;
+    justify-content: center;
+}
+
+.st-lines .form-text {
+    margin-top: 4px;
+    font-size: var(--k-text-xs);
+}
+
+.st-lines > tfoot > tr > td {
+    font-size: var(--k-text-md);
+}
+
+.st-lines-total {
+    font-size: var(--k-text-xl) !important;
+}
+
+.st-lines-tools {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-2) var(--k-4);
+    margin-top: var(--k-4);
+}
+
+/* product type-ahead built over the native select */
+.st-combo {
+    position: relative;
+}
+
+.st-combo-native {
+    position: absolute !important;
+    width: 1px !important;
+    height: 1px !important;
+    min-height: 0 !important;
+    padding: 0 !important;
+    border: 0 !important;
+    opacity: 0;
+    pointer-events: none;
+}
+
+.st-combo-list {
+    position: absolute;
+    top: calc(100% + 4px);
+    left: 0;
+    right: 0;
+    z-index: var(--k-z-popover);
+    max-height: 272px;
+    margin: 0;
+    padding: 4px;
+    overflow-y: auto;
+    list-style: none;
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius);
+    background: var(--k-panel);
+    box-shadow: var(--k-shadow-pop);
+}
+
+.st-combo-list > li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--k-3);
+    padding: 8px 10px;
+    border-radius: var(--k-radius-sm);
+    cursor: pointer;
+}
+
+.st-combo-list > li:hover {
+    background: var(--k-hover);
+}
+
+.st-combo-list > li[aria-selected="true"] {
+    background: var(--k-accent-tint);
+    color: var(--k-accent-ink);
+}
+
+.st-combo-list > li > span:last-child {
+    flex: none;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.st-combo-list > .st-combo-none {
+    color: var(--k-ink-soft);
+    cursor: default;
+}
+
+.st-combo-list > .st-combo-none:hover {
+    background: none;
+}
+
+@media (max-width: 1199.98px) {
+    .st-work.is-side-open {
+        grid-template-columns: minmax(0, 1fr);
+    }
+
+    .st-work > .k-side {
+        position: static;
+        max-height: none;
+        overflow: visible;
+    }
+}
+
+/* phone and narrow tablet: each purchase line is a small card of fields */
+@media (max-width: 767.98px) {
+    .st-lines > thead {
+        display: none;
+    }
+
+    .st-lines,
+    .st-lines > tbody,
+    .st-lines > tfoot {
+        display: block;
+        width: 100% !important;
+        margin: 0 !important;
+    }
+
+    .st-lines > tbody > tr {
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: var(--k-3);
+        padding: var(--k-4) 0;
+        border-bottom: var(--k-hair) solid var(--k-divider);
+    }
+
+    .st-lines > tbody > tr:first-child {
+        padding-top: 0;
+    }
+
+    .st-lines > tbody > tr.d-none {
+        display: none;
+    }
+
+    .st-lines > tbody > tr > td {
+        display: block;
+        width: auto;
+        height: auto;
+        padding: 0 !important;
+        border: 0 !important;
+        text-align: left;
+    }
+
+    .st-lines > tbody > tr > td:empty {
+        display: none;
+    }
+
+    .st-lines > tbody > tr > td[data-label]::before {
+        content: attr(data-label);
+        display: block;
+        margin-bottom: 6px;
+        color: var(--k-ink);
+        font-size: var(--k-text-sm);
+        font-weight: 500;
+    }
+
+    .st-lines > tbody > tr > td.st-line-product,
+    .st-lines > tbody > tr > td.st-line-x {
+        grid-column: 1 / -1;
+    }
+
+    .st-lines > tbody > tr > td.st-line-amount {
+        align-self: end;
+        padding-top: 0 !important;
+        font-size: var(--k-text-lg);
+        text-align: right;
+    }
+
+    .st-lines > tbody > tr > td.st-line-x {
+        text-align: left;
+    }
+
+    .st-lines .st-line-remove {
+        width: auto;
+        padding: 0 var(--k-2);
+        gap: 4px;
+        color: var(--k-ink-soft);
+        font-size: var(--k-text-sm);
+    }
+
+    .st-lines > tfoot > tr {
+        display: flex;
+        justify-content: space-between;
+        align-items: baseline;
+        padding: var(--k-3) 0 0;
+        border-top: var(--k-hair) solid var(--k-border-strong);
+    }
+
+    .st-lines > tfoot > tr > td {
+        display: block;
+        width: auto;
+        height: auto;
+        padding: 0 !important;
+        border: 0 !important;
+    }
+
+    .st-lines > tfoot > tr > td:empty {
+        display: none;
+    }
+}
+
+/* quick setup: folded forms beside the bill */
+.st-quick {
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+
+.st-quick > summary {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--k-2);
+    min-height: 48px;
+    color: var(--k-ink-title);
+    font-weight: 500;
+    cursor: pointer;
+    list-style: none;
+    transition: color var(--k-dur) var(--k-ease-out);
+}
+
+.st-quick > summary::-webkit-details-marker {
+    display: none;
+}
+
+.st-quick > summary:hover {
+    color: var(--k-accent-ink);
+}
+
+.st-quick > summary:focus-visible {
+    outline: var(--k-focus-ring);
+    outline-offset: var(--k-focus-offset);
+    border-radius: var(--k-radius-sm);
+}
+
+.st-quick > summary .bi {
+    color: var(--k-ink-soft);
+    transition: transform var(--k-dur) var(--k-ease-out);
+}
+
+.st-quick[open] > summary .bi {
+    transform: rotate(180deg);
+}
+
+.st-quick-note {
+    margin: 0 0 var(--k-3);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.st-quick form {
+    padding: 0 0 var(--k-4);
+}
+
+.st-quick .k-form-grid {
+    gap: var(--k-3);
+}
+
+.st-feedback {
+    margin-top: var(--k-3);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+/* ---------- returns ---------- */
+
+.st-return-input {
+    width: 150px;
+    margin-left: auto;
+}
+
+.st-return-input .form-control {
+    text-align: right;
+}
+
+tr.is-over > td {
+    background: var(--k-out-wash) !important;
+}
+
+tr.is-over .form-control {
+    border-color: var(--k-out);
+}
+
+.st-over-note {
+    margin-top: 4px;
+    color: var(--k-out);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+    white-space: normal;
+    text-align: right;
+}
+
+.st-past {
+    display: grid;
+    gap: var(--k-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.st-past > li {
+    display: flex;
+    justify-content: space-between;
+    gap: var(--k-3);
+}
+
+.st-past > li > span:last-child {
+    color: var(--k-ink-title);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums lining-nums;
+    white-space: nowrap;
+}
+
+/* ---------- stock adjustments ---------- */
+
+.st-onhand {
+    margin-top: var(--k-2);
+    color: var(--k-accent-ink);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+/* a stock change is not money: it stays in ink, only weighted */
+.st-change-in,
+.st-change-out {
+    color: var(--k-ink-title);
+    font-weight: 600;
+}
+
+/* ---------- import ---------- */
+
+.st-steps {
+    display: grid;
+    gap: var(--k-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    counter-reset: st-step;
+}
+
+.st-steps > li {
+    position: relative;
+    padding-left: 44px;
+    counter-increment: st-step;
+}
+
+.st-steps > li::before {
+    content: counter(st-step);
+    position: absolute;
+    top: -2px;
+    left: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: var(--k-radius-pill);
+    background: var(--k-accent-tint);
+    color: var(--k-accent-ink);
+    font-size: var(--k-text-sm);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.st-steps h3 {
+    margin: 0 0 var(--k-3);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-md);
+    font-weight: 600;
+}
+
+.st-columns td.text-nowrap {
+    width: 1%;
+}
+
+.st-columns code {
+    padding: 2px 6px;
+    border-radius: var(--k-radius-sm);
+    background: var(--k-sunk);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+@media (max-width: 575.98px) {
+    .st-columns {
+        table-layout: fixed;
+    }
+
+    .st-columns td.text-nowrap {
+        width: 42%;
+        white-space: normal !important;
+    }
+
+    .st-columns code {
+        overflow-wrap: anywhere;
+    }
+}
+
+.st-errors td {
+    vertical-align: top;
+}
+
+.st-errors .st-fix > div + div {
+    margin-top: 4px;
+}
+
+/* ---------- phone lists: a note under a figure is written beside it ---------- */
+
+@media (max-width: 575.98px) {
+    .k-ledger--stack > * > tr > td > .st-sub,
+    .k-ledger--stack [data-k="amount"] > .st-sub,
+    .k-ledger--stack [data-k="balance"] > .st-sub {
+        display: inline;
+        margin: 0 0 0 var(--k-1);
+        font-size: var(--k-text-xs);
+    }
+
+    .k-ledger--stack > * > tr > td[data-k="meta"] > .st-sub {
+        margin-left: 0;
+        font-size: var(--k-text-sm);
+    }
+
+    .k-ledger--stack > * > tr > td[data-k="meta"] > .st-sub::before {
+        content: "\00b7\00a0";
+    }
+
+    .k-ledger--stack > * > tr > td[data-k="meta"] > .st-sub:first-child::before {
+        content: none;
+    }
+
+    .k-ledger--stack .st-stock-line .k-badge {
+        display: none;
+    }
+
+    #product-ledger .st-cell-title {
+        min-width: 0;
+    }
+
+    /* a product entry: name and price on line one, SKU and stock on line two.
+       A family of sizes reads the same: name and price range, then "2 sizes · Large, Small" and stock,
+       with its own chevron as the only one (its details live on the sizes it opens onto). */
+    #product-ledger > tbody > tr > td.st-cell-title {
+        display: contents;
+    }
+
+    #product-ledger > tbody > tr > td.st-cell-title > :is(.st-name, .st-family-toggle) {
+        order: 1;
+        flex: 1 1 0;
+        min-width: 0;
+        color: var(--k-ink-title);
+        font-weight: 500;
+        overflow-wrap: anywhere;
+    }
+
+    #product-ledger > tbody > tr > td.st-cell-title > .k-badge {
+        order: 2;
+    }
+
+    #product-ledger > tbody > tr > td.st-cell-title > .st-sub {
+        order: 5;
+        flex: 1 1 0;
+        min-width: 0;
+        margin: 0;
+        color: var(--k-ink-soft);
+        font-size: var(--k-text-sm);
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+    }
+
+    tr.st-variant > td.st-cell-title {
+        padding-left: 0 !important;
+    }
+
+    .k-ledger--stack > tbody > tr.st-variant {
+        padding-left: calc(var(--k-table-edge, 12px) + 16px);
+        background: var(--k-sunk);
+    }
+
+    .k-ledger--stack > tbody > tr.k-open > .st-cell-actions {
+        justify-content: flex-start;
+    }
+}
+
+/* notes boxes arrive ten rows tall; an entry page wants them short until they are used */
+form[data-st-entry] textarea[rows="10"],
+.st-form textarea[rows="10"] {
+    height: 5.25rem;
+}
+
+@media (max-width: 575.98px) {
+    .st-cols {
+        display: none;
+    }
+}

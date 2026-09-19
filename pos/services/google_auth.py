@@ -12,7 +12,14 @@ GOOGLE_NEXT_URL_SESSION_KEY = "google_oauth_next"
 GOOGLE_ISSUERS = {"accounts.google.com", "https://accounts.google.com"}
 
 
+def desktop_mode():
+    """One offline shop per install: no email delivery, no Google, no marketing pages."""
+    return str(getattr(settings, "DEPLOYMENT_MODE", "cloud")).strip().lower() == "desktop"
+
+
 def google_sign_in_enabled():
+    if desktop_mode():
+        return False
     return bool(
         getattr(settings, "GOOGLE_SIGN_IN_ENABLED", False)
         and getattr(settings, "GOOGLE_OAUTH_CLIENT_ID", "").strip()
@@ -122,3 +129,58 @@ def verify_google_identity_token(id_token_value, *, expected_nonce=""):
     if expected_nonce and claims.get("nonce") != expected_nonce:
         raise ValueError("Google sign-in could not be verified. Please try again.")
     return claims
+
+
+# Google's "sub" is the only identifier that never changes or gets reassigned; an
+# email address can. The column is optional until the migration that adds
+# UserPreference.google_sub ships, so every helper degrades to email matching.
+GOOGLE_SUB_FIELD = "google_sub"
+
+
+def google_sub_storage_available():
+    from django.core.exceptions import FieldDoesNotExist
+
+    from pos.models import UserPreference
+
+    try:
+        UserPreference._meta.get_field(GOOGLE_SUB_FIELD)
+    except FieldDoesNotExist:
+        return False
+    return True
+
+
+def find_user_by_google_sub(sub):
+    sub = (sub or "").strip()
+    if not sub or not google_sub_storage_available():
+        return None
+
+    from pos.models import UserPreference
+
+    preference = (
+        UserPreference.objects.select_related("user").filter(**{GOOGLE_SUB_FIELD: sub}).order_by("id").first()
+    )
+    return preference.user if preference is not None else None
+
+
+def stored_google_sub(user):
+    if user is None or not google_sub_storage_available():
+        return ""
+
+    from pos.models import UserPreference
+
+    preference = UserPreference.objects.filter(user=user).first()
+    return (getattr(preference, GOOGLE_SUB_FIELD, "") or "").strip() if preference is not None else ""
+
+
+def remember_google_sub(user, sub):
+    sub = (sub or "").strip()
+    if not sub or user is None or not google_sub_storage_available():
+        return False
+
+    from pos.models import UserPreference
+
+    preference, _ = UserPreference.objects.get_or_create(user=user)
+    if (getattr(preference, GOOGLE_SUB_FIELD, "") or "") != sub:
+        setattr(preference, GOOGLE_SUB_FIELD, sub)
+        preference.save(update_fields=[GOOGLE_SUB_FIELD, "updated_at"])
+    return True

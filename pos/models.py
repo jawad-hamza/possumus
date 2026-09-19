@@ -5,16 +5,37 @@ from django.conf import settings
 from django.contrib.contenttypes.fields import GenericForeignKey
 from django.contrib.contenttypes.models import ContentType
 from django.core.exceptions import ValidationError
-from django.db import models
+from django.db import models, transaction
 from django.utils import timezone
 from django.utils.text import slugify
 
 
 TWO_PLACES = Decimal("0.01")
+QTY_PLACES = Decimal("0.001")
+ZERO_QTY = Decimal("0")
 
 
 def quantize_money(value):
     return Decimal(value).quantize(TWO_PLACES, rounding=ROUND_HALF_UP)
+
+
+def quantize_qty(value):
+    return Decimal(str(value if value not in (None, "") else 0)).quantize(QTY_PLACES, rounding=ROUND_HALF_UP)
+
+
+def trial_days():
+    """Length of the free trial for this install; TRIAL_DAYS in settings, 10 by default."""
+    try:
+        days = int(getattr(settings, "TRIAL_DAYS", 10))
+    except (TypeError, ValueError):
+        days = 10
+    return max(days, 1)
+
+
+def format_qty(value):
+    """Render a quantity without trailing zeros: 2, 0.5, 1.25."""
+    text = format(quantize_qty(value), "f")
+    return text.rstrip("0").rstrip(".") if "." in text else text
 
 
 class Category(models.Model):
@@ -98,6 +119,47 @@ class Supplier(models.Model):
         return get_party_balance(self)
 
 
+class ProductGroup(models.Model):
+    """One item sold in several sizes (Bread: Small, Medium, Large). Every size is a full Product row."""
+
+    name = models.CharField(max_length=100)
+    category = models.ForeignKey(
+        Category,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="product_groups",
+    )
+    brand = models.ForeignKey(
+        Brand,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="product_groups",
+    )
+    is_active = models.BooleanField(default=True)
+
+    class Meta:
+        ordering = ["name"]
+
+    def __str__(self):
+        return self.name
+
+    def save(self, *args, **kwargs):
+        self.name = (self.name or "").strip()
+        super().save(*args, **kwargs)
+        # Every size carries the family name, so a line can be named without a join to the group.
+        self.variants.exclude(name=self.name).update(name=self.name)
+
+
+def compose_display_name(name, variant_label="", variant_group_id=None):
+    """'Bread - Small' for a size of a grouped item; the plain name for everything else."""
+    label = (variant_label or "").strip()
+    if variant_group_id and label:
+        return f"{name} - {label}"
+    return name
+
+
 class Product(models.Model):
     category = models.ForeignKey(
         Category,
@@ -120,14 +182,65 @@ class Product(models.Model):
         blank=True,
         related_name="products",
     )
+    UNIT_PIECE = "pcs"
+    UNIT_CHOICES = (
+        (UNIT_PIECE, "Piece (pcs)"),
+        ("box", "Box"),
+        ("pack", "Pack"),
+        ("dozen", "Dozen"),
+        ("kg", "Kilogram (kg)"),
+        ("g", "Gram (g)"),
+        ("l", "Litre (L)"),
+        ("ml", "Millilitre (ml)"),
+        ("m", "Metre (m)"),
+        ("ft", "Foot (ft)"),
+    )
+    # Units sold in fractions (0.5 kg); the rest must be whole numbers.
+    FRACTIONAL_UNITS = frozenset({"kg", "g", "l", "ml", "m", "ft"})
+
     name = models.CharField(max_length=100)
+    # Sizes of one item: the group is the family ("Bread"), the label is the size ("Small").
+    variant_group = models.ForeignKey(
+        ProductGroup,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="variants",
+    )
+    variant_label = models.CharField(max_length=40, blank=True, default="")
     sku = models.CharField(max_length=50, unique=True)
     barcode = models.CharField(max_length=50, unique=True, blank=True, null=True)
+    unit = models.CharField(
+        max_length=10,
+        choices=UNIT_CHOICES,
+        default=UNIT_PIECE,
+        help_text="Prices, cost and stock are all per this unit.",
+    )
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Selling price")
+    markup_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Set the sale price as cost plus this percentage. Leave blank to type the price yourself.",
+    )
+    markup_amount = models.DecimalField(
+        max_digits=10,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Set the sale price as cost plus this fixed amount. Leave blank to type the price yourself.",
+    )
     minimum_margin_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    stock = models.PositiveIntegerField(default=0)
-    low_stock_threshold = models.PositiveIntegerField(
+    stock = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    track_stock = models.BooleanField(
+        default=True,
+        help_text="Turn off for services and other items that are never counted on a shelf.",
+    )
+    low_stock_threshold = models.DecimalField(
+        max_digits=12,
+        decimal_places=3,
         default=5,
         help_text="Alert when stock falls to this level",
     )
@@ -135,8 +248,106 @@ class Product(models.Model):
     expiry_date = models.DateField(null=True, blank=True)
     is_active = models.BooleanField(default=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["is_active", "name"], name="pos_product_active_name_idx"),
+        ]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["variant_group", "variant_label"],
+                condition=models.Q(variant_group__isnull=False),
+                name="pos_product_unique_variant_label",
+            ),
+        ]
+
+    PRICE_BY_HAND = "manual"
+    PRICE_BY_PERCENT = "percent"
+    PRICE_BY_AMOUNT = "amount"
+
     def __str__(self):
-        return self.name
+        return self.display_name
+
+    @property
+    def display_name(self):
+        """The name printed on bills, lists and reports: 'Bread - Small' for a size of a grouped item."""
+        return compose_display_name(self.name, self.variant_label, self.variant_group_id)
+
+    @property
+    def price_by(self):
+        if self.markup_percent is not None:
+            return self.PRICE_BY_PERCENT
+        if self.markup_amount is not None:
+            return self.PRICE_BY_AMOUNT
+        return self.PRICE_BY_HAND
+
+    @property
+    def has_markup(self):
+        return self.markup_percent is not None or self.markup_amount is not None
+
+    @property
+    def markup_display(self):
+        """'Cost + 25%' or 'Cost + 20.00'; empty when the price is typed by hand."""
+        if self.markup_percent is not None:
+            return f"Cost + {Decimal(self.markup_percent).normalize():f}%"
+        if self.markup_amount is not None:
+            return f"Cost + {quantize_money(self.markup_amount)}"
+        return ""
+
+    @property
+    def allows_fractional_quantity(self):
+        return self.unit in self.FRACTIONAL_UNITS
+
+    @property
+    def quantity_step(self):
+        return "0.001" if self.allows_fractional_quantity else "1"
+
+    @property
+    def stock_display(self):
+        if not self.track_stock:
+            return "Not tracked"
+        return f"{format_qty(self.stock)} {self.unit}"
+
+    def validate_quantity(self, quantity):
+        """Return an error message when the quantity does not suit this product's unit."""
+        quantity = quantize_qty(quantity)
+        if quantity <= 0:
+            return "Quantity must be greater than zero."
+        if not self.allows_fractional_quantity and quantity != quantity.to_integral_value():
+            return f"{self.display_name} is sold in whole {self.get_unit_display().lower()} units."
+        return ""
+
+    def price_for_cost(self, cost_price=None):
+        """Sale price from the markup (a percentage or a fixed amount on cost); None when typed by hand."""
+        if self.markup_percent is None and self.markup_amount is None:
+            return None
+        cost = Decimal(cost_price if cost_price is not None else self.cost_price or 0)
+        if self.markup_percent is not None:
+            multiplier = Decimal("1") + (Decimal(self.markup_percent) / Decimal("100"))
+            return quantize_money(cost * multiplier)
+        return quantize_money(cost + Decimal(self.markup_amount))
+
+    def minimum_markup_amount_for_cost(self, cost_price=None):
+        """The smallest fixed amount on this cost that still keeps the minimum margin."""
+        cost = Decimal(cost_price if cost_price is not None else self.cost_price or 0)
+        return quantize_money(self.minimum_sale_price_for_cost(cost) - cost)
+
+    def apply_stock_change(self, delta):
+        """Add (or remove) stock against the locked database row, never the stale in-memory value."""
+        delta = quantize_qty(delta)
+        with transaction.atomic():
+            current, tracked = (
+                Product.objects.select_for_update().values_list("stock", "track_stock").get(pk=self.pk)
+            )
+            if not tracked:
+                # Services have no shelf quantity: selling or returning one moves nothing.
+                self.stock = current
+                return current
+            new_stock = quantize_qty(current + delta)
+            if new_stock < 0:
+                raise ValidationError(f"Not enough stock for {self.display_name}.")
+            Product.objects.filter(pk=self.pk).update(stock=new_stock)
+        self.stock = new_stock
+        return new_stock
 
     def minimum_sale_price_for_cost(self, cost_price=None):
         cost = Decimal(cost_price if cost_price is not None else self.cost_price or 0)
@@ -175,13 +386,43 @@ class Product(models.Model):
             errors["price"] = "Sale price cannot be negative."
         if Decimal(self.minimum_margin_percent or 0) < 0:
             errors["minimum_margin_percent"] = "Minimum margin cannot be negative."
+        if self.markup_percent is not None and self.markup_amount is not None:
+            errors["markup_amount"] = "Use a percentage or an amount on cost, not both."
+        elif self.markup_percent is not None:
+            if Decimal(self.markup_percent) < 0:
+                errors["markup_percent"] = "Markup cannot be negative."
+            elif Decimal(self.markup_percent) < Decimal(self.minimum_margin_percent or 0):
+                errors["markup_percent"] = "Markup cannot be lower than the minimum margin."
+            elif Decimal(self.cost_price or 0) > 0:
+                self.price = self.price_for_cost()
+        elif self.markup_amount is not None:
+            if Decimal(self.markup_amount) < 0:
+                errors["markup_amount"] = "The amount added on cost cannot be negative."
+            elif Decimal(self.cost_price or 0) > 0:
+                if self.price_for_cost() < self.minimum_sale_price:
+                    errors["markup_amount"] = (
+                        f"Add at least {self.minimum_markup_amount_for_cost()} on this cost to keep the "
+                        f"minimum margin (lowest sale price {self.minimum_sale_price})."
+                    )
+                else:
+                    self.price = self.price_for_cost()
 
-        if Decimal(self.price or 0) and Decimal(self.cost_price or 0):
+        if "markup_amount" not in errors and Decimal(self.price or 0) and Decimal(self.cost_price or 0):
             minimum_sale_price = self.minimum_sale_price
             if Decimal(self.price) < minimum_sale_price:
                 errors["price"] = (
                     f"Sale price must be at least {minimum_sale_price} to keep the minimum margin."
                 )
+
+        self.variant_label = (self.variant_label or "").strip()
+        if self.variant_group_id and not self.variant_label:
+            errors["variant_label"] = "Name this size, such as Small, 500 g or Pack of 6."
+        elif self.variant_group_id:
+            clash = Product.objects.filter(
+                variant_group_id=self.variant_group_id, variant_label__iexact=self.variant_label
+            ).exclude(pk=self.pk)
+            if clash.exists():
+                errors["variant_label"] = f"This item already has a size called {self.variant_label}."
 
         if errors:
             raise ValidationError(errors)
@@ -246,9 +487,29 @@ class Sale(models.Model):
     bank_tax_rate_snapshot = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tax_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # NULL (not "") for sales made before numbering existed, so the unique index ignores them.
+    invoice_number = models.CharField(max_length=40, unique=True, null=True, blank=True, editable=False)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["created_at"], name="pos_sale_created_idx"),
+        ]
 
     def __str__(self):
-        return f"Sale #{self.id}"
+        return f"Sale {self.display_number}"
+
+    @property
+    def display_number(self):
+        """Invoice number shown to people; older sales fall back to their id."""
+        return self.invoice_number or (f"#{self.pk}" if self.pk else "")
+
+    def save(self, *args, **kwargs):
+        if self._state.adding and not self.invoice_number:
+            # Same transaction as the insert: a failed sale gives its number back.
+            with transaction.atomic():
+                self.invoice_number = SystemSettings.allocate_invoice_number()
+                return super().save(*args, **kwargs)
+        return super().save(*args, **kwargs)
 
     def clean(self):
         errors = {}
@@ -334,7 +595,7 @@ class Sale(models.Model):
 class SaleItem(models.Model):
     sale = models.ForeignKey(Sale, related_name="items", on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
     original_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
@@ -378,8 +639,10 @@ class SaleItem(models.Model):
 
     def clean(self):
         errors = {}
-        if self.quantity <= 0:
-            errors["quantity"] = "Quantity must be greater than zero."
+        self.quantity = quantize_qty(self.quantity)
+        quantity_error = self.product.validate_quantity(self.quantity)
+        if quantity_error:
+            errors["quantity"] = quantity_error
         if Decimal(self.price or 0) <= 0:
             errors["price"] = "Price must be greater than zero."
         if Decimal(self.original_price or 0) < 0:
@@ -395,13 +658,14 @@ class SaleItem(models.Model):
         if self.discounted_unit_price < minimum_price:
             errors["price"] = f"Final unit price cannot go below {minimum_price}."
 
-        available_stock = self.product.stock
-        if self.pk:
-            old_item = SaleItem.objects.select_related("product").get(pk=self.pk)
-            if old_item.product_id == self.product_id:
-                available_stock += old_item.quantity
-        if self.quantity > available_stock:
-            errors["quantity"] = f"Not enough stock for {self.product.name}."
+        if self.product.track_stock:
+            available_stock = self.product.stock
+            if self.pk:
+                old_item = SaleItem.objects.select_related("product").get(pk=self.pk)
+                if old_item.product_id == self.product_id:
+                    available_stock += old_item.quantity
+            if self.quantity > available_stock:
+                errors["quantity"] = f"Not enough stock for {self.product.display_name}."
 
         if errors:
             raise ValidationError(errors)
@@ -414,40 +678,38 @@ class SaleItem(models.Model):
             self.price = self.product.price
         if is_new and self.discount_percent in (None, ""):
             self.discount_percent = Decimal("0")
-        if is_new and not self.cost_price:
+        if not self.product.track_stock:
+            # Nothing ever entered Inventory for an untracked item, so nothing may leave it as COGS.
+            self.cost_price = Decimal("0")
+        elif is_new and not self.cost_price:
             self.cost_price = self.product.cost_price
 
         self.clean()
 
-        if is_new:
-            self.product.stock -= self.quantity
-            self.product.save(update_fields=["stock"])
-        else:
-            old_item = SaleItem.objects.select_related("product").get(pk=self.pk)
-            if old_item.product_id == self.product_id:
-                self.product.stock = self.product.stock + old_item.quantity - self.quantity
-                self.product.save(update_fields=["stock"])
+        with transaction.atomic():
+            if is_new:
+                self.product.apply_stock_change(-self.quantity)
             else:
-                old_product = old_item.product
-                old_product.stock += old_item.quantity
-                old_product.save(update_fields=["stock"])
+                old_item = SaleItem.objects.select_related("product").get(pk=self.pk)
+                if old_item.product_id == self.product_id:
+                    self.product.apply_stock_change(old_item.quantity - self.quantity)
+                else:
+                    old_item.product.apply_stock_change(old_item.quantity)
+                    self.product.apply_stock_change(-self.quantity)
 
-                self.product.stock -= self.quantity
-                self.product.save(update_fields=["stock"])
-
-        super().save(*args, **kwargs)
-        self.sale.update_total()
+            super().save(*args, **kwargs)
+            self.sale.update_total()
 
     def delete(self, *args, **kwargs):
-        self.product.stock += self.quantity
-        self.product.save(update_fields=["stock"])
-
-        sale = self.sale
-        super().delete(*args, **kwargs)
-        sale.update_total()
+        with transaction.atomic():
+            self.product.apply_stock_change(self.quantity)
+            sale = self.sale
+            super().delete(*args, **kwargs)
+            sale.update_total()
 
     def __str__(self):
-        return f"{self.product.name} x {self.quantity}"
+        return f"{self.product.display_name} x {format_qty(self.quantity)}"
+
 
 class Purchase(models.Model):
     CASH = "cash"
@@ -467,6 +729,8 @@ class Purchase(models.Model):
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default=CASH)
     bank_account = models.ForeignKey("accounts.BankAccount", null=True, blank=True, on_delete=models.PROTECT, related_name="purchases")
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    supplier_invoice_number = models.CharField(max_length=50, blank=True)
+    bill_date = models.DateField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     total_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     last_edited_by = models.ForeignKey(
@@ -478,15 +742,18 @@ class Purchase(models.Model):
     )
     last_edited_at = models.DateTimeField(null=True, blank=True)
     edit_reason = models.TextField(blank=True)
+
+    class Meta:
+        indexes = [
+            models.Index(fields=["created_at"], name="pos_purchase_created_idx"),
+        ]
+
     def clean(self):
         errors = {}
         if Decimal(self.paid_amount or 0) < 0:
             errors["paid_amount"] = "Paid amount cannot be negative."
         if self.payment_method == self.CASH or Decimal(self.paid_amount or 0) == 0:
             self.bank_account = None
-        if errors:
-            raise ValidationError(errors)
-
         if errors:
             raise ValidationError(errors)
 
@@ -516,7 +783,7 @@ class Purchase(models.Model):
 class PurchaseItem(models.Model):
     purchase = models.ForeignKey(Purchase, related_name="items", on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
     cost_price = models.DecimalField(max_digits=10, decimal_places=2)
     sale_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
 
@@ -542,30 +809,71 @@ class PurchaseItem(models.Model):
         errors = {}
         if not self.product_id:
             errors["product"] = "Product is required."
-        if self.quantity in (None, "") or self.quantity <= 0:
+        elif not self.product.track_stock:
+            errors["product"] = (
+                f"{self.product.display_name} does not track stock, so it cannot be purchased into inventory. "
+                "Record its cost as an expense instead."
+            )
+        if self.quantity in (None, "") or Decimal(self.quantity) <= 0:
             errors["quantity"] = "Quantity must be greater than zero."
+        elif self.product_id:
+            self.quantity = quantize_qty(self.quantity)
+            quantity_error = self.product.validate_quantity(self.quantity)
+            if quantity_error:
+                errors["quantity"] = quantity_error
         if self.cost_price in (None, "") or Decimal(self.cost_price or 0) <= 0:
             errors["cost_price"] = "Cost price must be greater than zero."
+        priced_from_markup = False
+        if (
+            self.product_id
+            and self.sale_price in (None, "")
+            and self.cost_price not in (None, "")
+            and self.product.has_markup
+        ):
+            # Markup-priced products take their sale price from the new cost.
+            self.sale_price = self.product.price_for_cost(self.cost_price)
+            priced_from_markup = True
         if self.sale_price in (None, "") or Decimal(self.sale_price or 0) <= 0:
             errors["sale_price"] = "Sale price must be greater than zero."
 
         if self.product_id and self.cost_price not in (None, "") and self.sale_price not in (None, ""):
             minimum_sale_price = self.product.minimum_sale_price_for_cost(self.cost_price)
             if Decimal(self.sale_price or 0) < minimum_sale_price:
-                errors["sale_price"] = (
-                    f"Sale price must be at least {minimum_sale_price} for the configured minimum margin."
-                )
+                if priced_from_markup:
+                    errors["sale_price"] = (
+                        f"{self.product.markup_display} on this cost gives {quantize_money(self.sale_price)}, "
+                        f"below the lowest price {minimum_sale_price} for the minimum margin. "
+                        "Type a sale price, or raise the markup on the product."
+                    )
+                else:
+                    errors["sale_price"] = (
+                        f"Sale price must be at least {minimum_sale_price} for the configured minimum margin."
+                    )
 
         if errors:
             raise ValidationError(errors)
 
-    def _sync_product_pricing(self):
+    def _average_cost(self, stock_before, old_quantity=ZERO_QTY, old_cost=Decimal("0"), current_cost=None):
+        """Weighted-average cost after this line, so COGS follows what was actually paid."""
+        if current_cost is None:
+            current_cost = self.product.cost_price
+        current_cost = Decimal(current_cost or 0)
+        stock_before = max(Decimal(stock_before), ZERO_QTY)
+        value = (stock_before * current_cost) - (Decimal(old_quantity) * Decimal(old_cost)) + (
+            Decimal(self.quantity) * Decimal(self.cost_price)
+        )
+        units = stock_before - Decimal(old_quantity) + Decimal(self.quantity)
+        if units <= 0 or value <= 0 or current_cost <= 0:
+            return quantize_money(self.cost_price)
+        return quantize_money(value / units)
+
+    def _sync_product_pricing(self, average_cost):
         updated_fields = []
         if self.purchase.supplier_id and self.product.supplier_id != self.purchase.supplier_id:
             self.product.supplier = self.purchase.supplier
             updated_fields.append("supplier")
-        if Decimal(self.product.cost_price or 0) != Decimal(self.cost_price or 0):
-            self.product.cost_price = self.cost_price
+        if Decimal(self.product.cost_price or 0) != average_cost:
+            self.product.cost_price = average_cost
             updated_fields.append("cost_price")
         if Decimal(self.product.price or 0) != Decimal(self.sale_price or 0):
             self.product.price = self.sale_price
@@ -578,50 +886,73 @@ class PurchaseItem(models.Model):
         self.clean()
         is_new = self.pk is None
 
-        if is_new:
-            self.product.stock += self.quantity
-            self.product.save(update_fields=["stock"])
-            old_total = Decimal("0")
-        else:
-            old_item = PurchaseItem.objects.select_related("product").get(pk=self.pk)
-            old_total = self.purchase.total_amount
+        with transaction.atomic():
+            # Cost comes from the same locked row as the stock: a second line for the same
+            # product must average against what the first line just wrote, not a stale copy.
+            stock_before, cost_before = (
+                Product.objects.select_for_update().values_list("stock", "cost_price").get(pk=self.product_id)
+            )
+            self.product.cost_price = cost_before
+            pricing_changed = is_new
+            average_cost = None
 
-            if old_item.product_id == self.product_id:
-                new_stock = self.product.stock + (self.quantity - old_item.quantity)
-                if new_stock < 0:
-                    raise ValidationError("Cannot reduce stock below zero")
-                self.product.stock = new_stock
-                self.product.save(update_fields=["stock"])
+            if is_new:
+                average_cost = self._average_cost(stock_before)
+                self.product.apply_stock_change(self.quantity)
             else:
-                old_product = old_item.product
-                restored_old_stock = old_product.stock - old_item.quantity
-                if restored_old_stock < 0:
+                old_item = PurchaseItem.objects.select_related("product").get(pk=self.pk)
+                pricing_changed = (
+                    old_item.product_id != self.product_id
+                    or Decimal(old_item.cost_price) != Decimal(self.cost_price)
+                    or Decimal(old_item.sale_price or 0) != Decimal(self.sale_price or 0)
+                    or Decimal(old_item.quantity) != Decimal(self.quantity)
+                )
+                returned = sum((row.quantity for row in self.return_items.all()), ZERO_QTY)
+                if Decimal(self.quantity) < returned:
                     raise ValidationError(
-                        "Cannot change this purchase item because existing stock has already been consumed"
+                        f"{format_qty(returned)} of {self.product.display_name} was already returned to the supplier."
                     )
-                old_product.stock = restored_old_stock
-                old_product.save(update_fields=["stock"])
 
-                self.product.stock += self.quantity
-                self.product.save(update_fields=["stock"])
+                if old_item.product_id == self.product_id:
+                    average_cost = self._average_cost(stock_before, old_item.quantity, old_item.cost_price)
+                    try:
+                        self.product.apply_stock_change(Decimal(self.quantity) - Decimal(old_item.quantity))
+                    except ValidationError as exc:
+                        raise ValidationError("Cannot reduce stock below zero") from exc
+                else:
+                    try:
+                        old_item.product.apply_stock_change(-old_item.quantity)
+                    except ValidationError as exc:
+                        raise ValidationError(
+                            "Cannot change this purchase item because existing stock has already been consumed"
+                        ) from exc
+                    average_cost = self._average_cost(stock_before)
+                    self.product.apply_stock_change(self.quantity)
 
-        super().save(*args, **kwargs)
-        self._sync_product_pricing()
-        self.purchase.update_total()
+            super().save(*args, **kwargs)
+            # Re-saving an untouched line (e.g. editing only the paid amount of an old
+            # purchase) must not push old prices back onto the product.
+            if pricing_changed:
+                self._sync_product_pricing(average_cost)
+            self.purchase.update_total()
 
     def delete(self, *args, **kwargs):
-        if self.product.stock < self.quantity:
-            raise ValidationError("Cannot reduce stock below zero")
+        if self.pk and self.return_items.exists():
+            raise ValidationError(
+                f"{self.product.display_name} has supplier returns recorded against it and cannot be removed."
+            )
+        with transaction.atomic():
+            try:
+                self.product.apply_stock_change(-self.quantity)
+            except ValidationError as exc:
+                raise ValidationError("Cannot reduce stock below zero") from exc
 
-        self.product.stock -= self.quantity
-        self.product.save(update_fields=["stock"])
-
-        purchase = self.purchase
-        super().delete(*args, **kwargs)
-        purchase.update_total()
+            purchase = self.purchase
+            super().delete(*args, **kwargs)
+            purchase.update_total()
 
     def __str__(self):
-        return f"{self.product.name} x {self.quantity}"
+        return f"{self.product.display_name} x {format_qty(self.quantity)}"
 
 
 class PurchaseEditLog(models.Model):
@@ -671,6 +1002,9 @@ class UserSessionLog(models.Model):
 
     class Meta:
         ordering = ["-login_at"]
+        indexes = [
+            models.Index(fields=["user", "login_at"], name="pos_sessionlog_user_login_idx"),
+        ]
 
     def __str__(self):
         return f"{self.user} | {self.role_name} | {self.login_at:%Y-%m-%d %H:%M}"
@@ -737,6 +1071,8 @@ class CustomRole(models.Model):
 class UserPreference(models.Model):
     user = models.OneToOneField(settings.AUTH_USER_MODEL, on_delete=models.CASCADE, related_name="preference")
     time_zone = models.CharField(max_length=64, blank=True, default="")
+    # Google's stable account id; an email address can be reassigned, this cannot.
+    google_sub = models.CharField(max_length=255, blank=True, default="", db_index=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -778,13 +1114,45 @@ class OwnerOnboarding(models.Model):
     trial_started_at = models.DateTimeField(null=True, blank=True)
     trial_ends_at = models.DateTimeField(null=True, blank=True)
     business_created_at = models.DateTimeField(null=True, blank=True)
+    # High-water mark of the system clock. An offline install cannot ask a server what
+    # time it is, so this is what stops "set the date back" from extending the trial.
+    last_seen_at = models.DateTimeField(null=True, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
+
+    CLOCK_ROLLBACK_TOLERANCE = timedelta(days=1)
+    LAST_SEEN_WRITE_INTERVAL = timedelta(minutes=10)
 
     class Meta:
         ordering = ["-created_at"]
 
     def __str__(self):
         return f"Owner onboarding for {self.user.email or self.user.get_username()}"
+
+    @property
+    def clock_rolled_back(self):
+        if not self.last_seen_at:
+            return False
+        return timezone.now() < self.last_seen_at - self.CLOCK_ROLLBACK_TOLERANCE
+
+    @property
+    def trusted_now(self):
+        """The clock, but never earlier than the latest moment this install has already seen."""
+        now = timezone.now()
+        if self.last_seen_at and self.last_seen_at > now:
+            return self.last_seen_at
+        return now
+
+    def touch_last_seen(self, now=None):
+        """Advance the high-water mark. It never moves backwards and is written at most every few minutes."""
+        if not self.pk:
+            return
+        now = now or timezone.now()
+        if self.last_seen_at and now < self.last_seen_at + self.LAST_SEEN_WRITE_INTERVAL:
+            return
+        OwnerOnboarding.objects.filter(pk=self.pk).filter(
+            models.Q(last_seen_at__isnull=True) | models.Q(last_seen_at__lt=now)
+        ).update(last_seen_at=now)
+        self.last_seen_at = now
 
     @property
     def plan_label(self):
@@ -798,16 +1166,24 @@ class OwnerOnboarding(models.Model):
     def trial_is_active(self):
         if not self.trial_started_at or not self.trial_ends_at:
             return False
-        return timezone.now() <= self.trial_ends_at
+        if self.clock_rolled_back:
+            return False
+        return self.trusted_now <= self.trial_ends_at
 
     @property
     def trial_days_remaining(self):
-        if not self.trial_ends_at:
+        if not self.trial_ends_at or self.clock_rolled_back:
             return 0
-        remaining = self.trial_ends_at - timezone.now()
+        remaining = self.trial_ends_at - self.trusted_now
         if remaining.total_seconds() <= 0:
             return 0
         return remaining.days + (1 if remaining.seconds else 0)
+
+    @property
+    def trial_length_days(self):
+        if self.trial_started_at and self.trial_ends_at:
+            return max((self.trial_ends_at - self.trial_started_at).days, 1)
+        return trial_days()
 
     @property
     def subscription_is_active(self):
@@ -815,8 +1191,19 @@ class OwnerOnboarding(models.Model):
         return bool(subscription and subscription.grants_access)
 
     @property
+    def active_license(self):
+        from pos.services.licensing import get_active_license
+
+        return get_active_license(now=self.trusted_now)
+
+    @property
+    def license_is_active(self):
+        return self.active_license is not None
+
+    @property
     def billing_is_active(self):
-        return self.trial_is_active or self.subscription_is_active
+        """The one rule for workspace access: trial, OR paid subscription, OR valid licence key."""
+        return self.trial_is_active or self.subscription_is_active or self.license_is_active
 
     @property
     def requires_payment_setup(self):
@@ -825,13 +1212,20 @@ class OwnerOnboarding(models.Model):
     @property
     def billing_status_label(self):
         subscription = self.current_subscription
+        active_license = self.active_license
+        if active_license is not None:
+            return active_license.status_label
+        if subscription is not None and subscription.grants_access:
+            return subscription.status_label
         if self.trial_is_active:
             days = self.trial_days_remaining
-            return f"3 free days active ({days} day{'s' if days != 1 else ''} left)"
+            return f"Free trial active ({days} day{'s' if days != 1 else ''} left)"
+        if self.clock_rolled_back:
+            return "Check the computer date and time"
         if subscription is not None:
             return subscription.status_label
         if self.email_verified and self.business_created_at:
-            return "Payment required"
+            return "Activation required"
         return "Setup in progress"
 
     def mark_verification_sent(self, now=None):
@@ -851,8 +1245,11 @@ class OwnerOnboarding(models.Model):
             self.trial_started_at = now
             update_fields.append("trial_started_at")
         if self.trial_ends_at is None:
-            self.trial_ends_at = now + timedelta(days=3)
+            self.trial_ends_at = now + timedelta(days=trial_days())
             update_fields.append("trial_ends_at")
+        if self.last_seen_at is None:
+            self.last_seen_at = now
+            update_fields.append("last_seen_at")
         if self.billing_state == self.BILLING_PENDING:
             self.billing_state = self.BILLING_TRIAL
             update_fields.append("billing_state")
@@ -877,7 +1274,7 @@ class OwnerOnboarding(models.Model):
     def sync_billing_state(self):
         subscription = self.current_subscription
         target_state = self.BILLING_PENDING
-        if subscription and subscription.grants_access:
+        if (subscription and subscription.grants_access) or self.license_is_active:
             target_state = self.BILLING_ACTIVE
         elif self.trial_is_active:
             target_state = self.BILLING_TRIAL
@@ -940,9 +1337,14 @@ class BillingSubscription(models.Model):
     cancelled_at = models.DateTimeField(null=True, blank=True)
     last_event_name = models.CharField(max_length=120, blank=True)
     last_event_at = models.DateTimeField(null=True, blank=True)
+    # The provider's own updated_at from the last applied webhook; older deliveries are ignored.
+    provider_updated_at = models.DateTimeField(null=True, blank=True)
+    past_due_since = models.DateTimeField(null=True, blank=True)
     metadata = models.JSONField(default=dict, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
+
+    PAST_DUE_GRACE = timedelta(days=7)
 
     class Meta:
         ordering = ["-updated_at", "-created_at"]
@@ -969,12 +1371,23 @@ class BillingSubscription(models.Model):
         return "payable"
 
     @property
+    def past_due_grace_ends_at(self):
+        if self.status != self.STATUS_PAST_DUE:
+            return None
+        started = self.past_due_since or self.last_event_at or self.updated_at or timezone.now()
+        return started + self.PAST_DUE_GRACE
+
+    @property
     def grants_access(self):
         now = timezone.now()
-        if self.status in {self.STATUS_ACTIVE, self.STATUS_ON_TRIAL, self.STATUS_PAST_DUE}:
+        if self.status in {self.STATUS_ACTIVE, self.STATUS_ON_TRIAL}:
             return True
+        if self.status == self.STATUS_PAST_DUE:
+            # A failed renewal keeps the shop open for a bounded grace period, not forever.
+            return now <= self.past_due_grace_ends_at
         if self.status == self.STATUS_CANCELLED:
-            return self.ends_at is None or now <= self.ends_at
+            # Cancelled keeps access only up to a known paid-through date.
+            return self.ends_at is not None and now <= self.ends_at
         return False
 
 
@@ -992,6 +1405,96 @@ class BillingWebhookEvent(models.Model):
 
     def __str__(self):
         return f"{self.get_provider_display()} {self.event_name or 'webhook'}"
+
+
+class License(models.Model):
+    """An activated offline licence key.
+
+    The parsed columns are for display and reporting only. Access decisions always
+    re-verify the signed key text, so editing a row in the database unlocks nothing.
+    """
+
+    key = models.TextField()
+    key_hash = models.CharField(max_length=64, unique=True)
+    license_id = models.CharField(max_length=64, blank=True)
+    licensee = models.CharField(max_length=200)
+    email = models.EmailField(blank=True)
+    plan = models.CharField(max_length=40, blank=True)
+    # Display copies of the signed payload. modules=None means every module (Enterprise, or an older key).
+    edition = models.CharField(max_length=40, blank=True)
+    modules = models.JSONField(null=True, blank=True)
+    issued_at = models.DateTimeField()
+    expires_at = models.DateTimeField(null=True, blank=True)
+    max_users = models.PositiveIntegerField(null=True, blank=True)
+    is_active = models.BooleanField(default=True)
+    activated_at = models.DateTimeField(default=timezone.now)
+    activated_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="activated_licenses",
+    )
+
+    class Meta:
+        ordering = ["-activated_at", "-id"]
+
+    def __str__(self):
+        return f"Licence for {self.licensee}"
+
+    @property
+    def is_perpetual(self):
+        return self.expires_at is None
+
+    def is_expired(self, now=None):
+        if self.expires_at is None:
+            return False
+        return (now or timezone.now()) > self.expires_at
+
+    @property
+    def days_remaining(self):
+        if self.expires_at is None:
+            return None
+        remaining = self.expires_at - timezone.now()
+        if remaining.total_seconds() <= 0:
+            return 0
+        return remaining.days + (1 if remaining.seconds else 0)
+
+    @property
+    def plan_label(self):
+        return (self.plan or "Licensed").replace("_", " ").title()
+
+    @property
+    def status_label(self):
+        if self.is_perpetual:
+            return "Licensed (lifetime)"
+        if self.is_expired():
+            return "Licence expired"
+        days = self.days_remaining
+        return f"Licensed ({days} day{'s' if days != 1 else ''} left)"
+
+    @property
+    def max_users_label(self):
+        return "Unlimited" if self.max_users is None else str(self.max_users)
+
+    @property
+    def edition_label(self):
+        from pos.services.modules import edition_label
+
+        return edition_label(self.edition) or ("Enterprise" if self.modules is None else "Custom")
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        from pos.services.modules import invalidate_module_state
+
+        invalidate_module_state()
+
+    def delete(self, *args, **kwargs):
+        result = super().delete(*args, **kwargs)
+        from pos.services.modules import invalidate_module_state
+
+        invalidate_module_state()
+        return result
 
 
 class CompanyProfile(models.Model):
@@ -1043,13 +1546,38 @@ class SystemSettings(models.Model):
     allow_credit_sales = models.BooleanField(default=True)
     allow_price_override = models.BooleanField(default=True)
     allow_line_discount = models.BooleanField(default=True)
+    allow_zero_total_sales = models.BooleanField(
+        default=False,
+        help_text="Let a sale close at a total of zero (a 100% discount or a giveaway).",
+    )
     default_sale_payment_method = models.CharField(
         max_length=10,
         choices=Sale.PAYMENT_METHOD_CHOICES,
         default=Sale.CASH,
     )
     thermal_printer_width_mm = models.PositiveIntegerField(default=50)
+    currency_symbol = models.CharField(max_length=8, default="Rs", help_text="Shown before every amount.")
+    currency_code = models.CharField(max_length=3, default="PKR", help_text="ISO code, e.g. PKR, USD, AED.")
+    default_markup_percent = models.DecimalField(
+        max_digits=6,
+        decimal_places=2,
+        null=True,
+        blank=True,
+        help_text="Suggested markup on cost for new products.",
+    )
+    invoice_prefix = models.CharField(
+        max_length=12,
+        default="INV-",
+        blank=True,
+        help_text="Printed before the invoice number, e.g. INV-000125.",
+    )
+    next_invoice_sequence = models.PositiveIntegerField(default=1, editable=False)
+    # Feature modules the owner switched off (keys of pos.services.modules). The licence
+    # sets the ceiling; this list only ever narrows it.
+    disabled_modules = models.JSONField(default=list, blank=True, editable=False)
     updated_at = models.DateTimeField(auto_now=True)
+
+    INVOICE_NUMBER_DIGITS = 6
 
     class Meta:
         verbose_name = "System Settings"
@@ -1059,9 +1587,33 @@ class SystemSettings(models.Model):
         return "System Settings"
 
     @classmethod
-    def load(cls):
+    def load_raw(cls):
+        """The row exactly as stored. Only the module switches need this."""
         settings, _ = cls.objects.get_or_create(pk=1)
         return settings
+
+    @classmethod
+    def load(cls):
+        """The settings in force: switches of modules the shop cannot use read as off."""
+        from pos.services.modules import apply_module_mask
+
+        return apply_module_mask(cls.load_raw())
+
+    @classmethod
+    def allocate_invoice_number(cls):
+        """Hand out the next invoice number. Call inside the transaction that creates the sale."""
+        cls.load()
+        with transaction.atomic():
+            row = cls.objects.select_for_update().get(pk=1)
+            prefix = (row.invoice_prefix or "").strip()
+            sequence = max(int(row.next_invoice_sequence or 1), 1)
+            number = f"{prefix}{sequence:0{cls.INVOICE_NUMBER_DIGITS}d}"
+            # The settings form saves the whole row, so a stale counter can come back; skip past used numbers.
+            while Sale.objects.filter(invoice_number=number).exists():
+                sequence += 1
+                number = f"{prefix}{sequence:0{cls.INVOICE_NUMBER_DIGITS}d}"
+            cls.objects.filter(pk=1).update(next_invoice_sequence=sequence + 1)
+        return number
 
     @property
     def uses_category_gst(self):
@@ -1083,25 +1635,39 @@ class SystemSettings(models.Model):
     def save(self, *args, **kwargs):
         self.pk = 1
         self.tax_label = (self.tax_label or "GST").strip() or "GST"
+        self.invoice_prefix = (self.invoice_prefix or "").strip()
         self.thermal_printer_width_mm = max(int(self.thermal_printer_width_mm or 50), 50)
         self.expiry_alert_days = max(int(self.expiry_alert_days or 30), 1)
         self.cash_gst_rate = quantize_money(max(Decimal(self.cash_gst_rate or 0), Decimal("0")))
         self.bank_gst_rate = quantize_money(max(Decimal(self.bank_gst_rate or 0), Decimal("0")))
-        super().save(*args, **kwargs)
+        # load() masks the switches of unavailable modules; the owner's stored choice must survive a save.
+        masked = [flag for flag in (getattr(self, "_masked_flags", None) or {}) if getattr(self, flag) is False]
+        for flag in masked:
+            setattr(self, flag, True)
+        try:
+            super().save(*args, **kwargs)
+        finally:
+            for flag in masked:
+                setattr(self, flag, False)
+        from pos.services.modules import invalidate_module_state
+
+        invalidate_module_state()
 
 class StockAdjustment(models.Model):
     ADJUSTMENT = "adjustment"
     STOCK_TAKE = "stock_take"
+    OPENING_STOCK = "opening_stock"
     MODE_CHOICES = (
         (ADJUSTMENT, "Stock Adjustment"),
         (STOCK_TAKE, "Stock Take"),
+        (OPENING_STOCK, "Opening Stock"),
     )
 
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="stock_adjustments")
     adjustment_mode = models.CharField(max_length=20, choices=MODE_CHOICES, default=ADJUSTMENT)
-    quantity_before = models.PositiveIntegerField(default=0)
-    quantity_after = models.PositiveIntegerField(default=0)
-    quantity_delta = models.IntegerField(default=0)
+    quantity_before = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    quantity_after = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    quantity_delta = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     reason = models.CharField(max_length=150)
     notes = models.TextField(blank=True)
     voucher = models.ForeignKey(
@@ -1122,9 +1688,12 @@ class StockAdjustment(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["product", "created_at"], name="pos_stockadj_prod_created_idx"),
+        ]
 
     def __str__(self):
-        return f"Stock adjustment #{self.id} - {self.product.name}"
+        return f"Stock adjustment #{self.id} - {self.product.display_name}"
 
 
 class SaleReturn(models.Model):
@@ -1171,16 +1740,19 @@ class SaleReturn(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["created_at"], name="pos_salereturn_created_idx"),
+        ]
 
     def __str__(self):
-        return f"Sale return #{self.id} for sale #{self.sale_id}"
+        return f"Sale return #{self.id} for sale {self.sale.display_number}"
 
 
 class SaleReturnItem(models.Model):
     sale_return = models.ForeignKey(SaleReturn, on_delete=models.CASCADE, related_name="items")
     sale_item = models.ForeignKey(SaleItem, on_delete=models.PROTECT, related_name="return_items")
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="sale_return_items")
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     line_amount = models.DecimalField(max_digits=12, decimal_places=2)
     net_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -1191,7 +1763,7 @@ class SaleReturnItem(models.Model):
         ordering = ["id"]
 
     def __str__(self):
-        return f"{self.product.name} x {self.quantity}"
+        return f"{self.product.display_name} x {format_qty(self.quantity)}"
 
 
 class PurchaseReturn(models.Model):
@@ -1235,6 +1807,9 @@ class PurchaseReturn(models.Model):
 
     class Meta:
         ordering = ["-created_at", "-id"]
+        indexes = [
+            models.Index(fields=["created_at"], name="pos_purchreturn_created_idx"),
+        ]
 
     def __str__(self):
         return f"Purchase return #{self.id} for purchase #{self.purchase_id}"
@@ -1244,14 +1819,14 @@ class PurchaseReturnItem(models.Model):
     purchase_return = models.ForeignKey(PurchaseReturn, on_delete=models.CASCADE, related_name="items")
     purchase_item = models.ForeignKey(PurchaseItem, on_delete=models.PROTECT, related_name="return_items")
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="purchase_return_items")
-    quantity = models.PositiveIntegerField()
+    quantity = models.DecimalField(max_digits=12, decimal_places=3)
     line_amount = models.DecimalField(max_digits=12, decimal_places=2)
 
     class Meta:
         ordering = ["id"]
 
     def __str__(self):
-        return f"{self.product.name} x {self.quantity}"
+        return f"{self.product.display_name} x {format_qty(self.quantity)}"
 
 
 

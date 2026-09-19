@@ -1,0 +1,515 @@
+/* ---------- the receipt page: a summary panel beside the slip as it prints ---------- */
+
+.k-paper-desk {
+    display: grid;
+    grid-template-columns: minmax(300px, 380px) minmax(0, 1fr);
+    gap: var(--k-5);
+    align-items: start;
+}
+
+.k-paper-entry {
+    position: sticky;
+    top: 0;
+    display: grid;
+    gap: var(--k-5);
+    margin: 0;
+}
+
+.k-paper-total {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--k-2) var(--k-3);
+}
+
+.k-paper-total-label {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+.k-paper-total .k-figure {
+    flex: 1 0 100%;
+    text-align: left;
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+
+.k-paper-told {
+    margin: 0;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.k-paper-facts {
+    margin: 0;
+}
+
+.k-paper-facts > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--k-3);
+    padding: var(--k-2) 0;
+}
+
+.k-paper-facts > div + div {
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+
+.k-paper-facts dt {
+    min-width: 0;
+    color: var(--k-ink-soft);
+    font-weight: 400;
+    overflow-wrap: anywhere;
+}
+
+.k-paper-facts dd {
+    margin: 0;
+    color: var(--k-ink-title);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums lining-nums;
+    text-align: right;
+    white-space: nowrap;
+}
+
+.k-paper-choice {
+    margin: 0;
+    padding: 0;
+    border: 0;
+    min-width: 0;
+}
+
+.k-paper-choice legend {
+    float: none;
+    width: auto;
+    margin: 0 0 var(--k-2);
+    padding: 0;
+    color: var(--k-ink);
+    font-size: var(--k-text-sm);
+    font-weight: 600;
+}
+
+.k-paper-choice .btn-group {
+    display: flex;
+}
+
+.k-paper-choice .btn {
+    flex: 1 1 0;
+}
+
+.k-paper-stage {
+    display: flex;
+    justify-content: center;
+    min-width: 0;
+    padding-bottom: var(--k-5);
+}
+
+/* ---------- paper: on screen a white sheet on the grey ground ---------- */
+
+.k-paper {
+    --p-ink: var(--k-ink-title);
+    --p-soft: var(--k-ink-soft);
+    --p-rule: var(--k-border-strong);
+    --p-rule-soft: var(--k-divider);
+    position: relative;
+    background: var(--k-panel);
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius);
+    box-shadow: var(--k-shadow-panel);
+    color: var(--p-ink);
+    font-family: var(--k-font);
+    font-variant-numeric: tabular-nums lining-nums;
+    line-height: 1.3;
+}
+
+.k-paper-desk[data-paper="roll"] .k-paper--a4,
+.k-paper-desk[data-paper="a4"] .k-paper--roll {
+    display: none;
+}
+
+.k-paper p {
+    margin: 0;
+}
+
+.k-paper img {
+    object-fit: contain;
+}
+
+/* ---------- the thermal roll ---------- */
+
+.k-paper--roll {
+    --roll-w: calc(var(--paper-mm, 50) * 1mm);
+    --roll-text: calc(7pt + (var(--paper-mm, 50) - 50) * 0.05pt);
+    width: var(--roll-w);
+    min-width: var(--roll-w);
+    max-width: var(--roll-w);
+    padding: 3mm 2.2mm 4mm;
+    font-size: var(--roll-text);
+}
+
+.r-head {
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+.r-head img {
+    max-width: 18mm;
+    max-height: 18mm;
+    margin-bottom: 1mm;
+}
+
+.r-name {
+    font-size: 1.35em;
+    font-weight: 800;
+    line-height: 1.15;
+    letter-spacing: 0.01em;
+}
+
+.r-rule {
+    margin: 1.6mm 0;
+    border: 0;
+    border-top: 1px solid var(--p-rule);
+    opacity: 1;
+}
+
+.r-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 2mm;
+    padding: 0.35mm 0;
+}
+
+.r-row > :first-child {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.r-row > :last-child {
+    flex: none;
+    max-width: 70%;
+    font-weight: 700;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.r-cols {
+    font-size: 0.9em;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+}
+
+.r-item {
+    padding: 1mm 0;
+    border-top: 1px dotted var(--p-rule);
+    break-inside: avoid;
+}
+
+.r-cols + .r-item {
+    border-top: 1px solid var(--p-rule);
+    margin-top: 0.6mm;
+}
+
+.r-item-name {
+    font-size: 1.08em;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.r-item-note {
+    font-size: 0.92em;
+}
+
+.r-total {
+    margin: 1.2mm 0 0.8mm;
+    padding: 1mm 0 0.8mm;
+    border-top: 1px solid var(--p-rule);
+    border-bottom: 3px double var(--p-rule);
+    font-size: 1.4em;
+    font-weight: 800;
+}
+
+.r-foot {
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+/* ---------- the A4 sheet ---------- */
+
+.k-paper--a4 {
+    width: 100%;
+    max-width: 210mm;
+    padding: clamp(var(--k-4), 4vw, 14mm);
+    font-size: var(--k-text-sm);
+}
+
+.a-head {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    gap: var(--k-5);
+    padding-bottom: var(--k-4);
+    border-bottom: 2px solid var(--p-rule);
+}
+
+.a-company {
+    min-width: 0;
+    overflow-wrap: anywhere;
+}
+
+.a-company img {
+    max-width: 30mm;
+    max-height: 20mm;
+    margin-bottom: var(--k-2);
+}
+
+.a-name {
+    font-size: var(--k-text-xl);
+    font-weight: 800;
+    line-height: 1.15;
+}
+
+.a-company p + p {
+    margin-top: 1px;
+}
+
+.a-doc {
+    flex: none;
+    text-align: right;
+}
+
+.a-doc-title {
+    margin: 0;
+    color: var(--p-ink);
+    font-size: var(--k-text-2xl);
+    font-weight: 800;
+    letter-spacing: -0.01em;
+    line-height: 1;
+}
+
+.a-doc-number {
+    margin-top: var(--k-1);
+    font-size: var(--k-text-lg);
+    font-weight: 700;
+}
+
+.a-meta {
+    display: grid;
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+    gap: var(--k-3);
+    margin: var(--k-4) 0 var(--k-5);
+    padding: 0;
+}
+
+.a-meta dt {
+    color: var(--p-soft);
+    font-size: var(--k-text-xs);
+    font-weight: 600;
+}
+
+.a-meta dd {
+    margin: 0;
+    font-weight: 700;
+    overflow-wrap: anywhere;
+}
+
+.a-lines {
+    width: 100%;
+    border-collapse: collapse;
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.a-lines th,
+.a-lines td {
+    padding: 0.55rem 0.5rem;
+    border-bottom: 1px solid var(--p-rule-soft);
+    vertical-align: top;
+    text-align: left;
+}
+
+.a-lines thead th {
+    border-bottom: 1px solid var(--p-rule);
+    color: var(--p-soft);
+    font-size: var(--k-text-xs);
+    font-weight: 600;
+}
+
+.a-lines th:nth-child(2) {
+    width: 100%;
+}
+
+.a-lines .a-n {
+    width: 2.2em;
+    padding-left: 0;
+    color: var(--p-soft);
+    text-align: right;
+}
+
+.a-lines .a-num {
+    text-align: right;
+    white-space: nowrap;
+}
+
+.a-lines td.a-amt {
+    font-weight: 700;
+}
+
+.a-lines tr {
+    break-inside: avoid;
+}
+
+.a-item-note {
+    display: block;
+    color: var(--p-soft);
+    font-size: var(--k-text-xs);
+}
+
+.a-sums {
+    width: min(100%, 22rem);
+    margin: var(--k-3) 0 0 auto;
+    break-inside: avoid;
+}
+
+.a-sums .r-row {
+    padding: 0.2rem 0.4rem;
+}
+
+.a-sums .r-row > :last-child {
+    max-width: none;
+}
+
+.a-sums .r-total {
+    margin: var(--k-1) 0;
+    padding: 0.5rem 0.4rem 0.35rem;
+    border-bottom: 0;
+    font-size: var(--k-text-xl);
+}
+
+.a-foot {
+    margin-top: var(--k-6);
+    padding-top: var(--k-2);
+    border-top: 1px solid var(--p-rule-soft);
+    color: var(--p-soft);
+    text-align: center;
+    overflow-wrap: anywhere;
+}
+
+/* ---------- a phone ---------- */
+
+@media (max-width: 991.98px) {
+    .k-paper-desk {
+        grid-template-columns: minmax(0, 1fr);
+        gap: var(--k-5);
+    }
+
+    .k-paper-entry {
+        position: static;
+    }
+
+    .k-paper-stage {
+        justify-content: center;
+    }
+}
+
+@media (max-width: 575.98px) {
+    .k-paper-total .k-figure--xl {
+        font-size: var(--k-text-3xl);
+    }
+
+    .a-head {
+        flex-direction: column;
+        gap: var(--k-3);
+    }
+
+    .a-doc {
+        text-align: left;
+    }
+
+    .a-meta {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .a-lines th,
+    .a-lines td {
+        padding: 0.3rem 0.2rem;
+    }
+}
+
+/* ---------- on paper: black only, nothing but the slip ---------- */
+
+@media print {
+    body.k-app .k-body,
+    body.k-app .k-page {
+        padding: 0 !important;
+        background: none !important;
+    }
+
+    .k-paper-desk {
+        display: block;
+    }
+
+    .k-paper-entry {
+        display: none !important;
+    }
+
+    .k-paper-stage {
+        display: block;
+        padding: 0;
+    }
+
+    .k-paper {
+        --p-ink: black;
+        --p-soft: black;
+        --p-rule: black;
+        --p-rule-soft: black;
+        margin: 0;
+        border: 0;
+        border-radius: 0;
+        box-shadow: none;
+        background: none;
+        color: black;
+    }
+
+    .k-paper--a4 {
+        max-width: none;
+        padding: 0;
+        font-size: 10pt;
+    }
+
+    .k-paper--a4 .a-name {
+        font-size: 15pt;
+    }
+
+    .k-paper--a4 .a-doc-title {
+        font-size: 18pt;
+    }
+
+    .k-paper--a4 .a-doc-number {
+        font-size: 12pt;
+    }
+
+    .k-paper--a4 .a-meta dt,
+    .k-paper--a4 .a-lines thead th,
+    .k-paper--a4 .a-item-note {
+        font-size: 8pt;
+    }
+
+    .k-paper--a4 .a-sums .r-total {
+        font-size: 13pt;
+    }
+
+    .a-head {
+        flex-direction: row;
+    }
+
+    .a-doc {
+        text-align: right;
+    }
+
+    .a-meta {
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+    }
+}

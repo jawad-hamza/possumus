@@ -31,23 +31,23 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
     def test_accounts_pages_render_plain_language_views(self):
         home_response = self.client.get(reverse("accounts_home"))
         self.assertEqual(home_response.status_code, 200)
-        self.assertContains(home_response, "Money Available Now")
-        self.assertContains(home_response, "Operating Bills Due")
-        self.assertContains(home_response, "Tax Collected")
-        self.assertContains(home_response, "Money Desk")
+        self.assertContains(home_response, "Money available now")
+        self.assertContains(home_response, "Operating bills due")
+        self.assertContains(home_response, "Tax collected")
+        self.assertContains(home_response, "Money desk")
 
         expense_response = self.client.get(reverse("expense_list"))
         self.assertEqual(expense_response.status_code, 200)
-        self.assertContains(expense_response, "Record Expense")
+        self.assertContains(expense_response, "Record expense")
 
         money_response = self.client.get(reverse("money_desk"))
         self.assertEqual(money_response.status_code, 200)
-        self.assertContains(money_response, "Opening Funds / Owner Capital")
-        self.assertContains(money_response, "Transfer Cash and Bank")
+        self.assertContains(money_response, "Opening funds / owner capital")
+        self.assertContains(money_response, "Transfer cash and bank")
 
         trial_response = self.client.get(reverse("trial_balance"))
         self.assertEqual(trial_response.status_code, 200)
-        self.assertContains(trial_response, "Trial Balance")
+        self.assertContains(trial_response, "Trial balance")
 
         profit_response = self.client.get(reverse("profit_loss"))
         self.assertEqual(profit_response.status_code, 200)
@@ -55,7 +55,7 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
 
         balance_response = self.client.get(reverse("balance_sheet"))
         self.assertEqual(balance_response.status_code, 200)
-        self.assertContains(balance_response, "Net Position")
+        self.assertContains(balance_response, "Net position")
         self.assertContains(home_response, reverse("money_breakdown"))
 
     def test_accounts_home_reports_tax_collected_from_gst_entries(self):
@@ -68,7 +68,7 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.context["tax_collected"], Decimal("15.00"))
-        self.assertContains(response, "Tax Collected")
+        self.assertContains(response, "Tax collected")
 
     def test_money_breakdown_page_shows_cash_and_bank_movements(self):
         bank_voucher = Voucher.objects.create(voucher_type=Voucher.RECEIPT, narration="Bank deposit")
@@ -81,7 +81,7 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
         self.assertEqual(response.context["cash_balance"], Decimal("300.00"))
         self.assertEqual(response.context["bank_balance"], Decimal("100.00"))
         self.assertEqual(response.context["available_money"], Decimal("400.00"))
-        self.assertContains(response, "Why Is Money Available Now This Much?")
+        self.assertContains(response, "Why is money available now this much?")
         self.assertContains(response, "Cash sale")
         self.assertContains(response, "Shop rent")
         self.assertContains(response, "Bank deposit")
@@ -90,7 +90,7 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
         response = self.client.get(reverse("account_ledger", args=[self.cash.id]))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Closing Balance")
+        self.assertContains(response, "Closing balance")
         self.assertContains(response, "Narration")
         self.assertEqual(response.context["closing_balance"], Decimal("300.00"))
 
@@ -191,7 +191,7 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
         page_response = self.client.get(reverse("expense_list"), {"expense": expense.id})
         self.assertEqual(page_response.status_code, 200)
         self.assertEqual(page_response.context["selected_expense_id"], str(expense.id))
-        self.assertContains(page_response, "Selected Bill")
+        self.assertContains(page_response, "Selected bill")
         self.assertContains(page_response, "March Internet")
 
         payment_response = self.client.post(

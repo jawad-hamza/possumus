@@ -150,18 +150,20 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         )
         self._set_cart(product, quantity=2)
 
-        with mock.patch("pos.views.post_sale_from_pos", side_effect=ValueError("posting failed")):
-            with self.assertRaisesMessage(ValueError, "posting failed"):
-                self.client.post(
-                    reverse("pos_screen"),
-                    {
-                        "action": "checkout",
-                        "discount_rate": "0",
-                        "tax_rate": "0",
-                        "payment_method": "cash",
-                    },
-                )
+        with mock.patch("pos.views.pos_views.post_sale_from_pos", side_effect=ValueError("posting failed")):
+            response = self.client.post(
+                reverse("pos_screen"),
+                {
+                    "action": "checkout",
+                    "discount_rate": "0",
+                    "tax_rate": "0",
+                    "payment_method": "cash",
+                },
+            )
 
+        # The cashier gets the till back with the reason, not an error page.
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "posting failed")
         product.refresh_from_db()
         self.assertEqual(Sale.objects.count(), 0)
         self.assertEqual(Voucher.objects.count(), 0)
@@ -194,7 +196,8 @@ class PosFlowTests(AuthenticatedAdminTestCase):
 
         self.assertEqual(purchase.total_amount, Decimal("60.00"))
         self.assertEqual(product.stock, 4)
-        self.assertEqual(product.cost_price, Decimal("20.00"))
+        # Weighted average: (1 x 10.00 + 3 x 20.00) / 4
+        self.assertEqual(product.cost_price, Decimal("17.50"))
         self.assertEqual(product.price, Decimal("30.00"))
         self.assertTrue(voucher.lines.filter(account__title="Inventory", debit=Decimal("60.00")).exists())
         self.assertTrue(voucher.lines.filter(account__title="Accounts Payable", credit=Decimal("60.00")).exists())
@@ -324,12 +327,13 @@ class PosFlowTests(AuthenticatedAdminTestCase):
             stock=4,
         )
 
-        response = self.client.get(reverse("scan_barcode", args=[product.barcode]))
+        response = self.client.post(reverse("scan_barcode", args=[product.barcode]))
 
         self.assertEqual(response.status_code, 200)
         self.assertEqual(response.json()["status"], "ok")
         session = self.client.session
-        self.assertEqual(session["cart"][str(product.id)]["quantity"], 1)
+        # Quantities are stored as strings so weights like 0.5 survive the session JSON.
+        self.assertEqual(session["cart"][str(product.id)]["quantity"], "1")
 
     def test_add_customer_flow_returns_to_pos_with_credit_selected(self):
         next_url = f"{reverse('pos_screen')}?credit=1"
@@ -555,7 +559,7 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         response = self.client.get(reverse("home"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Vendora")
+        self.assertContains(response, "ZehnMS")
         self.assertContains(response, "Lemon Squeezy")
         self.assertContains(response, "Get Started Free")
         self.assertContains(response, "Sign Up")
@@ -570,8 +574,8 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         response = self.client.get(reverse("start_trial"), follow=True)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "This Vendora workspace already has an owner account.")
-        self.assertContains(response, "Go to Sign In")
+        self.assertContains(response, "This ZehnMS workspace already has an owner account.")
+        self.assertContains(response, "Go to sign in")
 
     def test_demo_plan_checkout_redirects_to_signup_when_workspace_exists(self):
         self.client.logout()
@@ -579,8 +583,8 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         response = self.client.get(reverse("landing_plan_checkout", args=["growth"]), follow=True)
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "This Vendora workspace already has an owner account.")
-        self.assertContains(response, "Go to Sign In")
+        self.assertContains(response, "This ZehnMS workspace already has an owner account.")
+        self.assertContains(response, "Go to sign in")
 
     def test_settings_page_updates_branding_and_tax_rules(self):
         branding_response = self.client.post(
@@ -644,7 +648,7 @@ class PosFlowTests(AuthenticatedAdminTestCase):
             [log.description for log in response.context["audit_logs"]],
             [f"Event {number}" for number in range(14, 4, -1)],
         )
-        self.assertContains(response, "Show All")
+        self.assertContains(response, "Show all")
         self.assertContains(response, "Next")
 
         page_two_response = self.client.get(reverse("settings_page"), {"audit_page": 2})
@@ -664,7 +668,7 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         self.assertEqual(show_all_response.context["audit_mode"], "all")
         self.assertIsNone(show_all_response.context["audit_page_obj"])
         self.assertEqual(len(show_all_response.context["audit_logs"]), 14)
-        self.assertContains(show_all_response, "Back to Top 10")
+        self.assertContains(show_all_response, "Back to top 10")
 
     def test_settings_page_groups_sections_into_tabs(self):
         response = self.client.get(reverse("settings_page"))
@@ -692,7 +696,7 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         self.assertEqual(response.context["session_detected_time_zone"], "America/New_York")
         self.assertEqual(response.context["effective_time_zone"], "America/New_York")
         self.assertTrue(response.context["uses_system_detected_time_zone"])
-        self.assertContains(response, "Your Time Zone")
+        self.assertContains(response, "Your time zone")
         self.assertContains(response, "America/New_York")
 
     def test_settings_page_saves_admin_time_zone_preference(self):
@@ -720,14 +724,25 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         self.assertContains(response, "Time zone saved as Europe/London.")
 
     def test_settings_page_can_upload_database_snapshot(self):
+        # Uploads are validated now, so the payload has to be a real Django SQLite backup.
+        import sqlite3
+
+        with TemporaryDirectory() as source_dir:
+            source_path = Path(source_dir) / "source.sqlite3"
+            source_db = sqlite3.connect(str(source_path))
+            source_db.execute("CREATE TABLE django_migrations (id integer primary key, app text, name text)")
+            source_db.commit()
+            source_db.close()
+            backup_bytes = source_path.read_bytes()
+
         uploaded_file = SimpleUploadedFile(
             "staging-snapshot.sqlite3",
-            b"sqlite backup content",
+            backup_bytes,
             content_type="application/octet-stream",
         )
 
         with TemporaryDirectory() as tmpdir:
-            with override_settings(BASE_DIR=Path(tmpdir)):
+            with override_settings(BASE_DIR=Path(tmpdir), BACKUP_DIR=Path(tmpdir) / "backups", DEPLOYMENT_MODE="desktop"):
                 response = self.client.post(
                     reverse("settings_page"),
                     {
@@ -747,7 +762,7 @@ class PosFlowTests(AuthenticatedAdminTestCase):
 
                 stored_path = Path(tmpdir) / "backups" / snapshot.file_name
                 self.assertTrue(stored_path.exists())
-                self.assertEqual(stored_path.read_bytes(), b"sqlite backup content")
+                self.assertEqual(stored_path.read_bytes(), backup_bytes)
                 self.assertTrue(AuditLog.objects.filter(action="backup_uploaded", target_id=str(snapshot.id)).exists())
                 self.assertContains(response, "Staging Snapshot")
 
@@ -890,7 +905,7 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         product_list_response = self.client.get(reverse("product_list"))
         dashboard_response = self.client.get(reverse("dashboard"))
 
-        self.assertContains(product_edit_response, "Expiry Date")
+        self.assertContains(product_edit_response, "Expiry date")
         self.assertNotContains(product_list_response, "<th>Expiry</th>", html=False)
         self.assertNotIn("Expiry Alerts", [item["title"] for item in dashboard_response.context["dashboard_kpis"]])
 
@@ -926,7 +941,7 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         product_list_response = self.client.get(reverse("product_list"))
         dashboard_response = self.client.get(reverse("dashboard"))
 
-        self.assertContains(product_edit_response, "Expiry Date")
+        self.assertContains(product_edit_response, "Expiry date")
         self.assertContains(product_list_response, "<th>Expiry</th>", html=False)
         self.assertContains(product_list_response, "15 Mar 2026")
         self.assertIn("Expiry Alerts", [item["title"] for item in dashboard_response.context["dashboard_kpis"]])
@@ -1021,8 +1036,8 @@ class OwnerOnboardingTests(TestCase):
         GOOGLE_OAUTH_CLIENT_SECRET="google-client-secret",
         GOOGLE_SIGN_IN_ENABLED=True,
     )
-    @mock.patch("pos.views.verify_google_identity_token")
-    @mock.patch("pos.views.exchange_google_authorization_code")
+    @mock.patch("pos.views.public.verify_google_identity_token")
+    @mock.patch("pos.views.public.exchange_google_authorization_code")
     def test_google_sign_in_creates_verified_owner_account(self, exchange_code_mock, verify_token_mock):
         start_response = self.client.get(reverse("google_auth_start"), {"plan": OwnerOnboarding.PLAN_GROWTH})
 
@@ -1059,8 +1074,8 @@ class OwnerOnboardingTests(TestCase):
         GOOGLE_OAUTH_CLIENT_SECRET="google-client-secret",
         GOOGLE_SIGN_IN_ENABLED=True,
     )
-    @mock.patch("pos.views.verify_google_identity_token")
-    @mock.patch("pos.views.exchange_google_authorization_code")
+    @mock.patch("pos.views.public.verify_google_identity_token")
+    @mock.patch("pos.views.public.exchange_google_authorization_code")
     def test_google_sign_in_verifies_existing_owner_and_redirects_to_setup(self, exchange_code_mock, verify_token_mock):
         user = get_user_model().objects.create_user(
             username="owner@example.com",
@@ -1143,12 +1158,13 @@ class OwnerOnboardingTests(TestCase):
         self.assertContains(response, "Sign in with your registered owner account")
 
 
-    def test_login_page_explains_google_sign_in_setup_when_not_configured(self):
+    def test_login_page_shows_nothing_for_google_sign_in_when_not_configured(self):
         response = self.client.get(reverse("login"))
 
         self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Google Sign-In Unavailable")
-        self.assertContains(response, "Google sign-in will turn on after the Google OAuth client ID, secret, and callback URL are connected.")
+        self.assertNotContains(response, "Google Sign-In Unavailable")
+        self.assertNotContains(response, "Google sign-in will turn on after the Google OAuth client ID, secret, and callback URL are connected.")
+        self.assertNotContains(response, "data-google-sign-in-link")
 
     def test_billing_checkout_redirects_owner_to_provider_checkout(self):
         user = get_user_model().objects.create_user(
@@ -1172,7 +1188,7 @@ class OwnerOnboardingTests(TestCase):
         CompanyProfile.objects.create(name="Blue Mart", is_active=True)
 
         self.client.force_login(user)
-        response = self.client.get(reverse("billing_checkout", args=[OwnerOnboarding.PLAN_GROWTH]))
+        response = self.client.post(reverse("billing_checkout", args=[OwnerOnboarding.PLAN_GROWTH]))
 
         self.assertEqual(response.status_code, 302)
         self.assertIn("growth-demo", response.url)
@@ -1253,11 +1269,11 @@ class OwnerOnboardingTests(TestCase):
                     "customer_id": "cus_12345",
                     "product_id": "prod_123",
                     "variant_id": "var_123",
-                    "product_name": "Vendora Growth",
+                    "product_name": "ZehnMS Growth",
                     "variant_name": "Growth Monthly",
                     "renews_at": "2026-03-20T12:00:00Z",
                     "urls": {
-                        "customer_portal": "https://vendora.lemonsqueezy.com/billing/demo-portal"
+                        "customer_portal": "https://zehnms.lemonsqueezy.com/billing/demo-portal"
                     },
                 },
             },

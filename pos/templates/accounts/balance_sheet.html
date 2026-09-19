@@ -1,107 +1,124 @@
-﻿{% extends "pos/base.html" %}
-{% load accounting_tags %}
+{% extends "pos/base.html" %}
+{% load static accounting_tags %}
 
-{% block title %}Balance Sheet{% endblock %}
+{% block title %}Balance sheet{% endblock %}
+{% block page_title %}Balance sheet{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}{% include "accounts/_report_actions.html" %}{% endblock %}
 
 {% block content %}
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-    <div>
-        <h2 class="mb-1">Balance Sheet</h2>
-        <p class="text-muted mb-0">As of {{ as_of_label }}. This is a snapshot of what the business owns, owes, and retains.</p>
-    </div>
-    <form class="d-flex flex-wrap gap-2">
-        <input type="date" class="form-control" name="as_of" value="{{ request.GET.as_of }}">
-        <button class="btn btn-dark">Apply</button>
-    </form>
-</div>
+<header class="b-print-head">
+    <h2>{{ active_company.name|default:brand_name }}</h2>
+    <p>Balance Sheet as of {{ as_of_label }}</p>
+</header>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-3">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Assets</div>
-            <div class="fs-4 fw-bold">{{ total_assets|money }}</div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Liabilities</div>
-            <div class="fs-4 fw-bold">{{ total_liabilities|money }}</div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Equity</div>
-            <div class="fs-4 fw-bold">{{ total_equity|money }}</div>
-        </div>
-    </div>
-    <div class="col-md-3">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Net Position</div>
-            <div class="fs-4 fw-bold">{{ net_position|money }}</div>
-        </div>
-    </div>
-</div>
+{% include "accounts/_report_header.html" %}
 
-{% if balanced %}
-<div class="alert alert-success">The balance sheet is balanced: assets equal liabilities plus equity.</div>
-{% else %}
-<div class="alert alert-danger">The balance sheet is not balanced and should be reviewed.</div>
-{% endif %}
+<div class="b-sheet b-sheet--wide">
+    <div class="k-section-head">
+        <h2 class="k-heading m-0" id="bs-title">As of {{ as_of_label }} <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About this balance sheet" aria-describedby="tipBs" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipBs" role="tooltip" hidden>This is a snapshot of what the business owns, owes, and retains.{% if balanced %} The balance sheet is balanced: assets equal liabilities plus equity.{% endif %}</span></span></h2>
+        {% if balanced %}
+        <span class="k-badge k-badge--green">Balanced</span>
+        {% else %}
+        <span class="k-badge k-badge--red">Needs review</span>
+        {% endif %}
+        <div class="b-check m-0 ms-auto">
+            <span>Net position</span>
+            <strong class="{% if net_position >= 0 %}k-in{% else %}k-out{% endif %}">{{ net_position|money }}</strong>
+            <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Net position" aria-describedby="tipNetPos" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipNetPos" role="tooltip" hidden>Total assets less total liabilities.</span></span>
+        </div>
+    </div>
 
-<div class="row g-3">
-    <div class="col-lg-4">
-        <div class="page-card p-0 overflow-hidden h-100">
-            <div class="p-4 border-bottom">
-                <h4 class="mb-1">Assets</h4>
-                <p class="text-muted mb-0">What the business currently owns or controls.</p>
-            </div>
-            <ul class="list-group list-group-flush">
-                {% for row in assets %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <span>{{ row.account }}</span>
-                    <span class="fw-semibold">{{ row.balance|money }}</span>
-                </li>
-                {% empty %}
-                <li class="list-group-item text-muted">No assets to show.</li>
-                {% endfor %}
-            </ul>
-        </div>
+    {% if not balanced %}
+    <div class="alert alert-danger">The balance sheet is not balanced and should be reviewed.</div>
+    {% endif %}
+    {% if opening_difference %}
+    <div class="alert alert-warning">
+        Opening balances were entered one-sided: they differ by {{ opening_difference|money }}. The gap is listed under Equity until the opening balances are completed.
     </div>
-    <div class="col-lg-4">
-        <div class="page-card p-0 overflow-hidden h-100">
-            <div class="p-4 border-bottom">
-                <h4 class="mb-1">Liabilities</h4>
-                <p class="text-muted mb-0">Amounts the business still owes to others.</p>
-            </div>
-            <ul class="list-group list-group-flush">
-                {% for row in liabilities %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <span>{{ row.account }}</span>
-                    <span class="fw-semibold">{{ row.balance|money }}</span>
-                </li>
-                {% empty %}
-                <li class="list-group-item text-muted">No liabilities to show.</li>
-                {% endfor %}
-            </ul>
-        </div>
-    </div>
-    <div class="col-lg-4">
-        <div class="page-card p-0 overflow-hidden h-100">
-            <div class="p-4 border-bottom">
-                <h4 class="mb-1">Equity</h4>
-                <p class="text-muted mb-0">Owner value including retained earnings.</p>
-            </div>
-            <ul class="list-group list-group-flush">
-                {% for row in equity %}
-                <li class="list-group-item d-flex justify-content-between align-items-center">
-                    <span>{{ row.account }}</span>
-                    <span class="fw-semibold">{{ row.balance|money }}</span>
-                </li>
-                {% empty %}
-                <li class="list-group-item text-muted">No equity balances to show.</li>
-                {% endfor %}
-            </ul>
-        </div>
+    {% endif %}
+
+    <div class="b-grid b-grid--even">
+        <section class="k-section" aria-label="What the business owns">
+            <table class="b-statement">
+                <thead>
+                    <tr>
+                        <th scope="col">What the business owns</th>
+                        <th scope="col" class="k-num">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="b-group">
+                        <th scope="colgroup" colspan="2">Assets <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Assets" aria-describedby="tipBsAssets" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipBsAssets" role="tooltip" hidden>What the business currently owns or controls.</span></span></th>
+                    </tr>
+                    {% for row in assets %}
+                    <tr class="b-acct">
+                        <td>{% if row.account_id %}<a href="{% url 'account_ledger' row.account_id %}{% if filter_as_of %}?end={{ filter_as_of }}{% endif %}">{{ row.account }}</a>{% else %}{{ row.account }}{% endif %}</td>
+                        <td class="k-num">{{ row.balance|money }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr class="b-acct b-empty"><td colspan="2">No assets to show.</td></tr>
+                    {% endfor %}
+                </tbody>
+                <tfoot>
+                    <tr class="b-total">
+                        <td>Total assets</td>
+                        <td class="k-num">{{ total_assets|money }}</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </section>
+
+        <section class="k-section" aria-label="What the business owes and retains">
+            <table class="b-statement">
+                <thead>
+                    <tr>
+                        <th scope="col">What the business owes and retains</th>
+                        <th scope="col" class="k-num">Amount</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr class="b-group">
+                        <th scope="colgroup" colspan="2">Liabilities <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Liabilities" aria-describedby="tipBsLiab" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipBsLiab" role="tooltip" hidden>Amounts the business still owes to others.</span></span></th>
+                    </tr>
+                    {% for row in liabilities %}
+                    <tr class="b-acct">
+                        <td>{% if row.account_id %}<a href="{% url 'account_ledger' row.account_id %}{% if filter_as_of %}?end={{ filter_as_of }}{% endif %}">{{ row.account }}</a>{% else %}{{ row.account }}{% endif %}</td>
+                        <td class="k-num">{{ row.balance|money }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr class="b-acct b-empty"><td colspan="2">No liabilities to show.</td></tr>
+                    {% endfor %}
+                    <tr class="b-subtotal">
+                        <td>Total liabilities</td>
+                        <td class="k-num">{{ total_liabilities|money }}</td>
+                    </tr>
+                    <tr class="b-group">
+                        <th scope="colgroup" colspan="2">Equity <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Equity" aria-describedby="tipBsEquity" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipBsEquity" role="tooltip" hidden>Owner value including earnings to date.</span></span></th>
+                    </tr>
+                    {% for row in equity %}
+                    <tr class="b-acct">
+                        <td>{% if row.account_id %}<a href="{% url 'account_ledger' row.account_id %}{% if filter_as_of %}?end={{ filter_as_of }}{% endif %}">{{ row.account }}</a>{% else %}{{ row.account }}{% endif %}</td>
+                        <td class="k-num">{{ row.balance|money }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr class="b-acct b-empty"><td colspan="2">No equity balances to show.</td></tr>
+                    {% endfor %}
+                    <tr class="b-subtotal">
+                        <td>Total equity</td>
+                        <td class="k-num">{{ total_equity|money }}</td>
+                    </tr>
+                </tbody>
+                {% if balanced %}
+                <tfoot>
+                    <tr class="b-total">
+                        <td>Total liabilities and equity</td>
+                        <td class="k-num">{{ total_assets|money }}</td>
+                    </tr>
+                </tfoot>
+                {% endif %}
+            </table>
+        </section>
     </div>
 </div>
 {% endblock %}

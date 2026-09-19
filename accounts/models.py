@@ -120,7 +120,14 @@ class Voucher(models.Model):
     )
 
     created_at = models.DateTimeField(auto_now_add=True)
-    date = models.DateField(default=timezone.now)
+    date = models.DateField(default=timezone.localdate)
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="vouchers_created",
+    )
 
     voucher_type = models.CharField(max_length=20, choices=VOUCHER_TYPE_CHOICES)
     narration = models.CharField(max_length=255, blank=True)
@@ -162,6 +169,16 @@ class VoucherLine(models.Model):
 
     debit = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     credit = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        constraints = [
+            models.CheckConstraint(
+                condition=(
+                    models.Q(debit__gt=0, credit=0) | models.Q(debit=0, credit__gt=0)
+                ),
+                name="voucherline_one_sided_positive",
+            ),
+        ]
 
     def clean(self):
         if self.debit and self.credit:
@@ -368,8 +385,15 @@ class PartyLedgerEntry(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
+    class Meta:
+        indexes = [
+            models.Index(fields=["content_type", "object_id"], name="acc_partyledger_party_idx"),
+        ]
+
     def __str__(self):
         return f"{self.party} | D:{self.debit} C:{self.credit}"
+
+
 def _expense_account_title(name):
     normalized = " ".join((name or "").split())
     if not normalized:
@@ -733,6 +757,42 @@ class MoneyTransfer(models.Model):
 
     def __str__(self):
         return f"Transfer #{self.id} - {self.from_account_title} to {self.to_account_title}"
+
+class AccountingSettings(models.Model):
+    """
+    Single-row accounting configuration. books_locked_until closes a period:
+    nothing dated on or before it can be posted, rewritten or deleted.
+    Enforcement lives in accounts.services.books_lock (wired through signals).
+    """
+
+    books_locked_until = models.DateField(null=True, blank=True)
+    locked_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="books_locks",
+    )
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        verbose_name = "Accounting settings"
+        verbose_name_plural = "Accounting settings"
+
+    def save(self, *args, **kwargs):
+        self.pk = 1
+        super().save(*args, **kwargs)
+
+    @classmethod
+    def load(cls):
+        obj, _ = cls.objects.get_or_create(pk=1)
+        return obj
+
+    def __str__(self):
+        if self.books_locked_until:
+            return f"Books locked until {self.books_locked_until}"
+        return "Books open"
+
 
 class AuditLog(models.Model):
     action = models.CharField(max_length=80)

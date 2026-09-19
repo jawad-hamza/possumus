@@ -1,9 +1,10 @@
+{% load currency_tags %}
 <div class="row g-3">
     {% for product in products %}
     <div class="col-md-4">
         <div class="border rounded p-2 text-center h-100">
-            <h6 class="mb-1">{{ product.name }}</h6>
-            <small class="text-muted">Rs {{ product.price }}</small>
+            <h6 class="mb-1">{{ product.display_name }}</h6>
+            <small class="text-muted">{{ product.price|money }}{{ product|per_unit }}</small>
 
             <form method="post" class="mt-2">
                 {% csrf_token %}

@@ -3,1003 +3,245 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{% block title %}{{ active_company.name|default:"POS IMS" }}{% endblock %}</title>
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
-    <style>
-        :root {
-            --nav-bg: #14213d;
-            --nav-bg-alt: #1f355f;
-            --nav-text: #d9e3f0;
-            --nav-active: #fca311;
-            --page-bg: #f5f7fb;
-            --card-border: #dce3ee;
-            --content-max: 1440px;
-            --text-main: #14213d;
-            --text-soft: #5f6f86;
-            --surface-tint: #f8fbff;
-            --accent-primary: #2563eb;
-            --accent-success: #15803d;
-            --accent-info: #0f766e;
-            --accent-warning: #b45309;
-            --accent-danger: #dc2626;
-            --accent-slate: #334155;
-        }
-
-        body {
-            background: radial-gradient(circle at top, #ffffff 0%, var(--page-bg) 55%, #edf2f7 100%);
-            overflow-x: hidden;
-            color: var(--text-main);
-        }
-
-        a {
-            color: inherit;
-        }
-
-        .layout-shell {
-            min-height: 100vh;
-        }
-
-        .sidebar {
-            width: 250px;
-            min-height: 100vh;
-            position: fixed;
-            inset: 0 auto 0 0;
-            background: linear-gradient(180deg, var(--nav-bg), #0d162c 100%);
-            color: #fff;
-            z-index: 1030;
-            transition: width 0.25s ease, transform 0.25s ease;
-            overflow-y: auto;
-                    display: flex;
-            flex-direction: column;
-}
-
-        .sidebar.collapsed {
-            width: 78px;
-        }
-
-        .sidebar-brand {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 12px;
-            padding: 22px 18px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        .sidebar-brand-mark {
-            width: 40px;
-            height: 40px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 12px;
-            background: linear-gradient(135deg, var(--nav-active), #ffbf57);
-            color: #182a4d;
-            font-weight: 700;
-        }
-
-        .sidebar-title {
-            font-size: 1rem;
-            font-weight: 700;
-            letter-spacing: 0.02em;
-            margin: 0;
-        }
-
-        .sidebar-subtitle {
-            color: rgba(217, 227, 240, 0.72);
-            font-size: 0.75rem;
-            margin: 0;
-        }
-
-        .toggle-btn {
-            background: transparent;
-            border: none;
-            color: #fff;
-            font-size: 1.1rem;
-            width: 36px;
-            height: 36px;
-            border-radius: 10px;
-        }
-
-        .toggle-btn:hover {
-            background: rgba(255, 255, 255, 0.08);
-        }
-        .sidebar-rail-toggle {
-            display: none;
-            position: fixed;
-            top: 18px;
-            left: 66px;
-            width: 30px;
-            height: 42px;
-            align-items: center;
-            justify-content: center;
-            border: 1px solid rgba(255, 255, 255, 0.12);
-            border-left: none;
-            border-radius: 0 14px 14px 0;
-            background: linear-gradient(180deg, #1f355f, #14213d);
-            color: #fff;
-            box-shadow: 0 10px 22px rgba(15, 23, 42, 0.22);
-            z-index: 1035;
-        }
-
-        .sidebar.collapsed + .sidebar-rail-toggle {
-            display: inline-flex;
-        }
-
-        .sidebar-rail-toggle:hover {
-            background: linear-gradient(180deg, #284375, #172849);
-        }
-
-        .sidebar-nav {
-            padding: 14px 12px 24px;
-            flex: 1 1 auto;
-        }
-
-        .nav-link-shell {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            color: var(--nav-text);
-            text-decoration: none;
-            padding: 12px 14px;
-            border-radius: 14px;
-            margin-bottom: 6px;
-            transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
-        }
-
-        .nav-link-shell:hover,
-        .nav-link-shell.active {
-            background: linear-gradient(90deg, rgba(252, 163, 17, 0.16), rgba(252, 163, 17, 0.06));
-            color: #fff;
-            transform: translateX(2px);
-        }
-
-        .nav-link-shell i {
-            font-size: 1.1rem;
-            width: 22px;
-            text-align: center;
-            color: var(--nav-active);
-        }
-
-        .sidebar.collapsed .sidebar-copy,
-        .sidebar.collapsed .nav-copy {
-            display: none;
-        }
-
-        .content {
-            margin-left: 250px;
-            padding: 24px;
-            transition: margin-left 0.25s ease;
-        }
-
-        .content.expanded {
-            margin-left: 78px;
-        }
-
-        .content-inner {
-            max-width: var(--content-max);
-            margin: 0 auto;
-        }
-
-        .page-topbar {
-            display: none;
-            align-items: center;
-            justify-content: space-between;
-            margin-bottom: 16px;
-        }
-
-        .mobile-overlay {
-            display: none;
-            position: fixed;
-            inset: 0;
-            background: rgba(8, 15, 28, 0.48);
-            z-index: 1020;
-        }
-
-        .page-card {
-            border: 1px solid var(--card-border);
-            border-radius: 18px;
-            background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
-            box-shadow: 0 10px 30px rgba(20, 33, 61, 0.06);
-        }
-
-        .page-header {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 16px;
-            margin-bottom: 1.5rem;
-        }
-
-        .page-header-copy {
-            display: flex;
-            align-items: flex-start;
-            gap: 14px;
-            min-width: 0;
-        }
-
-        .page-title-icon,
-        .section-title-icon,
-        .metric-icon {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-
-        .page-title-icon {
-            width: 52px;
-            height: 52px;
-            border-radius: 16px;
-            font-size: 1.25rem;
-            color: #fff;
-            box-shadow: 0 14px 24px rgba(37, 99, 235, 0.18);
-            background: linear-gradient(135deg, #2563eb, #1d4ed8);
-        }
-
-        .page-title-icon.success {
-            background: linear-gradient(135deg, #16a34a, #15803d);
-            box-shadow: 0 14px 24px rgba(22, 163, 74, 0.18);
-        }
-
-        .page-title-icon.warning {
-            background: linear-gradient(135deg, #f59e0b, #d97706);
-            box-shadow: 0 14px 24px rgba(245, 158, 11, 0.18);
-        }
-
-        .page-title-icon.danger {
-            background: linear-gradient(135deg, #ef4444, #dc2626);
-            box-shadow: 0 14px 24px rgba(239, 68, 68, 0.18);
-        }
-
-        .page-title-icon.slate {
-            background: linear-gradient(135deg, #475569, #334155);
-            box-shadow: 0 14px 24px rgba(71, 85, 105, 0.18);
-        }
-
-        .page-title {
-            margin: 0;
-            font-size: clamp(1.65rem, 1.2rem + 1vw, 2.15rem);
-            font-weight: 700;
-            letter-spacing: -0.02em;
-        }
-
-        .page-subtitle {
-            color: var(--text-soft);
-            margin: 6px 0 0;
-            max-width: 820px;
-        }
-
-        .page-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 10px;
-            align-items: center;
-        }
-
-        .metric-card {
-            position: relative;
-            overflow: hidden;
-            border: 1px solid var(--card-border);
-            border-radius: 18px;
-            background: linear-gradient(180deg, #ffffff 0%, var(--surface-tint) 100%);
-            padding: 1rem;
-            height: 100%;
-            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-        }
-
-        .metric-card::before {
-            content: "";
-            position: absolute;
-            inset: 0 0 auto 0;
-            height: 4px;
-            background: var(--metric-accent, var(--accent-primary));
-        }
-
-        .metric-card:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 16px 28px rgba(20, 33, 61, 0.12);
-        }
-
-        .metric-card.primary {
-            --metric-accent: var(--accent-primary);
-            --metric-soft: rgba(37, 99, 235, 0.12);
-        }
-
-        .metric-card.success {
-            --metric-accent: var(--accent-success);
-            --metric-soft: rgba(22, 163, 74, 0.12);
-        }
-
-        .metric-card.info {
-            --metric-accent: var(--accent-info);
-            --metric-soft: rgba(15, 118, 110, 0.12);
-        }
-
-        .metric-card.warning {
-            --metric-accent: var(--accent-warning);
-            --metric-soft: rgba(180, 83, 9, 0.12);
-        }
-
-        .metric-card.danger {
-            --metric-accent: var(--accent-danger);
-            --metric-soft: rgba(220, 38, 38, 0.12);
-        }
-
-        .metric-card.slate {
-            --metric-accent: var(--accent-slate);
-            --metric-soft: rgba(51, 65, 85, 0.12);
-        }
-
-        .metric-icon {
-            width: 42px;
-            height: 42px;
-            border-radius: 14px;
-            background: var(--metric-soft, rgba(37, 99, 235, 0.12));
-            color: var(--metric-accent, var(--accent-primary));
-            font-size: 1.1rem;
-        }
-
-        .metric-label {
-            color: var(--text-soft);
-            font-size: 0.82rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-        }
-
-        .metric-value {
-            font-size: clamp(1.6rem, 1.3rem + 0.6vw, 2rem);
-            font-weight: 700;
-            margin-top: 0.65rem;
-            line-height: 1.1;
-        }
-
-        .metric-meta {
-            color: var(--text-soft);
-            font-size: 0.9rem;
-            margin-top: 0.8rem;
-        }
-
-        .section-heading {
-            display: flex;
-            justify-content: space-between;
-            align-items: flex-start;
-            gap: 12px;
-            margin-bottom: 1rem;
-        }
-
-        .section-heading-copy {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-        }
-
-        .section-title-icon {
-            width: 40px;
-            height: 40px;
-            border-radius: 14px;
-            background: #eaf2ff;
-            color: var(--accent-primary);
-            font-size: 1rem;
-        }
-
-        .section-title-icon.section-icon-success {
-            background: #e9f9ef;
-            color: #15803d;
-        }
-
-        .section-title-icon.section-icon-warning {
-            background: #fff2df;
-            color: #b45309;
-        }
-
-        .section-title-icon.section-icon-danger {
-            background: #fdecec;
-            color: #dc2626;
-        }
-
-        .section-title-icon.section-icon-slate {
-            background: #edf2f7;
-            color: #334155;
-        }
-
-        .section-title {
-            margin: 0;
-            font-size: 1.15rem;
-            font-weight: 700;
-        }
-
-        .section-copy {
-            color: var(--text-soft);
-            margin: 4px 0 0;
-            font-size: 0.92rem;
-        }
-
-        .section-link {
-            color: var(--accent-primary);
-            text-decoration: none;
-            font-weight: 600;
-            font-size: 0.92rem;
-        }
-
-        .section-link:hover {
-            text-decoration: underline;
-        }
-
-        .chart-shell {
-            position: relative;
-            height: 320px;
-            max-height: 320px;
-            overflow: hidden;
-        }
-
-        .chart-shell.compact {
-            height: 240px;
-            max-height: 240px;
-        }
-
-        .chart-shell canvas {
-            max-width: 100%;
-            max-height: 100%;
-        }
-
-        .table-responsive .table {
-            margin-bottom: 0;
-        }
-
-        .table thead.table-light th,
-        .table thead th {
-            background: #f7fafc;
-            color: #334155;
-            font-size: 0.82rem;
-            letter-spacing: 0.02em;
-            text-transform: uppercase;
-            border-bottom-color: #dde7f2;
-        }
-
-        .table tbody tr {
-            transition: background-color 0.18s ease;
-        }
-
-        .table tbody tr:hover {
-            background: #fafcff;
-        }
-
-        .list-link-card {
-            border: 1px solid #e2e8f0;
-            border-radius: 16px;
-            padding: 14px 16px;
-            text-decoration: none;
-            color: inherit;
-            background: linear-gradient(180deg, #ffffff 0%, #f9fbff 100%);
-            transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
-        }
-
-        .list-link-card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 14px 24px rgba(20, 33, 61, 0.08);
-            border-color: #bfd0e6;
-        }
-
-        .list-link-card .list-link-icon {
-            width: 38px;
-            height: 38px;
-            border-radius: 12px;
-            background: #eef4ff;
-            color: var(--accent-primary);
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .btn {
-            border-radius: 12px;
-            font-weight: 600;
-        }
-
-        .btn-dark {
-            background: linear-gradient(135deg, #172849, #111d36);
-            border-color: #172849;
-            box-shadow: 0 10px 18px rgba(20, 33, 61, 0.12);
-        }
-
-        .btn-dark:hover,
-        .btn-dark:focus {
-            background: linear-gradient(135deg, #1f355f, #14213d);
-            border-color: #1f355f;
-        }
-
-        .btn-outline-secondary,
-        .btn-outline-primary,
-        .btn-outline-dark {
-            background: #fff;
-        }
-
-        .form-control,
-        .form-select {
-            border-radius: 12px;
-            border-color: #d7e2ee;
-            min-height: 46px;
-        }
-
-        textarea.form-control {
-            min-height: 120px;
-        }
-
-        .form-control:focus,
-        .form-select:focus {
-            border-color: #93c5fd;
-            box-shadow: 0 0 0 0.22rem rgba(37, 99, 235, 0.12);
-        }
-
-        .status-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            border-radius: 999px;
-            padding: 4px 10px;
-            font-size: 0.8rem;
-            font-weight: 600;
-        }
-
-        .status-chip.healthy {
-            color: #0f766e;
-            background: #ccfbf1;
-        }
-
-        .status-chip.below,
-        .status-chip.payable {
-            color: #b91c1c;
-            background: #fee2e2;
-        }
-
-        .status-chip.advance {
-            color: #92400e;
-            background: #fef3c7;
-        }
-
-        .status-chip.receivable {
-            color: #1d4ed8;
-            background: #dbeafe;
-        }
-
-        .status-chip.clear,
-        .status-chip.unknown {
-            color: #475569;
-            background: #e2e8f0;
-        }
-
-        .sidebar-footer {
-            margin: auto 12px 16px;
-            padding: 14px 0 0;
-            border-top: 1px solid rgba(255, 255, 255, 0.08);
-        }
-
-        .sidebar-user {
-            display: flex;
-            gap: 12px;
-            align-items: flex-start;
-            margin-bottom: 12px;
-        }
-
-        .sidebar-user-mark {
-            width: 40px;
-            height: 40px;
-            border-radius: 14px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            background: rgba(252, 163, 17, 0.16);
-            color: #fff;
-            font-weight: 800;
-        }
-
-        .sidebar-user-name {
-            font-weight: 700;
-            color: #ffffff;
-        }
-
-        .sidebar-user-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 6px;
-            margin-top: 4px;
-        }
-
-        .sidebar-role-chip {
-            display: inline-flex;
-            align-items: center;
-            border-radius: 999px;
-            padding: 3px 9px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            background: rgba(37, 99, 235, 0.18);
-            color: #bfdbfe;
-        }
-
-        .sidebar-session-text,
-        .sidebar-hint {
-            color: rgba(217, 227, 240, 0.7);
-            font-size: 0.75rem;
-        }
-
-        .sidebar-hint {
-            margin: 0 0 10px 52px;
-        }
-
-        .sidebar-logout {
-            width: 100%;
-            border: none;
-            background: transparent;
-            text-align: left;
-        }
-        @media (max-width: 992px) {
-            .sidebar {
-                transform: translateX(-100%);
-            }
-
-            .sidebar.show {
-                transform: translateX(0);
-            }
-
-            .content,
-            .content.expanded {
-                margin-left: 0;
-                padding: 16px;
-            }
-
-            .page-topbar {
-                display: flex;
-            }
-
-            .mobile-overlay.show {
-                display: block;
-            }
-            .sidebar-rail-toggle {
-                display: none !important;
-            }
-
-            .page-title-icon {
-                width: 44px;
-                height: 44px;
-                border-radius: 14px;
-            }
-
-            .chart-shell {
-                height: 260px;
-                max-height: 260px;
-            }
-
-            .chart-shell.compact {
-                height: 220px;
-                max-height: 220px;
-            }
-        }
-
-        @media (max-width: 576px) {
-            .content,
-            .content.expanded {
-                padding: 12px;
-            }
-
-            .page-header {
-                gap: 12px;
-            }
-
-            .page-header-copy {
-                width: 100%;
-                gap: 10px;
-            }
-
-            .page-actions {
-                width: 100%;
-            }
-
-            .page-actions .btn,
-            .page-actions .status-chip {
-                width: 100%;
-                justify-content: center;
-            }
-
-            .page-card,
-            .metric-card {
-                border-radius: 16px;
-            }
-
-            .metric-value {
-                font-size: 1.8rem;
-            }
-
-            .table-responsive {
-                font-size: 0.92rem;
-            }
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <title>{% block title %}{{ active_company.name|default:brand_name|default:"ZehnMS" }}{% endblock %}</title>
+    <link rel="preload" href="{% static 'zehnms/fonts/public-sans-latin-var.woff2' %}" as="font" type="font/woff2" crossorigin>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/tokens.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/components.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/shell.css' %}" rel="stylesheet">
     {% block extra_css %}{% endblock %}
 </head>
-<body data-time-zone-sync-url="{% url 'set_client_time_zone' %}" data-session-time-zone="{{ session_time_zone }}" data-effective-time-zone="{{ effective_time_zone }}" data-preferred-time-zone="{{ preferred_time_zone }}">
-<div class="layout-shell">
-    <div class="mobile-overlay" id="mobileOverlay" onclick="toggleSidebarMobile()"></div>
+<body class="k-app {% block body_class %}{% endblock %}" data-time-zone-sync-url="{% url 'set_client_time_zone' %}" data-session-time-zone="{{ session_time_zone }}" data-effective-time-zone="{{ effective_time_zone }}" data-preferred-time-zone="{{ preferred_time_zone }}">
+<a class="k-skip" href="#content">Skip to the page</a>
+<div class="k-scrim mobile-overlay" id="mobileOverlay" data-k-action="drawer-close"></div>
 
-    {% if messages %}
-    <div class="position-fixed top-0 end-0 p-3" style="z-index: 1080; max-width: 420px;">
-        {% for message in messages %}
-        <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show shadow-sm" role="alert">
-            {{ message }}
-            <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+<aside class="k-rail sidebar" id="sidebar" aria-label="Modules">
+    <div class="k-rail-cover">
+        {% with shop_name=active_company.name|default:brand_name|default:"ZehnMS" %}
+        <span class="k-rail-mark" aria-hidden="true">{{ shop_name|slice:":1"|upper }}</span>
+        <div class="k-rail-brand">
+            <p class="k-rail-name" data-len="{% if shop_name|length > 28 %}long{% elif shop_name|length > 16 %}mid{% else %}short{% endif %}">{{ shop_name }}</p>
+            <p class="k-rail-sub">Sales, stock, accounts</p>
         </div>
-        {% endfor %}
+        {% endwith %}
     </div>
-    {% endif %}
 
-    <aside class="sidebar" id="sidebar">
-        <div class="sidebar-brand">
-            <div class="d-flex align-items-center gap-3 sidebar-copy">
-                <div class="sidebar-brand-mark">{{ active_company.name|default:"POS IMS"|slice:":2"|upper }}</div>
-                <div>
-                    <p class="sidebar-title">{{ active_company.name|default:"POS IMS" }}</p>
-                    <p class="sidebar-subtitle">Sales, stock, accounts</p>
-                </div>
-            </div>
-            <button class="toggle-btn" onclick="toggleSidebar()">
-                <i class="bi bi-list"></i>
-            </button>
+    {% with p=request.path u=request.resolver_match.url_name %}
+    <nav class="k-rail-nav" aria-label="Modules">
+        {% if nav_access.dashboard or nav_access.pos %}<p class="k-rail-group">Counter</p>{% endif %}
+        {% if nav_access.dashboard %}
+        <a href="{% url 'dashboard' %}" data-goto="Dashboard" data-k-module class="k-rail-link{% if u == 'dashboard' %} active" aria-current="page{% endif %}">
+            <i class="bi bi-speedometer2" aria-hidden="true"></i>
+            <span class="k-rail-label nav-copy">Dashboard</span>
+        </a>
+        {% endif %}
+        {% if nav_access.pos %}
+        <a href="{% url 'pos_screen' %}" data-goto="Till" data-goto-keys="pos sell sale counter checkout bill" data-k-module class="k-rail-link{% if '/pos/' in p and u != 'add_supplier_from_pos' or '/invoice/' in p %} active" aria-current="page{% endif %}">
+            <i class="bi bi-cart4" aria-hidden="true"></i>
+            <span class="k-rail-label nav-copy">Till</span>
+        </a>
+        {% endif %}
+        {% if nav_access.products or nav_access.stock_control or nav_access.purchases %}<p class="k-rail-group">Stock</p>{% endif %}
+        {% if nav_access.products %}
+        <a href="{% url 'product_list' %}" data-goto="Products" data-goto-keys="items catalogue inventory" data-k-module class="k-rail-link{% if '/products/' in p or '/categories/' in p or '/brands/' in p %} active" aria-current="page{% endif %}">
+            <i class="bi bi-box-seam" aria-hidden="true"></i>
+            <span class="k-rail-label nav-copy">Products</span>
+        </a>
+        {% endif %}
+        {% if nav_access.stock_control %}
+        <a href="{% url 'stock_adjustments' %}" data-goto="Stock control" data-goto-keys="adjustment stock take opening" data-k-module class="k-rail-link{% if '/inventory/' in p %} active" aria-current="page{% endif %}">
+            <i class="bi bi-boxes" aria-hidden="true"></i>
+            <span class="k-rail-label nav-copy">Stock control</span>
+        </a>
+        {% endif %}
+        {% if nav_access.purchases %}
+        <a href="{% url 'purchase_list' %}" data-goto="Purchases" data-goto-keys="supplier bills buying" data-k-module class="k-rail-link{% if '/purchases/' in p or u == 'add_supplier_from_pos' %} active" aria-current="page{% endif %}">
+            <i class="bi bi-truck" aria-hidden="true"></i>
+            <span class="k-rail-label nav-copy">Purchases</span>
+        </a>
+        {% endif %}
+        {% if nav_access.expenses or nav_access.parties or nav_access.accounts %}<p class="k-rail-group">Money</p>{% endif %}
+        {% if nav_access.expenses %}
+        <a href="{% url 'expense_list' %}" data-goto="Expenses" data-goto-keys="spending money desk" data-k-module class="k-rail-link{% if u == 'expense_list' or u == 'money_desk' or u == 'quick_create_expense_type' %} active" aria-current="page{% endif %}">
+            <i class="bi bi-receipt-cutoff" aria-hidden="true"></i>
+            <span class="k-rail-label nav-copy">Expenses</span>
+        </a>
+        {% endif %}
+        {% if nav_access.parties %}
+        <a href="{% url 'parties_home' %}" data-goto="Parties" data-goto-keys="customers suppliers credit udhaar" data-k-module class="k-rail-link{% if '/parties/' in p or u == 'party_statement' or u == 'party_opening_balance' %} active" aria-current="page{% endif %}">
+            <i class="bi bi-people" aria-hidden="true"></i>
+            <span class="k-rail-label nav-copy">Parties</span>
+        </a>
+        {% endif %}
+        {% if nav_access.accounts %}
+        <a href="{% url 'accounts_home' %}" data-goto="Accounts" data-goto-keys="books ledger khata" data-k-module class="k-rail-link{% if '/accounts/' in p and u != 'expense_list' and u != 'money_desk' and u != 'party_statement' and u != 'party_opening_balance' %} active" aria-current="page{% endif %}">
+            <i class="bi bi-journal-text" aria-hidden="true"></i>
+            <span class="k-rail-label nav-copy">Accounts</span>
+        </a>
+        {% endif %}
+        {% if nav_access.reports or nav_access.settings %}<p class="k-rail-group">Office</p>{% endif %}
+        {% if nav_access.reports %}
+        <a href="{% url 'reports_home' %}" data-goto="Reports" data-k-module class="k-rail-link{% if '/reports/' in p %} active" aria-current="page{% endif %}">
+            <i class="bi bi-graph-up-arrow" aria-hidden="true"></i>
+            <span class="k-rail-label nav-copy">Reports</span>
+        </a>
+        {% endif %}
+        {% if nav_access.settings %}
+        <a href="{% url 'settings_page' %}" data-goto="Settings" data-goto-keys="setup company users backup modules" data-k-module class="k-rail-link{% if '/settings/' in p or u == 'billing_page' or u == 'license_page' %} active" aria-current="page{% endif %}">
+            <i class="bi bi-gear" aria-hidden="true"></i>
+            <span class="k-rail-label nav-copy">Settings</span>
+        </a>
+        {% endif %}
+    </nav>
+    {% endwith %}
+
+    <div class="k-rail-foot">
+        <button type="button" class="k-rail-toggle" data-k-action="rail-toggle" aria-label="Collapse or expand the sidebar" data-tip="Collapse or expand the sidebar (Ctrl+B)">
+            <i class="bi bi-chevron-bar-left" aria-hidden="true"></i><i class="bi bi-chevron-bar-right" aria-hidden="true"></i>
+            <span class="k-rail-label">Collapse</span>
+        </button>
+    </div>
+</aside>
+
+<header class="k-head">
+    <div class="k-head-heading">
+        <h1 class="k-head-title">{% block page_title %}{{ active_company.name|default:brand_name|default:"ZehnMS" }}{% endblock %}</h1>
+        <span class="k-tip" id="kPageTip"><button type="button" class="k-tip-btn" aria-label="About this page" aria-describedby="kPageHelp" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="kPageHelp" role="tooltip" hidden>{% block page_help %}{% endblock %}</span></span>
+    </div>
+    <div class="k-head-actions">{% block page_actions %}{% endblock %}</div>
+    <div class="k-head-tools">
+        <div class="k-goto" role="search">
+            <i class="bi bi-search" aria-hidden="true"></i>
+            <input type="search" class="k-goto-input" id="kGoto" placeholder="Go to" autocomplete="off" spellcheck="false" role="combobox" aria-label="Go to a module or page" aria-expanded="false" aria-controls="kGotoList" aria-autocomplete="list">
+            <kbd class="k-key" aria-hidden="true">Ctrl K</kbd>
+            <ul class="k-goto-list" id="kGotoList" role="listbox" aria-label="Places" hidden></ul>
         </div>
-
-                <nav class="sidebar-nav">
-            {% if nav_access.dashboard %}
-            <a href="{% url 'dashboard' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
-                <i class="bi bi-speedometer2"></i>
-                <span class="nav-copy">Dashboard</span>
-            </a>
-            {% endif %}
-            {% if nav_access.pos %}
-            <a href="{% url 'pos_screen' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'pos_screen' or request.resolver_match.url_name == 'invoice' or request.resolver_match.url_name == 'sale_return' or request.resolver_match.url_name == 'invoice_pdf' or request.resolver_match.url_name == 'add_customer_from_pos' or request.resolver_match.url_name == 'customer_add' %}active{% endif %}">
-                <i class="bi bi-cart4"></i>
-                <span class="nav-copy">POS</span>
-            </a>
-            {% endif %}
-            {% if nav_access.products %}
-            <a href="{% url 'product_list' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'product_list' or request.resolver_match.url_name == 'product_add' or request.resolver_match.url_name == 'product_view' or request.resolver_match.url_name == 'product_edit' %}active{% endif %}">
-                <i class="bi bi-box-seam"></i>
-                <span class="nav-copy">Products</span>
-            </a>
-            {% endif %}
-            {% if nav_access.stock_control %}
-            <a href="{% url 'stock_adjustments' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'stock_adjustments' %}active{% endif %}">
-                <i class="bi bi-boxes"></i>
-                <span class="nav-copy">Stock Control</span>
-            </a>
-            {% endif %}
-            {% if nav_access.purchases %}
-            <a href="{% url 'purchase_list' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'purchase_list' or request.resolver_match.url_name == 'purchase_add' or request.resolver_match.url_name == 'purchase_detail' or request.resolver_match.url_name == 'purchase_return' or request.resolver_match.url_name == 'purchase_edit' %}active{% endif %}">
-                <i class="bi bi-truck"></i>
-                <span class="nav-copy">Purchases</span>
-            </a>
-            {% endif %}
-            {% if nav_access.expenses %}
-            <a href="{% url 'expense_list' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'expense_list' or request.resolver_match.url_name == 'money_desk' %}active{% endif %}">
-                <i class="bi bi-receipt-cutoff"></i>
-                <span class="nav-copy">Expenses</span>
-            </a>
-            {% endif %}
-            {% if nav_access.parties %}
-            <a href="{% url 'parties_home' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'parties_home' or request.resolver_match.url_name == 'customer_list' or request.resolver_match.url_name == 'customer_add' or request.resolver_match.url_name == 'customer_detail' or request.resolver_match.url_name == 'supplier_list' or request.resolver_match.url_name == 'supplier_add' or request.resolver_match.url_name == 'supplier_detail' or request.resolver_match.url_name == 'party_statement_page' %}active{% endif %}">
-                <i class="bi bi-people"></i>
-                <span class="nav-copy">Parties</span>
-            </a>
-            {% endif %}
-            {% if nav_access.accounts %}
-            <a href="{% url 'accounts_home' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'accounts_home' or request.resolver_match.url_name == 'money_breakdown' or request.resolver_match.url_name == 'trial_balance' or request.resolver_match.url_name == 'profit_loss' or request.resolver_match.url_name == 'balance_sheet' or request.resolver_match.url_name == 'account_ledger' or request.resolver_match.url_name == 'party_statement' %}active{% endif %}">
-                <i class="bi bi-journal-text"></i>
-                <span class="nav-copy">Accounts</span>
-            </a>
-            {% endif %}
-            {% if nav_access.reports %}
-            <a href="{% url 'reports_home' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'reports_home' or request.resolver_match.url_name == 'daily_sales_report' or request.resolver_match.url_name == 'low_stock_list' %}active{% endif %}">
-                <i class="bi bi-graph-up-arrow"></i>
-                <span class="nav-copy">Reports</span>
-            </a>
-            {% endif %}
-            {% if nav_access.settings %}
-            <a href="{% url 'settings_page' %}" class="nav-link-shell {% if request.resolver_match.url_name == 'settings_page' %}active{% endif %}">
-                <i class="bi bi-gear"></i>
-                <span class="nav-copy">Settings</span>
-            </a>
-            {% endif %}
-        </nav>
-        <div class="sidebar-footer">
-            <div class="sidebar-user">
-                <div class="sidebar-user-mark">{{ request.user.username|first|upper }}</div>
-                <div class="sidebar-copy">
-                    <div class="sidebar-user-name">{{ request.user.get_full_name|default:request.user.username }}</div>
-                    <div class="sidebar-user-meta">
-                        <span class="sidebar-role-chip">{{ user_role_label }}</span>
-                        {% if active_user_session %}<span class="sidebar-session-text">In since {{ active_user_session.login_at|date:"H:i" }}</span>{% endif %}
+        <button type="button" class="k-head-btn k-only-phone" data-k-action="goto" aria-label="Go to a module or page">
+            <i class="bi bi-search" aria-hidden="true"></i>
+        </button>
+        {% if shell_notice %}
+        <a href="{{ shell_notice.url }}" class="k-head-notice" title="{{ shell_notice.label }}">
+            <i class="bi bi-hourglass-split" aria-hidden="true"></i><span>{{ shell_notice.label }}</span>
+        </a>
+        {% endif %}
+        <button type="button" class="k-head-btn k-only-desk" data-k-action="keys" aria-label="Keyboard shortcuts" aria-controls="kKeys" aria-expanded="false" data-tip="Keyboard shortcuts (F1)">
+            <i class="bi bi-keyboard" aria-hidden="true"></i>
+        </button>
+        <div class="dropdown">
+            <button type="button" class="k-head-btn" data-bs-toggle="dropdown" data-bs-offset="0,6" aria-expanded="false" aria-label="Your account">
+                <span class="k-avatar" aria-hidden="true">{{ request.user.get_full_name|default:request.user.username|slice:":1" }}</span>
+                <span class="k-user-name">{{ request.user.get_full_name|default:request.user.username }}</span>
+            </button>
+            <div class="dropdown-menu dropdown-menu-end k-user-menu">
+                <div class="k-user-card">
+                    <span class="k-avatar" aria-hidden="true">{{ request.user.get_full_name|default:request.user.username|slice:":1" }}</span>
+                    <div>
+                    <strong>{{ request.user.get_full_name|default:request.user.username }}</strong>
+                    <div class="k-user-meta">
+                        <span>{{ user_role_label }}</span>
+                        {% if active_user_session %}<span>In since {{ active_user_session.login_at|date:"H:i" }}</span>{% endif %}
+                    </div>
+                    {% if is_cashier_user %}
+                    <p class="k-user-hint">Cashier access is limited to the till and your own receipts.</p>
+                    {% elif user_role_summary and user_role_summary != "Full system access" %}
+                    <p class="k-user-hint">{{ user_role_summary }}</p>
+                    {% endif %}
                     </div>
                 </div>
+                <a href="{% url 'password_change' %}" data-goto="Change password" class="dropdown-item {% if request.resolver_match.url_name == 'password_change' %}active{% endif %}">
+                    <i class="bi bi-key" aria-hidden="true"></i>
+                    <span>Change password</span>
+                </a>
+                <form method="post" action="{% url 'logout' %}" class="logout-form"{% if request.session.held_carts %} data-k-confirm="You still have {{ request.session.held_carts|length }} held sale(s). Logging out discards them. Log out anyway?"{% endif %}>
+                    {% csrf_token %}
+                    <button type="submit" class="dropdown-item">
+                        <i class="bi bi-box-arrow-right" aria-hidden="true"></i>
+                        <span>Logout</span>
+                    </button>
+                </form>
             </div>
-            {% if is_cashier_user %}
-            <div class="sidebar-hint sidebar-copy">Cashier access is limited to POS checkout and your own receipts.</div>
-            {% elif user_role_summary and user_role_summary != "Full system access" %}
-            <div class="sidebar-hint sidebar-copy">{{ user_role_summary }}</div>
-            {% endif %}
-            <form method="post" action="{% url 'logout' %}" class="logout-form">
-                {% csrf_token %}
-                <button type="submit" class="nav-link-shell sidebar-logout">
-                    <i class="bi bi-box-arrow-right"></i>
-                    <span class="nav-copy">Logout</span>
-                </button>
-            </form>
         </div>
-    </aside>
-    <button type="button" class="sidebar-rail-toggle" onclick="toggleSidebar()" aria-label="Expand sidebar">
-        <i class="bi bi-chevron-right"></i>
-    </button>
+    </div>
+</header>
 
-    <main class="content" id="content">
-        <div class="content-inner">
-            <div class="page-topbar">
-                <button class="btn btn-outline-dark" onclick="toggleSidebarMobile()">
-                    <i class="bi bi-list"></i>
-                </button>
-                <div class="d-flex align-items-center gap-2">
-                    <strong>{{ active_company.name|default:"POS IMS" }}</strong>
-                    {% if request.user.is_authenticated %}<span class="badge text-bg-light">{{ user_role_label }}</span>{% endif %}
-                </div>
-            </div>
-            {% block content %}{% endblock %}
-        </div>
-    </main>
+<main class="k-body content" id="content" tabindex="-1">
+    <div class="k-page content-inner {% block page_class %}{% endblock %}">
+        {% block content %}{% endblock %}
+    </div>
+</main>
+
+<nav class="k-tabbar" aria-label="Main modules">
+    {% if nav_access.dashboard %}<a href="{% url 'dashboard' %}" class="k-tab"><i class="bi bi-speedometer2" aria-hidden="true"></i><span>Dashboard</span></a>{% endif %}
+    {% if nav_access.pos %}<a href="{% url 'pos_screen' %}" class="k-tab"><i class="bi bi-cart4" aria-hidden="true"></i><span>Till</span></a>{% endif %}
+    {% if nav_access.parties %}<a href="{% url 'parties_home' %}" class="k-tab"><i class="bi bi-people" aria-hidden="true"></i><span>Parties</span></a>{% endif %}
+    {% if nav_access.products %}<a href="{% url 'product_list' %}" class="k-tab"><i class="bi bi-box-seam" aria-hidden="true"></i><span>Products</span></a>{% endif %}
+    {% if nav_access.purchases %}<a href="{% url 'purchase_list' %}" class="k-tab"><i class="bi bi-truck" aria-hidden="true"></i><span>Purchases</span></a>{% endif %}
+    {% if nav_access.expenses %}<a href="{% url 'expense_list' %}" class="k-tab"><i class="bi bi-receipt-cutoff" aria-hidden="true"></i><span>Expenses</span></a>{% endif %}
+    {% if nav_access.accounts %}<a href="{% url 'accounts_home' %}" class="k-tab"><i class="bi bi-journal-text" aria-hidden="true"></i><span>Accounts</span></a>{% endif %}
+    {% if nav_access.reports %}<a href="{% url 'reports_home' %}" class="k-tab"><i class="bi bi-graph-up-arrow" aria-hidden="true"></i><span>Reports</span></a>{% endif %}
+    <button type="button" class="k-tab" data-k-action="drawer" aria-controls="sidebar" aria-expanded="false"><i class="bi bi-grid-3x3-gap" aria-hidden="true"></i><span>More</span></button>
+</nav>
+
+{% if messages %}
+<div class="k-flash" id="kFlash" role="status" aria-live="polite">
+    {% for message in messages %}
+    <div class="alert alert-{{ message.tags|default:'info' }} alert-dismissible fade show" role="alert">
+        {{ message }}
+        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Dismiss"></button>
+    </div>
+    {% endfor %}
+</div>
+{% endif %}
+
+<aside class="k-keys" id="kKeys" aria-label="Keyboard shortcuts" hidden>
+    <div class="k-keys-head">
+        <h2>Keyboard shortcuts</h2>
+        <button type="button" class="btn-close" data-k-action="keys" aria-label="Close"></button>
+    </div>
+    <dl>
+        <div class="k-keys-row"><dt>Go to a module or page</dt><dd><kbd class="k-key">Ctrl</kbd><kbd class="k-key">K</kbd></dd></div>
+        <div class="k-keys-row"><dt>Open module 1 to 10 in the sidebar</dt><dd><kbd class="k-key">Alt</kbd><kbd class="k-key">1</kbd>&hellip;<kbd class="k-key">0</kbd></dd></div>
+        <div class="k-keys-row"><dt>Collapse or expand the sidebar</dt><dd><kbd class="k-key">Ctrl</kbd><kbd class="k-key">B</kbd></dd></div>
+        <div class="k-keys-row"><dt>Jump to the first field on the page</dt><dd><kbd class="k-key">/</kbd></dd></div>
+        <div class="k-keys-row"><dt>This list</dt><dd><kbd class="k-key">F1</kbd></dd></div>
+        <div class="k-keys-row"><dt>Close what is open</dt><dd><kbd class="k-key">Esc</kbd></dd></div>
+    </dl>
+    <h3 id="kKeysPageHead" hidden>On this page</h3>
+    <dl id="kKeysPage"></dl>
+    <h3 id="kKeysModulesHead" hidden>Modules</h3>
+    <dl id="kKeysModules"></dl>
+</aside>
+
+<div id="kGotoMore" hidden>
+    {% if manage_access.products %}<a href="{% url 'product_add' %}" data-goto="New product" data-goto-group="Products" data-goto-keys="add item create"></a>{% endif %}
+    {% if manage_access.products and feature_modules.catalog_io %}<a href="{% url 'product_import' %}" data-goto="Import products" data-goto-group="Products" data-goto-keys="csv excel upload"></a>{% endif %}
+    {% if manage_access.purchases %}<a href="{% url 'purchase_add' %}" data-goto="New purchase" data-goto-group="Purchases" data-goto-keys="add buy supplier bill"></a>{% endif %}
+    {% if nav_access.parties %}
+    <a href="{% url 'customer_list' %}" data-goto="Customers" data-goto-group="Parties" data-goto-keys="receivable credit"></a>
+    <a href="{% url 'supplier_list' %}" data-goto="Suppliers" data-goto-group="Parties" data-goto-keys="payable vendor"></a>
+    {% endif %}
+    {% if nav_access.expenses %}<a href="{% url 'money_desk' %}" data-goto="Money desk" data-goto-group="Expenses" data-goto-keys="cash bank transfer payment"></a>{% endif %}
+    {% if nav_access.accounts %}
+    <a href="{% url 'trial_balance' %}" data-goto="Trial balance" data-goto-group="Accounts"></a>
+    <a href="{% url 'profit_loss' %}" data-goto="Profit and loss" data-goto-group="Accounts" data-goto-keys="p&l income"></a>
+    <a href="{% url 'balance_sheet' %}" data-goto="Balance sheet" data-goto-group="Accounts"></a>
+    <a href="{% url 'day_book' %}" data-goto="Day book" data-goto-group="Accounts" data-goto-keys="roznamcha journal"></a>
+    <a href="{% url 'cash_flow' %}" data-goto="Cash flow" data-goto-group="Accounts"></a>
+    <a href="{% url 'receivables_aging' %}" data-goto="Receivables aging" data-goto-group="Accounts" data-goto-keys="who owes us"></a>
+    <a href="{% url 'payables_aging' %}" data-goto="Payables aging" data-goto-group="Accounts" data-goto-keys="what we owe"></a>
+    {% endif %}
+    {% if nav_access.reports %}
+    <a href="{% url 'daily_sales_report' %}" data-goto="Daily sales" data-goto-group="Reports"></a>
+    <a href="{% url 'low_stock_list' %}" data-goto="Low stock" data-goto-group="Reports" data-goto-keys="reorder running out"></a>
+    {% endif %}
 </div>
 
-<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script>
-    function getCookie(name) {
-        const cookieValue = document.cookie
-            .split(';')
-            .map(function (entry) { return entry.trim(); })
-            .find(function (entry) { return entry.startsWith(name + '='); });
-        return cookieValue ? decodeURIComponent(cookieValue.split('=').slice(1).join('=')) : '';
-    }
-
-    function getCsrfToken() {
-        const hiddenToken = document.querySelector('input[name="csrfmiddlewaretoken"]');
-        return getCookie('csrftoken') || (hiddenToken ? hiddenToken.value : '');
-    }
-
-    function getBrowserTimeZone() {
-        try {
-            return Intl.DateTimeFormat().resolvedOptions().timeZone || '';
-        } catch (error) {
-            return '';
-        }
-    }
-
-    function updateBrowserTimeZoneLabels(browserTimeZone) {
-        const body = document.body;
-        if (!body) {
-            return;
-        }
-
-        const preferredTimeZone = body.dataset.preferredTimeZone || '';
-        const effectiveTimeZone = preferredTimeZone || browserTimeZone || body.dataset.effectiveTimeZone || '';
-        const detectedLabel = browserTimeZone || 'Unavailable on this device';
-        const effectiveLabel = effectiveTimeZone || 'Unavailable';
-
-        document.querySelectorAll('[data-browser-time-zone-label]').forEach(function (element) {
-            element.textContent = detectedLabel;
-        });
-
-        document.querySelectorAll('[data-effective-time-zone-label]').forEach(function (element) {
-            element.textContent = effectiveLabel;
-        });
-
-        document.querySelectorAll('[data-browser-time-zone-input]').forEach(function (input) {
-            input.value = browserTimeZone || '';
-        });
-    }
-
-    function syncBrowserTimeZone(browserTimeZone) {
-        const body = document.body;
-        if (!body || !browserTimeZone) {
-            return;
-        }
-
-        const syncUrl = body.dataset.timeZoneSyncUrl || '';
-        const sessionTimeZone = body.dataset.sessionTimeZone || '';
-        const preferredTimeZone = body.dataset.preferredTimeZone || '';
-        if (!syncUrl || sessionTimeZone === browserTimeZone) {
-            if (!preferredTimeZone) {
-                body.dataset.effectiveTimeZone = browserTimeZone;
-            }
-            updateBrowserTimeZoneLabels(browserTimeZone);
-            return;
-        }
-
-        const csrfToken = getCsrfToken();
-        if (!csrfToken) {
-            updateBrowserTimeZoneLabels(browserTimeZone);
-            return;
-        }
-
-        fetch(syncUrl, {
-            method: 'POST',
-            credentials: 'same-origin',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded; charset=UTF-8',
-                'X-CSRFToken': csrfToken,
-                'X-Requested-With': 'XMLHttpRequest',
-            },
-            body: new URLSearchParams({ time_zone: browserTimeZone }).toString(),
-        })
-            .then(function (response) {
-                if (!response.ok) {
-                    throw new Error('Unable to sync browser time zone.');
-                }
-                return response.json();
-            })
-            .then(function (payload) {
-                if (payload && payload.time_zone) {
-                    body.dataset.sessionTimeZone = payload.time_zone;
-                }
-                if (!preferredTimeZone) {
-                    body.dataset.effectiveTimeZone = browserTimeZone;
-                }
-                updateBrowserTimeZoneLabels(browserTimeZone);
-            })
-            .catch(function () {
-                updateBrowserTimeZoneLabels(browserTimeZone);
-            });
-    }
-
-    function toggleSidebar() {
-        const sidebar = document.getElementById('sidebar');
-        const content = document.getElementById('content');
-        sidebar.classList.toggle('collapsed');
-        content.classList.toggle('expanded');
-        localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
-    }
-
-    function toggleSidebarMobile() {
-        document.getElementById('sidebar').classList.toggle('show');
-        document.getElementById('mobileOverlay').classList.toggle('show');
-    }
-
-    window.addEventListener('DOMContentLoaded', function() {
-        if (window.innerWidth > 992 && localStorage.getItem('sidebarCollapsed') === 'true') {
-            document.getElementById('sidebar').classList.add('collapsed');
-            document.getElementById('content').classList.add('expanded');
-        }
-
-        const browserTimeZone = getBrowserTimeZone();
-        updateBrowserTimeZoneLabels(browserTimeZone);
-        syncBrowserTimeZone(browserTimeZone);
-    });
-</script>
+<script src="{% static 'vendor/bootstrap/js/bootstrap.bundle.min.js' %}"></script>
+<script src="{% static 'zehnms/js/shell.js' %}"></script>
+{% block vendor_js %}{% if request.resolver_match.url_name == 'dashboard' or request.resolver_match.url_name == 'accounts_home' %}<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script><script src="{% static 'zehnms/js/chart-theme.js' %}"></script>{% endif %}{% endblock %}
 {% block extra_js %}{% endblock %}
 </body>
 </html>
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

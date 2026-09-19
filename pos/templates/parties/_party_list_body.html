@@ -1,0 +1,73 @@
+{% comment %}
+Shared by the customer and supplier lists.
+Needs: parties, party_icon, detail_url_name, search_placeholder, empty_message,
+balance_filters, balance_filter, search_term, page_obj, page_querystring.
+{% endcomment %}
+{% load currency_tags %}
+<section class="k-section" aria-label="{% if detail_url_name == 'customer_detail' %}Customers{% else %}Suppliers{% endif %}">
+<form method="get" class="b-filter" id="party-search-form">
+    <div class="input-group">
+        <span class="input-group-text"><i class="bi bi-search" aria-hidden="true"></i></span>
+        <input class="form-control" id="party-search-input" name="search" placeholder="{{ search_placeholder }}" value="{{ search_term }}" autocomplete="off" aria-label="Search">
+    </div>
+    <div class="b-filter-tabs" role="group" aria-label="Show by balance">
+        {% for value, label in balance_filters %}
+        <button type="submit" name="balance" value="{{ value }}" class="btn btn-sm"{% if value == balance_filter %} aria-pressed="true"{% else %} aria-pressed="false"{% endif %}>{{ label }}</button>
+        {% endfor %}
+    </div>
+    {# Typing in the search box submits without a button, so the chosen filter rides along here. #}
+    <input type="hidden" name="balance" value="{{ balance_filter }}" id="party-balance-current">
+</form>
+
+<div class="table-responsive">
+    <table class="k-table k-ledger--stack b-index">
+        <thead>
+            <tr>
+                <th scope="col" data-k="what">Name</th>
+                <th scope="col" data-k="flag">Standing</th>
+                <th scope="col" class="k-num" data-k="amount">Balance</th>
+                <th scope="col" data-k="hide"><span class="visually-hidden">Open</span></th>
+            </tr>
+        </thead>
+        <tbody>
+        {% for party in parties %}
+            <tr>
+                <td class="b-stack-title" data-k="what"><a href="{% url detail_url_name party.id %}" class="b-index-name">{{ party.name }}</a>{% if not party.is_active %} <span class="k-badge">Inactive</span>{% endif %}<span class="b-sub">{{ party.phone|default:"No phone" }}{% if party.email %}<span class="d-none d-md-inline"> &middot; {{ party.email }}</span>{% endif %}</span></td>
+                <td data-label="Standing" data-k="flag">{% if party.balance_type == "clear" %}<span class="k-badge">Settled</span>{% elif party.balance_type == "receivable" %}<span class="k-badge k-badge--amber">Owes you</span>{% elif party.balance_type == "payable" %}<span class="k-badge k-badge--red">You owe</span>{% elif detail_url_name == "customer_detail" %}<span class="k-badge k-badge--red">Paid in advance</span>{% else %}<span class="k-badge k-badge--amber">Advance with them</span>{% endif %}</td>
+                <td class="k-num {% if party.balance_type == 'clear' %}b-state--none{% elif party.balance_type == 'payable' %}b-state--out{% elif party.balance_type == 'advance' and detail_url_name == 'customer_detail' %}b-state--out{% else %}b-state--due{% endif %}" data-label="Balance" data-k="amount">{{ party.balance_amount|money }}</td>
+                <td class="text-end" data-k="hide"><span class="k-row-actions"><a href="{% url detail_url_name party.id %}" class="k-icon-btn" aria-label="Open ledger of {{ party.name }}" data-tip="Open ledger"><i class="bi bi-chevron-right" aria-hidden="true"></i></a></span></td>
+            </tr>
+        {% empty %}
+            <tr><td class="k-empty" colspan="4"><p class="k-empty-title">{{ empty_message }}</p><p>{% if search_term or balance_filter %}Nothing matches this search and filter. Clear the search box or choose All.{% else %}Add the first one and its ledger leaf opens here, ready for credit and payments.{% endif %}</p></td></tr>
+        {% endfor %}
+        </tbody>
+    </table>
+</div>
+
+{% include "pos/reports/_pagination.html" %}
+</section>
+
+<script>
+(function () {
+    const form = document.getElementById("party-search-form");
+    const input = document.getElementById("party-search-input");
+    if (!form || !input) return;
+    // A clicked filter button sends its own value; drop the hidden copy so it is not sent twice.
+    form.addEventListener("submit", function (event) {
+        if (event.submitter && event.submitter.name === "balance") {
+            document.getElementById("party-balance-current").disabled = true;
+        }
+    });
+    let timer = null;
+    input.addEventListener("input", function () {
+        window.clearTimeout(timer);
+        timer = window.setTimeout(function () {
+            form.requestSubmit ? form.requestSubmit() : form.submit();
+        }, 350);
+    });
+    if (input.value) {
+        input.focus();
+        input.setSelectionRange(input.value.length, input.value.length);
+    }
+})();
+</script>

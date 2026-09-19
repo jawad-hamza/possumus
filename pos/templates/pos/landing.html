@@ -1,737 +1,270 @@
-<!DOCTYPE html>
+{% load static currency_tags %}<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>{{ brand_name }} | POS, Inventory, and Accounts for Growing Retail Teams</title>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&family=Fraunces:opsz,wght@9..144,500;9..144,700&display=swap" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons/font/bootstrap-icons.css" rel="stylesheet">
-    <style>
-        :root {
-            --ink: #12233f;
-            --ink-soft: #5f6d84;
-            --cream: #fbf6ee;
-            --line: rgba(18, 35, 63, 0.1);
-            --accent: #ff9f1c;
-            --accent-deep: #d97706;
-            --teal: #0f766e;
-            --sky: #dbeafe;
-            --rose: #fff1e6;
-            --panel: rgba(255, 255, 255, 0.84);
-        }
-
-        * {
-            box-sizing: border-box;
-        }
-
-        html {
-            scroll-behavior: smooth;
-        }
-
-        body {
-            margin: 0;
-            font-family: "Space Grotesk", sans-serif;
-            color: var(--ink);
-            background:
-                radial-gradient(circle at top left, rgba(255, 196, 119, 0.4), transparent 30%),
-                radial-gradient(circle at 85% 10%, rgba(59, 130, 246, 0.18), transparent 28%),
-                linear-gradient(180deg, #fffdf9 0%, #f6f8fc 58%, #edf2f8 100%);
-        }
-
-        body::before {
-            content: "";
-            position: fixed;
-            inset: 0;
-            pointer-events: none;
-            background-image: linear-gradient(rgba(18, 35, 63, 0.025) 1px, transparent 1px), linear-gradient(90deg, rgba(18, 35, 63, 0.025) 1px, transparent 1px);
-            background-size: 28px 28px;
-            mask-image: radial-gradient(circle at center, black 45%, transparent 90%);
-        }
-
-        a {
-            color: inherit;
-            text-decoration: none;
-        }
-
-        .shell {
-            position: relative;
-            z-index: 1;
-            width: min(1180px, calc(100% - 32px));
-            margin: 0 auto;
-        }
-
-        .site-nav {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            gap: 20px;
-            padding: 22px 0 12px;
-        }
-
-        .brand {
-            display: inline-flex;
-            align-items: center;
-            gap: 12px;
-            font-weight: 700;
-            letter-spacing: 0.02em;
-        }
-
-        .brand-mark {
-            width: 46px;
-            height: 46px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            border-radius: 16px;
-            background: linear-gradient(135deg, #162744, #274673 55%, #ffb347 140%);
-            color: #fff6e6;
-            box-shadow: 0 18px 36px rgba(18, 35, 63, 0.2);
-            font-weight: 700;
-        }
-
-        .brand-copy small {
-            display: block;
-            color: var(--ink-soft);
-            font-size: 0.76rem;
-            letter-spacing: 0.12em;
-            text-transform: uppercase;
-        }
-
-        .nav-links {
-            display: flex;
-            align-items: center;
-            gap: 18px;
-            color: var(--ink-soft);
-            font-size: 0.95rem;
-        }
-
-        .nav-actions {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-
-        .btn-ghost,
-        .btn-solid,
-        .btn-outline {
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            gap: 10px;
-            border-radius: 999px;
-            padding: 0.9rem 1.25rem;
-            font-weight: 700;
-            transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-        }
-
-        .btn-ghost {
-            color: var(--ink);
-            border: 1px solid transparent;
-        }
-
-        .btn-ghost:hover {
-            transform: translateY(-1px);
-            border-color: var(--line);
-            background: rgba(255, 255, 255, 0.7);
-        }
-
-        .btn-solid {
-            color: #fff;
-            background: linear-gradient(135deg, #12233f, #28518d);
-            box-shadow: 0 18px 32px rgba(18, 35, 63, 0.18);
-        }
-
-        .btn-solid:hover,
-        .btn-outline:hover {
-            transform: translateY(-2px);
-        }
-
-        .btn-outline {
-            border: 1px solid rgba(18, 35, 63, 0.14);
-            background: rgba(255, 255, 255, 0.78);
-            color: var(--ink);
-        }
-
-        .hero {
-            display: grid;
-            grid-template-columns: minmax(0, 1.05fr) minmax(340px, 420px);
-            gap: 28px;
-            align-items: stretch;
-            padding: 28px 0 34px;
-        }
-
-        .hero-panel,
-        .hero-aside,
-        .section-panel,
-        .price-card,
-        .cta-banner {
-            border: 1px solid var(--line);
-            background: var(--panel);
-            backdrop-filter: blur(12px);
-            box-shadow: 0 24px 60px rgba(18, 35, 63, 0.08);
-        }
-
-        .hero-panel {
-            border-radius: 34px;
-            padding: clamp(28px, 5vw, 52px);
-            overflow: hidden;
-            position: relative;
-        }
-
-        .hero-panel::after {
-            content: "";
-            position: absolute;
-            width: 220px;
-            height: 220px;
-            right: -40px;
-            top: -40px;
-            border-radius: 42px;
-            background: linear-gradient(180deg, rgba(255, 182, 88, 0.38), rgba(255, 182, 88, 0));
-            transform: rotate(18deg);
-        }
-
-        .eyebrow {
-            display: inline-flex;
-            align-items: center;
-            gap: 10px;
-            border-radius: 999px;
-            padding: 8px 14px;
-            background: rgba(255, 159, 28, 0.12);
-            color: var(--accent-deep);
-            font-size: 0.78rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.12em;
-        }
-
-        .hero-title {
-            font-family: "Fraunces", serif;
-            font-size: clamp(2.8rem, 5vw, 5rem);
-            line-height: 0.94;
-            margin: 18px 0 18px;
-            max-width: 10.5ch;
-        }
-
-        .hero-copy {
-            color: var(--ink-soft);
-            font-size: 1.08rem;
-            max-width: 58ch;
-            margin-bottom: 24px;
-        }
-
-        .hero-actions {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-            margin-bottom: 26px;
-        }
-
-        .hero-meta {
-            display: flex;
-            flex-wrap: wrap;
-            gap: 12px;
-        }
-
-        .meta-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 10px 14px;
-            border-radius: 16px;
-            background: rgba(255, 255, 255, 0.72);
-            border: 1px solid rgba(18, 35, 63, 0.08);
-            color: var(--ink-soft);
-            font-size: 0.92rem;
-        }
-
-        .hero-aside {
-            border-radius: 30px;
-            padding: 22px;
-            display: grid;
-            gap: 14px;
-            align-content: start;
-            background: linear-gradient(180deg, rgba(18, 35, 63, 0.96), rgba(26, 53, 93, 0.96));
-            color: #f8fbff;
-        }
-
-        .status-card {
-            border-radius: 22px;
-            padding: 18px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.12);
-        }
-
-        .status-card strong {
-            display: block;
-            font-size: 1.9rem;
-            margin-top: 6px;
-        }
-
-        .status-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 12px;
-        }
-
-        .status-mini {
-            border-radius: 18px;
-            padding: 16px;
-            background: rgba(255, 255, 255, 0.06);
-        }
-
-        .status-mini span,
-        .status-card p,
-        .section-copy,
-        .price-copy,
-        .price-features li,
-        .faq-item p,
-        .cta-banner p,
-        .section-kicker {
-            color: rgba(248, 251, 255, 0.72);
-        }
-
-        .section {
-            padding: 22px 0 30px;
-        }
-
-        .section-head {
-            display: flex;
-            flex-wrap: wrap;
-            justify-content: space-between;
-            align-items: end;
-            gap: 18px;
-            margin-bottom: 20px;
-        }
-
-        .section-title {
-            font-family: "Fraunces", serif;
-            font-size: clamp(2rem, 3vw, 3rem);
-            margin: 0 0 6px;
-        }
-
-        .section-kicker {
-            text-transform: uppercase;
-            letter-spacing: 0.14em;
-            font-size: 0.78rem;
-            font-weight: 700;
-            color: var(--accent-deep);
-        }
-
-        .feature-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 18px;
-        }
-
-        .section-panel {
-            border-radius: 26px;
-            padding: 22px;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(251, 246, 238, 0.92));
-        }
-
-        .feature-icon {
-            width: 54px;
-            height: 54px;
-            border-radius: 18px;
-            display: inline-flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.3rem;
-            background: linear-gradient(135deg, rgba(18, 35, 63, 0.94), rgba(40, 81, 141, 0.9));
-            color: #fff;
-            box-shadow: 0 16px 28px rgba(18, 35, 63, 0.16);
-            margin-bottom: 16px;
-        }
-
-        .feature-card h3,
-        .price-card h3,
-        .faq-item h3 {
-            font-size: 1.2rem;
-            font-weight: 700;
-            margin-bottom: 8px;
-        }
-
-        .feature-card p,
-        .price-copy,
-        .faq-item p {
-            color: var(--ink-soft);
-            margin-bottom: 0;
-        }
-
-        .pricing-grid {
-            display: grid;
-            grid-template-columns: repeat(3, minmax(0, 1fr));
-            gap: 18px;
-        }
-
-        .price-card {
-            border-radius: 28px;
-            padding: 24px;
-            display: flex;
-            flex-direction: column;
-            min-height: 100%;
-            background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(246, 248, 252, 0.94));
-        }
-
-        .price-card.featured {
-            transform: translateY(-8px);
-            background: linear-gradient(180deg, rgba(18, 35, 63, 0.98), rgba(34, 68, 118, 0.98));
-            color: #f8fbff;
-            border-color: rgba(255, 179, 71, 0.36);
-            box-shadow: 0 30px 70px rgba(18, 35, 63, 0.18);
-        }
-
-        .price-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 7px 12px;
-            border-radius: 999px;
-            background: rgba(255, 159, 28, 0.14);
-            color: var(--accent-deep);
-            font-size: 0.78rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-        }
-
-        .price-card.featured .price-badge {
-            background: rgba(255, 179, 71, 0.16);
-            color: #ffd27a;
-        }
-
-        .price-value {
-            display: flex;
-            align-items: baseline;
-            gap: 8px;
-            margin: 20px 0 8px;
-        }
-
-        .price-value strong {
-            font-size: 3rem;
-            line-height: 1;
-        }
-
-        .price-value span {
-            color: var(--ink-soft);
-        }
-
-        .price-card.featured .price-value span,
-        .price-card.featured .price-copy,
-        .price-card.featured .price-features li,
-        .price-card.featured .plan-note {
-            color: rgba(248, 251, 255, 0.74);
-        }
-
-        .price-features {
-            list-style: none;
-            padding: 0;
-            margin: 18px 0 22px;
-            display: grid;
-            gap: 10px;
-        }
-
-        .price-features li {
-            display: flex;
-            gap: 10px;
-            align-items: flex-start;
-            color: var(--ink-soft);
-        }
-
-        .price-features i {
-            color: var(--teal);
-            margin-top: 3px;
-        }
-
-        .price-card.featured .price-features i {
-            color: #8ef0d3;
-        }
-
-        .price-action {
-            margin-top: auto;
-        }
-
-        .plan-note {
-            margin-top: 12px;
-            font-size: 0.88rem;
-            color: var(--ink-soft);
-        }
-
-        .pricing-footnote {
-            margin-top: 16px;
-            color: var(--ink-soft);
-            font-size: 0.92rem;
-        }
-
-        .faq-grid {
-            display: grid;
-            grid-template-columns: repeat(2, minmax(0, 1fr));
-            gap: 18px;
-        }
-
-        .faq-item {
-            border-radius: 24px;
-            padding: 22px;
-            background: rgba(255, 255, 255, 0.78);
-            border: 1px solid var(--line);
-            box-shadow: 0 18px 42px rgba(18, 35, 63, 0.06);
-        }
-
-        .cta-banner {
-            border-radius: 32px;
-            padding: clamp(24px, 4vw, 38px);
-            margin: 26px 0 42px;
-            background: linear-gradient(135deg, rgba(18, 35, 63, 0.98), rgba(42, 84, 145, 0.96));
-            color: #fff;
-            display: flex;
-            flex-wrap: wrap;
-            align-items: center;
-            justify-content: space-between;
-            gap: 18px;
-        }
-
-        .cta-banner h2 {
-            font-family: "Fraunces", serif;
-            font-size: clamp(2rem, 3vw, 3rem);
-            margin: 0 0 8px;
-        }
-
-        .cta-banner p {
-            margin: 0;
-            max-width: 55ch;
-            color: rgba(248, 251, 255, 0.78);
-        }
-
-        .mobile-nav-note {
-            display: none;
-            color: var(--ink-soft);
-            font-size: 0.9rem;
-        }
-
-        @media (max-width: 1100px) {
-            .hero,
-            .feature-grid,
-            .pricing-grid,
-            .faq-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .price-card.featured {
-                transform: none;
-            }
-        }
-
-        @media (max-width: 760px) {
-            .site-nav {
-                flex-wrap: wrap;
-            }
-
-            .nav-links {
-                display: none;
-            }
-
-            .mobile-nav-note {
-                display: block;
-            }
-
-            .nav-actions {
-                width: 100%;
-                justify-content: stretch;
-            }
-
-            .nav-actions a {
-                flex: 1 1 0;
-            }
-
-            .status-grid {
-                grid-template-columns: 1fr;
-            }
-
-            .hero-panel,
-            .hero-aside,
-            .section-panel,
-            .price-card,
-            .faq-item,
-            .cta-banner {
-                border-radius: 24px;
-            }
-        }
-    </style>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="theme-color" content="#ffffff">
+    <meta name="description" content="{{ brand_name }} runs one shop end to end: the till, stock, purchases, customers and suppliers, expenses and the books, with every entry posted to a double-entry ledger.">
+    <title>{{ brand_name }} | Sales, stock and accounts for one shop</title>
+    <link rel="preload" href="{% static 'zehnms/fonts/public-sans-latin-var.woff2' %}" as="font" type="font/woff2" crossorigin>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/tokens.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/components.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/pages/landing.css' %}" rel="stylesheet">
 </head>
-<body>
-    <div class="shell">
-        <nav class="site-nav">
-            <a href="{% url 'home' %}" class="brand">
-                <span class="brand-mark">VD</span>
-                <span class="brand-copy">
-                    {{ brand_name }}
-                    <small>Retail SaaS Platform</small>
-                </span>
-            </a>
-            <div class="nav-links">
-                <a href="#features">Features</a>
-                <a href="#pricing">Pricing</a>
-                <a href="#faq">FAQ</a>
-            </div>
-            <div class="nav-actions">
-                <a class="btn-ghost" href="{{ login_url }}">Sign In</a>
-                <a class="btn-solid" href="{{ signup_url }}">Sign Up</a>
-            </div>
-            <div class="mobile-nav-note">POS, inventory, billing, and accounts in one browser workspace.</div>
+<body class="l-body">
+<a class="l-skip" href="#main">Skip to the page</a>
+
+<header class="l-top">
+    <div class="l-wrap l-top-inner">
+        <a href="{% url 'home' %}" class="l-brand">{{ brand_name }}</a>
+        <nav class="l-nav" aria-label="On this page">
+            <a href="#features">Features</a>
+            <a href="#delivery">How it runs</a>
+            <a href="#pricing">Pricing</a>
+            <a href="#questions">Questions</a>
         </nav>
+        <div class="l-top-actions">
+            <a class="l-top-link" href="{{ login_url }}">Sign In</a>
+            <a class="btn btn-outline-secondary" href="{{ signup_url }}">Sign Up</a>
+        </div>
+    </div>
+</header>
 
-        <section class="hero">
-            <div class="hero-panel">
-                <div class="eyebrow"><i class="bi bi-stars"></i> Built for small retail teams moving to SaaS</div>
-                <h1 class="hero-title">Run the counter, stock room, and books from one calm workspace.</h1>
-                <p class="hero-copy">{{ brand_name }} brings POS checkout, inventory, purchases, GST handling, team access, expenses, and accounting into one browser app. Start with 3 free days, create the owner account, verify the email, and open the business workspace. Plans can be purchased or upgraded later without changing the setup flow.</p>
-                <div class="hero-actions">
-                    <a class="btn-solid" href="{{ trial_cta_url }}"><i class="bi bi-rocket-takeoff"></i>Get Started Free</a>
-                    <a class="btn-outline" href="#pricing"><i class="bi bi-tags"></i>See Pricing</a>
-                </div>
-                <div class="hero-meta">
-                    <span class="meta-chip"><i class="bi bi-receipt"></i>POS + thermal receipts</span>
-                    <span class="meta-chip"><i class="bi bi-box-seam"></i>Inventory + purchases</span>
-                    <span class="meta-chip"><i class="bi bi-journal-check"></i>Accounts + reporting</span>
+<main id="main">
+    <section class="l-hero">
+        <div class="l-wrap l-hero-grid">
+            <div class="l-offer">
+                <h1>Sell at the counter. The books keep themselves.</h1>
+                <p>{{ brand_name }} rings up the sale, takes the stock off the shelf count and posts the money to a double-entry ledger, in one step. No second program for the accounts.</p>
+                <div class="l-offer-actions">
+                    <a class="btn btn-primary btn-lg" href="{{ trial_cta_url }}">Get Started Free</a>
+                    <span class="l-offer-note">{{ trial_days }} free days, then pick a plan.</span>
                 </div>
             </div>
 
-            <aside class="hero-aside">
-                <div class="status-card">
-                    <div class="text-uppercase small fw-semibold opacity-75">What your operators get</div>
-                    <strong>One verified owner account, one workspace, one source of truth.</strong>
-                    <p class="mb-0 mt-2">Cashiers stay focused on checkout. Owners keep pricing, stock, team access, backups, and reporting under control.</p>
+            <figure class="l-shot">
+                <div class="l-app" role="img" aria-label="The {{ brand_name }} till with a sample sale of four items, the total and the payment buttons">
+                    <div class="l-app-body" aria-hidden="true">
+                        <nav class="l-app-rail">
+                            <span class="l-app-brand">{{ brand_name }}</span>
+                            <span><i class="bi bi-grid"></i>Dashboard</span>
+                            <span class="is-on"><i class="bi bi-cart3"></i>Till</span>
+                            <span><i class="bi bi-box-seam"></i>Products</span>
+                            <span><i class="bi bi-truck"></i>Purchases</span>
+                            <span><i class="bi bi-people"></i>Parties</span>
+                            <span><i class="bi bi-journal-text"></i>Books</span>
+                            <span><i class="bi bi-bar-chart"></i>Reports</span>
+                        </nav>
+                        <div class="l-app-main">
+                            <div class="l-app-head">
+                                <strong>Till</strong>
+                                <span class="l-app-btn">Hold</span>
+                            </div>
+                            <div class="l-app-work">
+                                <div class="l-app-bill">
+                                    <div class="l-app-scan"><i class="bi bi-upc-scan"></i>Scan or type an item</div>
+                                    <table class="l-app-lines">
+                                        <thead><tr><th>Item</th><th class="k-num">Qty</th><th class="k-num">Amount</th></tr></thead>
+                                        <tbody>
+                                            <tr><td>Flour, loose<small>{{ '140.00'|money }} / kg</small></td><td class="k-num">0.5 kg</td><td class="k-num">{{ '70.00'|money }}</td></tr>
+                                            <tr><td>Cooking oil, 1 litre<small>{{ '560.00'|money }} each</small></td><td class="k-num">2</td><td class="k-num">{{ '1120.00'|money }}</td></tr>
+                                            <tr><td>Bread - Large<small>{{ '180.00'|money }} each</small></td><td class="k-num">1</td><td class="k-num">{{ '180.00'|money }}</td></tr>
+                                            <tr><td>Tea, 250 g pack<small>Discount 10%</small></td><td class="k-num">1</td><td class="k-num">{{ '405.00'|money }}</td></tr>
+                                        </tbody>
+                                    </table>
+                                </div>
+                                <div class="l-app-pay">
+                                    <span class="l-app-label">Total</span>
+                                    <span class="l-app-total">{{ '1775.00'|money }}</span>
+                                    <span class="l-app-row"><span>Cash given</span><span>{{ '2000.00'|money }}</span></span>
+                                    <span class="l-app-row"><span>Change</span><span>{{ '225.00'|money }}</span></span>
+                                    <span class="l-app-btn l-app-btn--primary">Cash</span>
+                                    <span class="l-app-btn">Bank</span>
+                                    <span class="l-app-btn">Credit</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-                <div class="status-grid">
-                    <div class="status-mini">
-                        <div class="small text-uppercase opacity-75">Free access</div>
-                        <div class="fs-4 fw-bold mt-1">3 days</div>
-                        <span>Every new owner gets 3 free days before choosing a paid plan.</span>
-                    </div>
-                    <div class="status-mini">
-                        <div class="small text-uppercase opacity-75">Starting at</div>
-                        <div class="fs-4 fw-bold mt-1">$10</div>
-                        <span>Entry package for lean retail operations.</span>
-                    </div>
-                    <div class="status-mini">
-                        <div class="small text-uppercase opacity-75">Ideal for</div>
-                        <div class="fs-5 fw-bold mt-1">Retail shops</div>
-                        <span>Grocery, pharmacy, electronics, garments, and mixed stores.</span>
-                    </div>
-                    <div class="status-mini">
-                        <div class="small text-uppercase opacity-75">Checkout later</div>
-                        <div class="fs-5 fw-bold mt-1">Billing-ready</div>
-                        <span>The pricing buttons can accept your checkout links as soon as you share them.</span>
-                    </div>
-                </div>
-            </aside>
-        </section>
+                <figcaption>A sample sale. The items, prices, currency and tax are whatever your shop sets.</figcaption>
+            </figure>
+        </div>
+    </section>
 
-        <section class="section" id="features">
-            <div class="section-head">
+    <section class="l-band" id="features">
+        <div class="l-wrap l-split">
+            <div class="l-split-head">
+                <h2>One entry at the counter, every book kept</h2>
+                <p>Stock and money change only through recorded entries, so any figure on screen can be traced back to what made it.</p>
+            </div>
+            <div class="l-panel">
+                <table class="l-does">
+                    <thead>
+                        <tr><th scope="col">You do this</th><th scope="col">{{ brand_name }} records this</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>Ring up a sale by scan or by name, for cash, bank or credit</td><td>Stock comes down, the sale posts to the ledger, and the receipt prints on your thermal roll or saves as a PDF.</td></tr>
+                        <tr><td>Put a sale on a named customer's credit</td><td>Their balance goes up. Their statement and the settlement when they pay stay with the customer.</td></tr>
+                        <tr><td>Record a purchase, paid or on credit</td><td>Stock goes up, cost is re-averaged across your purchases, and what you owe the supplier is updated.</td></tr>
+                        <tr><td>Take a return, from a customer or to a supplier</td><td>Stock and money are put back by new entries. Nothing is quietly edited after the fact.</td></tr>
+                        <tr><td>Pay an expense, move cash to the bank, add owner capital</td><td>The cash and bank accounts move with it.</td></tr>
+                        <tr><td>Count the shelves</td><td>Stock takes, adjustments and opening stock are recorded, and the audit log keeps who did what.</td></tr>
+                        <tr><td>Close the day</td><td>Trial balance, profit and loss and balance sheet, with sales, stock, expiry and employee reports.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </section>
+
+    <section class="l-band l-band--plain">
+        <div class="l-wrap l-split">
+            <div class="l-split-head">
+                <h2>Set up for your shop, whatever it sells</h2>
+                <p>No country or trade is assumed. The wording, the units and the money are settings.</p>
+            </div>
+            <dl class="l-terms">
                 <div>
-                    <div class="section-kicker">Core Product</div>
-                    <h2 class="section-title">A retail control stack, not just a POS screen.</h2>
+                    <dt>Weights and units</dt>
+                    <dd>Sell by piece, box, pack or dozen, and by weight, volume or length. Quantities carry three decimals, so half a kilo of flour is a line like any other.</dd>
                 </div>
-                <p class="section-copy mb-0" style="max-width: 44ch; color: var(--ink-soft);">The goal is simple: sell faster, know what is in stock, and keep the financial side tied to real operations without jumping between disconnected tools.</p>
-            </div>
-            <div class="feature-grid">
-                <article class="section-panel feature-card">
-                    <span class="feature-icon"><i class="bi bi-cart4"></i></span>
-                    <h3>Checkout built for real counters</h3>
-                    <p>Barcode scan, fast cart handling, bank or cash payment, role-aware price controls, and receipt output sized for thermal printers.</p>
-                </article>
-                <article class="section-panel feature-card">
-                    <span class="feature-icon"><i class="bi bi-boxes"></i></span>
-                    <h3>Inventory that stays connected</h3>
-                    <p>Purchases, stock movement, low-stock alerts, expiry tracking, and category tax rules all update from the same operating workflow.</p>
-                </article>
-                <article class="section-panel feature-card">
-                    <span class="feature-icon"><i class="bi bi-bank2"></i></span>
-                    <h3>Accounts that reflect operations</h3>
-                    <p>Sales, purchases, supplier balances, expenses, bank ledgers, and accounting reports move together instead of living in a separate spreadsheet universe.</p>
-                </article>
-            </div>
-        </section>
-
-        <section class="section" id="pricing">
-            <div class="section-head">
                 <div>
-                    <div class="section-kicker">Pricing</div>
-                    <h2 class="section-title">Start small, then scale the workspace with your store.</h2>
+                    <dt>Pricing on cost</dt>
+                    <dd>Type a sale price, or set a markup on cost as a percentage or as a fixed amount. A minimum margin is enforced either way, and cost is a weighted average of your purchases.</dd>
                 </div>
-                <p class="section-copy mb-0" style="max-width: 44ch; color: var(--ink-soft);">Every package starts with the same safe onboarding flow: owner signup, email verification, and 3 free days to get the workspace live. Paid packages and upgrades can be connected later through {{ checkout_provider }} without redesigning the page.</p>
-            </div>
+                <div>
+                    <dt>Sizes of one item</dt>
+                    <dd>Small, medium and large sit under one product name. Each size keeps its own code, price, cost and stock, and the till asks which size.</dd>
+                </div>
+                <div>
+                    <dt>Currency and tax</dt>
+                    <dd>The currency symbol, the tax label and the tax rates are yours to set. Expiry dates are tracked where the goods need them.</dd>
+                </div>
+                <div>
+                    <dt>Only the modules you use</dt>
+                    <dd>Switch off what the shop does not need and the screen stays small. Everything else is one switch away in Settings.</dd>
+                </div>
+                <div>
+                    <dt>Staff and roles</dt>
+                    <dd>Cashiers see the till and their own receipts. The owner sees everything. Custom roles give access module by module.</dd>
+                </div>
+                <div>
+                    <dt>Counter and phone</dt>
+                    <dd>The till is built for a PC or laptop with a keyboard and a USB barcode scanner. The owner's pages, such as who owes what and what is running low, work on a phone.</dd>
+                </div>
+                <div>
+                    <dt>Your data</dt>
+                    <dd>Reports export to CSV, and backup and restore are built in. The shop owns its data.</dd>
+                </div>
+            </dl>
+        </div>
+    </section>
 
-            <div class="pricing-grid">
+    <section class="l-band" id="delivery">
+        <div class="l-wrap">
+            <div class="l-band-head">
+                <h2>Two ways to run it</h2>
+            </div>
+            <div class="l-ways">
+                <article class="l-panel l-way">
+                    <h3><i class="bi bi-pc-display" aria-hidden="true"></i>Installed on the shop's PC</h3>
+                    <p>A Windows setup file installs {{ brand_name }}, and it opens in its own window like any other program. It runs with no internet and the data stays in the shop.</p>
+                    <ul>
+                        <li>Keeps selling when the internet is down</li>
+                        <li>One install serves one shop</li>
+                        <li>Unlocked by a licence key after the free days</li>
+                    </ul>
+                    <p class="l-way-foot">Ask about it at <a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
+                </article>
+                <article class="l-panel l-way">
+                    <h3><i class="bi bi-cloud" aria-hidden="true"></i>Hosted, in the browser</h3>
+                    <p>Create the owner account here, verify the email and set up the business. The free days start there, on every plan.</p>
+                    <ul>
+                        <li>Open it from the counter PC or the owner's phone</li>
+                        <li>One workspace serves one business</li>
+                        <li>A monthly plan after the free days</li>
+                    </ul>
+                    <p class="l-way-foot"><a href="{{ trial_cta_url }}">Get Started Free</a></p>
+                </article>
+            </div>
+        </div>
+    </section>
+
+    <section class="l-band l-band--plain" id="pricing">
+        <div class="l-wrap">
+            <div class="l-band-head">
+                <h2>{{ trial_days }} free days, then a monthly plan</h2>
+                <p>Every plan starts with the free days. When you choose or change a paid plan, checkout runs on {{ checkout_provider }}.</p>
+            </div>
+            <div class="l-plans">
                 {% for plan in pricing_plans %}
-                <article class="price-card {% if plan.featured %}featured{% endif %}">
-                    <span class="price-badge">{% if plan.featured %}<i class="bi bi-lightning-charge-fill"></i>{% endif %}{{ plan.badge }}</span>
-                    <h3 class="mt-3">{{ plan.name }}</h3>
-                    <p class="price-copy">{{ plan.description }}</p>
-                    <div class="price-value">
+                <article class="l-panel l-plan{% if plan.featured %} is-featured{% endif %}">
+                    <h3>{{ plan.name }}</h3>
+                    <p class="l-plan-copy">{{ plan.description }}</p>
+                    <div class="l-plan-price">
                         <strong>${{ plan.price }}</strong>
                         <span>/ month</span>
                     </div>
-                    <div class="plan-note">Includes 3 free days before you choose or upgrade a paid package.</div>
-                    <ul class="price-features">
+                    <a class="btn {% if plan.featured %}btn-primary{% else %}btn-outline-secondary{% endif %}" href="{{ plan.cta_url }}" data-plan-code="{{ plan.code }}" data-checkout-link="{{ plan.checkout_link }}" aria-label="{{ plan.cta_label }} on the {{ plan.name }} plan">{{ plan.cta_label }}</a>
+                    <ul>
                         {% for feature in plan.features %}
-                        <li><i class="bi bi-check2-circle"></i><span>{{ feature }}</span></li>
+                        <li><i class="bi bi-check2" aria-hidden="true"></i><span>{{ feature }}</span></li>
                         {% endfor %}
                     </ul>
-                    <div class="price-action">
-                        <a class="{% if plan.featured %}btn-solid{% else %}btn-outline{% endif %} w-100" href="{{ plan.cta_url }}" data-plan-code="{{ plan.code }}" data-checkout-link="{{ plan.checkout_link }}">{{ plan.cta_label }}</a>
-                    </div>
                 </article>
                 {% endfor %}
             </div>
-
-            <div class="pricing-footnote">Demo setup is using the placeholder domain {{ public_domain }}. The pricing buttons currently start verified signup and the 3 free days. Later each package can point to its real {{ checkout_provider }} checkout link without changing the layout.</div>
-        </section>
-
-        <section class="section" id="faq">
-            <div class="section-head">
-                <div>
-                    <div class="section-kicker">FAQ</div>
-                    <h2 class="section-title">A few questions buyers usually ask first.</h2>
-                </div>
-            </div>
-            <div class="faq-grid">
-                <article class="faq-item">
-                    <h3>Does every plan start with the same free setup period?</h3>
-                    <p>Yes. Each package starts with 3 free days, and the owner unlocks them by creating the account, verifying the email, and finishing business setup. Paid plans can be chosen or upgraded later.</p>
-                </article>
-                <article class="faq-item">
-                    <h3>Can {{ checkout_provider }} be connected later?</h3>
-                    <p>Yes. The pricing cards are already structured for plan-specific checkout links, so we only need to plug in the {{ checkout_provider }} URLs you share.</p>
-                </article>
-                <article class="faq-item">
-                    <h3>Will owners control the whole workspace?</h3>
-                    <p>Yes. The signed-up owner account becomes the admin with full control, while cashier or staff access can stay limited by role.</p>
-                </article>
-                <article class="faq-item">
-                    <h3>Can this evolve into a full SaaS?</h3>
-                    <p>Yes. This landing page and pricing flow are a public-facing first step before we finish the multi-tenant onboarding and subscription architecture.</p>
-                </article>
-            </div>
-        </section>
-
-        <section class="cta-banner">
-            <div>
-                <h2>Ready to package this as a real SaaS front door?</h2>
-                <p>The public page now leads into verified owner signup and business creation. Next, we can plug in real Google OAuth credentials, tenant onboarding, and {{ checkout_provider }} checkout one layer at a time.</p>
-            </div>
-            <div class="d-flex flex-wrap gap-2">
-                <a class="btn-solid" href="{{ signup_url }}">Sign Up</a>
-                <a class="btn-outline" href="{{ login_url }}">Sign In</a>
-            </div>
-        </section>
-        <div class="text-center pb-5 small" style="color: var(--ink-soft);">
-            Demo contact: <a href="mailto:{{ support_email }}">{{ support_email }}</a>
         </div>
+    </section>
+
+    <section class="l-band" id="questions">
+        <div class="l-wrap l-split">
+            <div class="l-split-head">
+                <h2>Before you start</h2>
+                <p>Anything else: <a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
+            </div>
+            <div class="l-panel l-faq">
+                <details>
+                    <summary>Does every plan start with the free days?</summary>
+                    <p>Yes. Each plan starts with {{ trial_days }} free days. The owner unlocks them by creating the account, verifying the email and finishing the business setup. A paid plan can be chosen or changed later.</p>
+                </details>
+                <details>
+                    <summary>Who controls the workspace?</summary>
+                    <p>The owner account that signs up becomes the admin with full control. Cashier and staff logins are created by the owner and stay limited by role.</p>
+                </details>
+                <details>
+                    <summary>Is it only invoices, or real accounts?</summary>
+                    <p>Real accounts. Every sale, purchase, return, expense and payment posts to a double-entry ledger, so profit and loss, the balance sheet and party balances come from the same entries as the till.</p>
+                </details>
+                <details>
+                    <summary>Can I get my data out?</summary>
+                    <p>Yes. Reports export to CSV, and the shop owns its data.</p>
+                </details>
+                <details>
+                    <summary>Is there an edition that runs without internet?</summary>
+                    <p>Yes. A Windows edition installs on the shop's own PC, runs with no internet and keeps the data in the shop. Write to <a href="mailto:{{ support_email }}">{{ support_email }}</a> to ask about it.</p>
+                </details>
+            </div>
+        </div>
+    </section>
+
+    <section class="l-band l-band--plain">
+        <div class="l-wrap">
+            <div class="l-panel l-last">
+                <h2>Ring up your first sale today.</h2>
+                <a class="btn btn-primary btn-lg" href="{{ trial_cta_url }}">Get Started Free</a>
+            </div>
+        </div>
+    </section>
+</main>
+
+<footer class="l-foot">
+    <div class="l-wrap l-foot-inner">
+        <span class="l-brand">{{ brand_name }}</span>
+        <p>Sales, stock and accounts for one shop.</p>
+        <p><a href="{{ login_url }}">Sign In</a><span aria-hidden="true"> · </span><a href="mailto:{{ support_email }}">{{ support_email }}</a></p>
     </div>
+</footer>
 </body>
 </html>

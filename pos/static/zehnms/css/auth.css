@@ -1,0 +1,216 @@
+/* ---------- sign in, first run and password pages: one white panel, centred on the grey ground ---------- */
+
+html,
+body.k-auth {
+    min-height: 100%;
+}
+
+body.k-auth {
+    min-height: 100vh;
+    min-height: 100dvh;
+    background: var(--k-ground);
+}
+
+.k-auth-page {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--k-5);
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: var(--k-7) var(--k-4);
+}
+
+.k-auth-brand {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    max-width: 440px;
+}
+
+.k-auth-mark {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 40px;
+    height: 40px;
+    border-radius: var(--k-radius);
+    background: var(--k-accent);
+    color: var(--k-on-accent);
+    font-size: var(--k-text-xl);
+    font-weight: 700;
+    line-height: 1;
+}
+
+.k-auth-brand-text {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+}
+
+.k-auth-brand-name {
+    color: var(--k-ink-title);
+    font-size: var(--k-text-xl);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+    overflow-wrap: anywhere;
+}
+
+.k-auth-sheet {
+    width: 100%;
+    max-width: 440px;
+    padding: var(--k-6);
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius-lg);
+    background: var(--k-panel);
+    box-shadow: var(--k-shadow-panel);
+}
+
+.k-auth-sheet--wide,
+.k-auth-page:has(.k-auth-sheet--wide) .k-auth-brand,
+.k-auth-page:has(.k-auth-sheet--wide) .k-auth-aside {
+    max-width: 720px;
+}
+
+.k-auth-title {
+    margin: 0 0 var(--k-1);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-2xl);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+}
+
+.k-auth-intro {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-md);
+}
+
+.k-auth-intro {
+    max-width: 60ch;
+    margin: 0 0 var(--k-5);
+}
+
+.k-auth-intro:empty {
+    margin-bottom: var(--k-4);
+}
+
+.k-auth-sheet .form-label {
+    margin-bottom: 6px;
+}
+
+.k-auth-sheet .form-control,
+.k-auth-sheet .form-select {
+    min-height: 44px;
+    font-size: 1rem;
+}
+
+.k-auth-sheet .btn {
+    min-height: 44px;
+}
+
+.k-auth-sheet .form-text ul,
+.k-auth-sheet .helptext ul {
+    margin: 0;
+    padding-left: 1.1rem;
+}
+
+.k-auth-foot {
+    margin-top: var(--k-5);
+    font-size: var(--k-text-sm);
+}
+
+.k-auth-foot a {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+}
+
+.k-auth-or {
+    display: flex;
+    align-items: center;
+    gap: var(--k-3);
+    margin: var(--k-4) 0;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.k-auth-or::before,
+.k-auth-or::after {
+    content: "";
+    flex: 1 1 auto;
+    border-top: var(--k-hair) solid var(--k-border);
+}
+
+/* what the page's cover used to say: quiet notes under the panel */
+.k-auth-aside {
+    width: 100%;
+    max-width: 440px;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.k-auth-aside:empty {
+    display: none;
+}
+
+.k-cover-note {
+    max-width: 60ch;
+    margin: 0 0 var(--k-3);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+@media (max-width: 575.98px) {
+    .k-auth-page {
+        justify-content: flex-start;
+        gap: var(--k-4);
+        padding: var(--k-5) var(--k-4) var(--k-6);
+    }
+
+    .k-auth-sheet {
+        padding: var(--k-5) var(--k-4);
+    }
+}
+
+/* ---------- a page that stands alone: errors ---------- */
+
+.k-lone {
+    display: grid;
+    place-items: center;
+    min-height: 100vh;
+    min-height: 100dvh;
+    padding: var(--k-5) var(--k-4);
+    background: var(--k-ground);
+}
+
+.k-lone-sheet {
+    width: 100%;
+    max-width: 520px;
+    padding: var(--k-6);
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius-lg);
+    background: var(--k-panel);
+    box-shadow: var(--k-shadow-panel);
+}
+
+.k-lone-code {
+    margin: 0 0 var(--k-3);
+}
+
+.k-lone-sheet h1 {
+    font-size: var(--k-text-2xl);
+}
+
+.k-lone-sheet p {
+    max-width: 56ch;
+    color: var(--k-ink-soft);
+}
+
+.k-lone-sheet .k-actions {
+    margin-top: var(--k-5);
+}

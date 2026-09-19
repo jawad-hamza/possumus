@@ -1,0 +1,60 @@
+{% comment %}
+Shared top of every accounting report: jump straight to another report, pick a
+period with one click. Export and print sit in the page head (_report_actions.html).
+Expects the context built by accounts.report_views._report_context.
+{% endcomment %}
+<nav class="b-reports" aria-label="Accounting reports">
+    <ul class="nav nav-tabs">
+        <li class="nav-item"><a class="nav-link" href="{% url 'accounts_home' %}"><i class="bi bi-arrow-left" aria-hidden="true"></i> Overview</a></li>
+        {% for link in report_links %}
+        <li class="nav-item"><a href="{{ link.url }}" class="nav-link {% if link.name == active_report %}active{% endif %}"{% if link.name == active_report %} aria-current="page"{% endif %}>{{ link.label }}</a></li>
+        {% endfor %}
+    </ul>
+</nav>
+
+<form method="get" class="b-period report-filter-card">
+    {% for key, value in filter_keep %}{% if key != extra_filter_name %}<input type="hidden" name="{{ key }}" value="{{ value }}">{% endif %}{% endfor %}
+    <div class="b-period-fields">
+        {% if filter_mode == "range" %}
+        <div>
+            <label class="form-label" for="report-start">From</label>
+            <input type="date" class="form-control" id="report-start" name="start" value="{{ filter_start }}">
+        </div>
+        <div>
+            <label class="form-label" for="report-end">To</label>
+            <input type="date" class="form-control" id="report-end" name="end" value="{{ filter_end }}">
+        </div>
+        {% else %}
+        <div>
+            <label class="form-label" for="report-as-of">As of</label>
+            <input type="date" class="form-control" id="report-as-of" name="as_of" value="{{ filter_as_of }}" onchange="this.form.submit()">
+        </div>
+        {% endif %}
+        {% if extra_filter_choices %}
+        <div>
+            <label class="form-label" for="report-extra">{{ extra_filter_label }}</label>
+            <select class="form-select" id="report-extra" name="{{ extra_filter_name }}" onchange="this.form.submit()">
+                <option value="">All {{ extra_filter_all|default:"entries" }}</option>
+                {% for value, label in extra_filter_choices %}
+                <option value="{{ value }}" {% if value == extra_filter_value %}selected{% endif %}>{{ label }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        {% endif %}
+        <button class="btn btn-outline-secondary">Apply</button>
+    </div>
+    {% if filter_presets %}
+    <nav class="nav nav-pills b-presets" aria-label="Date shortcuts">
+        {% for preset in filter_presets %}
+        <a href="?{{ preset.query }}" class="nav-link{% if preset.active %} active{% endif %}"{% if preset.active %} aria-current="true"{% endif %}>{{ preset.label }}</a>
+        {% endfor %}
+    </nav>
+    {% endif %}
+</form>
+<script>
+(function () {
+    var current = document.querySelector('.b-reports .nav-link.active');
+    var strip = document.querySelector('.b-reports .nav-tabs');
+    if (current && strip) strip.scrollLeft = Math.max(0, current.offsetLeft - (strip.clientWidth - current.offsetWidth) / 2);
+})();
+</script>

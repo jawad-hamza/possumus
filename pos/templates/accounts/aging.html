@@ -1,0 +1,77 @@
+{% extends "pos/base.html" %}
+{% load static accounting_tags %}
+
+{% block title %}{% if is_receivable %}Receivables{% else %}Payables{% endif %} Aging{% endblock %}
+{% block page_title %}{% if is_receivable %}Receivables aging{% else %}Payables aging{% endif %}{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}{% include "accounts/_report_actions.html" %}{% endblock %}
+
+{% block content %}
+<header class="b-print-head">
+    <h2>{{ active_company.name|default:brand_name }}</h2>
+    <p>{% if is_receivable %}Receivables Aging{% else %}Payables Aging{% endif %} as of {{ as_of_label }}</p>
+</header>
+
+{% include "accounts/_report_header.html" %}
+
+<div class="b-balances">
+    <div class="k-balance {% if is_receivable %}k-balance--due{% else %}k-balance--out{% endif %} b-balances-wide">
+        <div class="k-balance-label">Total outstanding</div>
+        <div class="k-balance-figure">{{ totals.outstanding|money }}</div>
+        <div class="k-balance-note">{{ party_count }} {{ party_kind }}{{ party_count|pluralize }} with a balance</div>
+    </div>
+    {% for bucket in buckets %}
+    <div class="k-balance">
+        <div class="k-balance-label">{{ bucket.label }}</div>
+        <div class="k-balance-figure">{{ bucket.total|money }}</div>
+    </div>
+    {% endfor %}
+</div>
+
+<section class="k-section" aria-labelledby="aging-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="aging-title">As of {{ as_of_label }} <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About this aging report" aria-describedby="tipAging" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipAging" role="tooltip" hidden>{% if is_receivable %}Who owes you money and how old the unpaid amounts are.{% else %}What you owe suppliers and how old the unpaid bills are.{% endif %} Payments are matched to the oldest bills first.</span></span></h2>
+    </div>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack b-bahi">
+            <thead>
+                <tr>
+                    <th scope="col" data-k="what">{{ party_kind|title }}</th>
+                    <th scope="col" data-k="meta">Oldest unpaid</th>
+                    {% for bucket in buckets %}<th scope="col" class="k-num" data-k="more">{{ bucket.label }}</th>{% endfor %}
+                    <th scope="col" class="k-num" data-k="amount">Outstanding</th>
+                    <th scope="col" class="k-num" data-k="more">Advance</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td class="b-stack-title">
+                        {% if row.statement_url %}<a href="{{ row.statement_url }}" class="b-index-name">{{ row.party }}</a>{% else %}<strong>{{ row.party }}</strong>{% endif %}
+                        {% if row.phone %}<span class="b-sub">{{ row.phone }}</span>{% endif %}
+                    </td>
+                    <td data-label="Oldest unpaid">{% if row.oldest_open %}{{ row.oldest_open }} <span class="b-drcr">{{ row.oldest_days }} day{{ row.oldest_days|pluralize }}</span>{% else %}-{% endif %}</td>
+                    {% for amount in row.amounts %}<td class="k-num" data-label="{% for bucket in buckets %}{% if forloop.counter == forloop.parentloop.counter %}{{ bucket.label }}{% endif %}{% endfor %}">{% if amount %}{{ amount|money }}{% endif %}</td>{% endfor %}
+                    <td class="k-num b-bal {% if is_receivable %}k-due{% else %}k-out{% endif %}" data-label="Outstanding">{{ row.outstanding|money }}</td>
+                    <td class="k-num" data-label="Advance">{% if row.advance %}{{ row.advance|money }}{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="k-empty"><p class="k-empty-title">{% if is_receivable %}Nobody owes you anything as of this date.{% else %}You do not owe any supplier as of this date.{% endif %}</p><p>{% if is_receivable %}Credit sales that are not yet paid will be listed here by age.{% else %}Purchases on credit that are not yet paid will be listed here by age.{% endif %}</p></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+            {% if rows %}
+            <tfoot>
+                <tr>
+                    <td colspan="2" class="b-stack-title">Total</td>
+                    {% for bucket in buckets %}<td class="k-num" data-label="{{ bucket.label }}">{{ bucket.total|money }}</td>{% endfor %}
+                    <td class="k-num" data-label="Outstanding">{{ totals.outstanding|money }}</td>
+                    <td class="k-num" data-label="Advance">{{ totals.advance|money }}</td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</section>
+{% endblock %}

@@ -3,6 +3,7 @@ from decimal import Decimal, InvalidOperation
 from django.db import transaction
 
 from accounts.models import Account, CapitalEntry, Expense, ExpensePayment, MoneyTransfer, Voucher, VoucherLine
+from accounts.services.books_lock import assert_books_open, normalize_voucher_date
 from accounts.services.cash_bank import resolve_money_account
 
 
@@ -39,14 +40,17 @@ def _money_label(method: str, bank_account=None, bank_name="", bank_account_numb
     return "Bank"
 
 
-def _sync_voucher(*, voucher_type: str, ref_model: str, ref_id: int, narration: str, date):
+def _sync_voucher(*, voucher_type: str, ref_model: str, ref_id: int, narration: str, date, actor=None):
+    date = normalize_voucher_date(date)
+    assert_books_open(date, action=f"post {ref_model} #{ref_id}")
     voucher, created = Voucher.objects.get_or_create(
         voucher_type=voucher_type,
         ref_model=ref_model,
         ref_id=ref_id,
-        defaults={"narration": narration, "date": date},
+        defaults={"narration": narration, "date": date, "created_by": actor},
     )
     if not created:
+        # Saving first lets the books-lock guard refuse before any line is removed.
         voucher.narration = narration
         voucher.date = date
         voucher.save(update_fields=["narration", "date"])
@@ -55,8 +59,8 @@ def _sync_voucher(*, voucher_type: str, ref_model: str, ref_id: int, narration: 
 
 
 @transaction.atomic
-def post_expense_payment(payment_id: int) -> Voucher:
-    payment = ExpensePayment.objects.select_related("expense", "bank_account").select_for_update().get(pk=payment_id)
+def post_expense_payment(payment_id: int, *, actor=None) -> Voucher:
+    payment = ExpensePayment.objects.select_related("expense", "bank_account").select_for_update(of=("self",)).get(pk=payment_id)
     expense = Expense.objects.select_for_update().get(pk=payment.expense_id)
     amount = _to_decimal(payment.amount)
     already_posted = payment.voucher_id is not None
@@ -76,6 +80,7 @@ def post_expense_payment(payment_id: int) -> Voucher:
         ref_id=payment.id,
         narration=f"Expense payment #{payment.id} - {expense.display_title} from {source_label}",
         date=payment.date,
+        actor=actor,
     )
     VoucherLine.objects.create(voucher=voucher, account=payable_account, debit=amount)
     VoucherLine.objects.create(voucher=voucher, account=source_account, credit=amount)
@@ -102,8 +107,8 @@ def create_expense_payment(**kwargs) -> ExpensePayment:
 
 
 @transaction.atomic
-def post_capital_entry(entry_id: int) -> Voucher:
-    entry = CapitalEntry.objects.select_related("bank_account").select_for_update().get(pk=entry_id)
+def post_capital_entry(entry_id: int, *, actor=None) -> Voucher:
+    entry = CapitalEntry.objects.select_related("bank_account").select_for_update(of=("self",)).get(pk=entry_id)
     amount = _to_decimal(entry.amount)
     if amount <= 0:
         raise ValueError("Amount must be greater than zero")
@@ -118,6 +123,7 @@ def post_capital_entry(entry_id: int) -> Voucher:
         ref_id=entry.id,
         narration=f"Funds introduced #{entry.id} - {entry.source_name} into {destination_label}",
         date=entry.date,
+        actor=actor,
     )
     VoucherLine.objects.create(voucher=voucher, account=destination_account, debit=amount)
     VoucherLine.objects.create(voucher=voucher, account=owner_capital_account, credit=amount)
@@ -139,8 +145,8 @@ def create_capital_entry(**kwargs) -> CapitalEntry:
 
 
 @transaction.atomic
-def post_money_transfer(transfer_id: int) -> Voucher:
-    transfer = MoneyTransfer.objects.select_related("from_bank_account", "to_bank_account").select_for_update().get(pk=transfer_id)
+def post_money_transfer(transfer_id: int, *, actor=None) -> Voucher:
+    transfer = MoneyTransfer.objects.select_related("from_bank_account", "to_bank_account").select_for_update(of=("self",)).get(pk=transfer_id)
     amount = _to_decimal(transfer.amount)
     if amount <= 0:
         raise ValueError("Transfer amount must be greater than zero")
@@ -158,6 +164,7 @@ def post_money_transfer(transfer_id: int) -> Voucher:
         ref_id=transfer.id,
         narration=f"Transfer #{transfer.id} - out from {from_label} into {to_label}",
         date=transfer.date,
+        actor=actor,
     )
     VoucherLine.objects.create(voucher=voucher, account=destination_account, debit=amount)
     VoucherLine.objects.create(voucher=voucher, account=source_account, credit=amount)

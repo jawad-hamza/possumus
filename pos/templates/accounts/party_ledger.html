@@ -1,66 +1,103 @@
-﻿{% extends "pos/base.html" %}
-{% load accounting_tags %}
+{% extends "pos/base.html" %}
+{% load static accounting_tags %}
 
-{% block title %}Party Statement{% endblock %}
+{% block title %}Statement - {{ party }}{% endblock %}
+{% block page_title %}{{ party_kind|title }} statement{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}{% include "accounts/_report_actions.html" %}<button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#opening-balance-panel" aria-expanded="false" aria-controls="opening-balance-panel"><i class="bi bi-flag" aria-hidden="true"></i> {% if party_opening %}Edit opening balance{% else %}Add opening balance{% endif %}</button>{% endblock %}
 
 {% block content %}
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
+<header class="b-print-head">
+    <h2>{{ active_company.name|default:brand_name }}</h2>
+    <p>{{ party_kind|title }} statement: {{ party }}. {{ period_label }}.</p>
+</header>
+
+{% include "accounts/_report_header.html" %}
+
+<section class="k-section b-leaf">
     <div>
-        <h2 class="mb-1">Party Statement</h2>
-        <p class="text-muted mb-0">Detailed movement history for {{ party|default:"this party" }}.</p>
+        <h2 class="b-leaf-name"><a href="{{ party_detail_url }}">{{ party }}</a></h2>
+        <ul class="b-leaf-meta"><li>{{ party_kind|title }} sub-ledger</li><li>{{ period_label }}</li></ul>
     </div>
-    <span class="status-chip clear">Sub-ledger</span>
+    <div class="b-leaf-balance">
+        <div class="b-leaf-label">Closing balance</div>
+        <div class="b-leaf-figure {% if not closing_balance %}b-state--none{% elif closing_side == 'Dr' %}b-state--due{% else %}b-state--out{% endif %}">{{ closing_balance|money }} <span class="b-drcr">{{ closing_side }}</span></div>
+        <div class="b-leaf-words"><span class="k-badge {% if not closing_balance %}{% elif closing_side == 'Dr' %}k-badge--amber{% else %}k-badge--red{% endif %}">{% if not closing_balance %}Settled{% elif closing_side == "Dr" %}They owe you{% else %}You owe them{% endif %}</span></div>
+    </div>
+</section>
+
+<div class="collapse" id="opening-balance-panel">
+    <section class="k-section">
+        <div class="k-section-head"><h2 class="k-section-title">Opening balance</h2></div>
+        {% include "accounts/_party_opening_form.html" %}
+    </section>
 </div>
 
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Total Debit</div>
-            <div class="fs-4 fw-bold">{{ total_debit|money }}</div>
-        </div>
+<div class="b-balances">
+    <div class="k-balance">
+        <div class="k-balance-label">Brought forward</div>
+        <div class="k-balance-figure">{{ opening_balance|money }} <span class="b-drcr">{{ opening_side }}</span></div>
     </div>
-    <div class="col-md-4">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Total Credit</div>
-            <div class="fs-4 fw-bold">{{ total_credit|money }}</div>
-        </div>
+    <div class="k-balance">
+        <div class="k-balance-label">Total debit</div>
+        <div class="k-balance-figure">{{ total_debit|money }}</div>
     </div>
-    <div class="col-md-4">
-        <div class="page-card p-3 h-100">
-            <div class="text-muted small">Closing Balance</div>
-            <div class="fs-4 fw-bold">{{ closing_balance|money }} {{ closing_side }}</div>
-        </div>
+    <div class="k-balance">
+        <div class="k-balance-label">Total credit</div>
+        <div class="k-balance-figure">{{ total_credit|money }}</div>
     </div>
 </div>
 
-<div class="page-card p-0 overflow-hidden">
+<section class="k-section" aria-labelledby="party-ledger-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="party-ledger-title">Entries</h2>
+    </div>
     <div class="table-responsive">
-        <table class="table align-middle mb-0">
-            <thead class="table-light">
+        <table class="k-table k-ledger--stack b-bahi">
+            <thead>
                 <tr>
-                    <th class="ps-4">Date</th>
-                    <th>Voucher</th>
-                    <th class="text-end">Debit</th>
-                    <th class="text-end">Credit</th>
-                    <th class="text-end pe-4">Running Balance</th>
+                    <th scope="col" data-k="meta">Date</th>
+                    <th scope="col" data-k="what">Voucher</th>
+                    <th scope="col" data-k="more">Narration</th>
+                    <th scope="col" class="k-num" data-k="amount" data-k-suffix="Dr">Debit</th>
+                    <th scope="col" class="k-num" data-k="amount" data-k-suffix="Cr">Credit</th>
+                    <th scope="col" class="k-num" data-k="balance">Running balance</th>
                 </tr>
             </thead>
             <tbody>
+                {% if page_obj.number == 1 and filter_start %}
+                <tr class="b-bf">
+                    <td colspan="5" class="b-stack-title">Brought forward</td>
+                    <td class="k-num b-bal" data-label="Balance">{{ opening_balance|money }} <span class="b-drcr">{{ opening_side }}</span></td>
+                </tr>
+                {% endif %}
                 {% for row in rows %}
                 <tr>
-                    <td class="ps-4">{{ row.date }}</td>
-                    <td>#{{ row.voucher.id }} | {{ row.voucher.get_voucher_type_display }}</td>
-                    <td class="text-end">{{ row.debit|money }}</td>
-                    <td class="text-end">{{ row.credit|money }}</td>
-                    <td class="text-end pe-4 fw-semibold">{{ row.balance|money }} {{ row.drcr }}</td>
+                    <td data-label="Date">{{ row.date }}</td>
+                    <td data-label="Voucher">#{{ row.voucher.id }} &middot; {{ row.voucher.get_voucher_type_display }}</td>
+                    <td data-label="Narration">{{ row.narration|default:"-" }}</td>
+                    <td class="k-num" data-label="Debit">{% if row.debit %}{{ row.debit|money }}{% endif %}</td>
+                    <td class="k-num" data-label="Credit">{% if row.credit %}{{ row.credit|money }}{% endif %}</td>
+                    <td class="k-num b-bal" data-label="Balance">{{ row.balance|money }} <span class="b-drcr">{{ row.drcr }}</span></td>
                 </tr>
                 {% empty %}
                 <tr>
-                    <td colspan="5" class="text-center text-muted py-5">No party ledger entries posted yet.</td>
+                    <td colspan="6" class="k-empty"><p class="k-empty-title">No party ledger entries posted in this period.</p><p>Widen the dates or choose All time. Credit sales, purchases, payments and the opening balance are written here.</p></td>
                 </tr>
                 {% endfor %}
             </tbody>
+            {% if rows %}
+            <tfoot>
+                <tr>
+                    <td colspan="3" class="b-stack-title">Total for the period</td>
+                    <td class="k-num" data-label="Debit">{{ total_debit|money }}</td>
+                    <td class="k-num" data-label="Credit">{{ total_credit|money }}</td>
+                    <td class="k-num b-bal" data-label="Closing">{{ closing_balance|money }} <span class="b-drcr">{{ closing_side }}</span></td>
+                </tr>
+            </tfoot>
+            {% endif %}
         </table>
     </div>
-</div>
+    {% include "accounts/_pagination.html" %}
+</section>
 {% endblock %}

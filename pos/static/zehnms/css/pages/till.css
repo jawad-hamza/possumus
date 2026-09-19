@@ -1,0 +1,1769 @@
+/* Till page styles: three white panels on the ground (bill, side, payment), the scan line in the head. */
+
+body.k-till {
+    --t-pay-w: 344px;
+    --t-side-w: 340px;
+    --t-gap: var(--k-4);
+}
+
+body.k-till .k-page.k-page--fixed {
+    padding: var(--t-gap);
+}
+
+/* ---------- scan line, in the page head ---------- */
+
+body.k-till .k-head-actions {
+    overflow: visible;
+}
+
+.t-scan {
+    position: relative;
+    flex: 1 1 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--k-2);
+    min-width: 0;
+    max-width: 760px;
+    height: 42px;
+    padding: 0 var(--k-2) 0 var(--k-3);
+    border: var(--k-hair) solid var(--k-border-field);
+    border-radius: var(--k-radius);
+    background: var(--k-panel);
+    color: var(--k-ink);
+    transition: border-color var(--k-dur) var(--k-ease-out), box-shadow var(--k-dur) var(--k-ease-out);
+}
+
+.t-scan:hover {
+    border-color: var(--k-ink-faint);
+}
+
+.t-scan:focus-within {
+    border-color: var(--k-accent);
+    box-shadow: var(--k-focus-halo);
+}
+
+.t-scan > .bi {
+    flex: none;
+    font-size: var(--k-text-xl);
+    color: var(--k-ink-soft);
+}
+
+.t-scan:focus-within > .bi {
+    color: var(--k-accent);
+}
+
+.t-scan-input {
+    flex: 1 1 auto;
+    min-width: 0;
+    height: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--k-ink-title);
+    font: inherit;
+    font-size: var(--k-text-lg);
+    font-weight: 500;
+}
+
+.t-scan-input:focus,
+.t-scan-input:focus-visible {
+    outline: 0;
+}
+
+.t-scan-input::placeholder {
+    color: var(--k-ink-faint);
+    font-weight: 400;
+}
+
+/* suggestions, and the size picker, drop from the scan line */
+.t-suggest {
+    position: absolute;
+    top: calc(100% + 6px);
+    left: 0;
+    right: 0;
+    z-index: var(--k-z-popover);
+    max-height: min(60vh, 440px);
+    margin: 0;
+    padding: var(--k-1);
+    overflow-y: auto;
+    list-style: none;
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius);
+    background: var(--k-panel);
+    box-shadow: var(--k-shadow-pop);
+}
+
+.t-suggest[hidden] {
+    display: none;
+}
+
+.t-suggest-item {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(5.5rem, auto);
+    align-items: center;
+    gap: var(--k-4);
+    min-height: 44px;
+    padding: 6px var(--k-3);
+    border-radius: var(--k-radius-sm);
+    cursor: pointer;
+}
+
+.t-suggest-item:hover {
+    background: var(--k-hover);
+}
+
+.t-suggest-item[aria-selected="true"] {
+    background: var(--k-selected);
+}
+
+.t-suggest-item > .k-num {
+    color: var(--k-ink-title);
+    font-weight: 600;
+    text-align: right;
+}
+
+.t-suggest-name {
+    display: flex;
+    align-items: baseline;
+    min-width: 0;
+    overflow: hidden;
+    color: var(--k-ink-title);
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.t-suggest-name .t-item-meta {
+    margin-left: var(--k-2);
+    font-weight: 400;
+}
+
+.t-suggest-name > .k-key {
+    flex: none;
+    align-self: center;
+    margin-right: var(--k-2);
+}
+
+.t-suggest-qty {
+    margin-right: 0.25em;
+    color: var(--k-accent-ink);
+    font-weight: 600;
+}
+
+.t-suggest-none {
+    padding: var(--k-2) var(--k-3);
+    color: var(--k-ink-soft);
+}
+
+/* the size picker's head: what is being sized, and how to pick */
+.t-suggest-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--k-1) var(--k-3);
+    margin-bottom: var(--k-1);
+    border-bottom: var(--k-hair) solid var(--k-divider);
+}
+
+/* ---------- regions ---------- */
+
+.t-till {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) var(--t-pay-w);
+    grid-template-rows: auto minmax(0, 1fr);
+    grid-template-areas:
+        "bill total"
+        "bill pay";
+    column-gap: var(--t-gap);
+    height: 100%;
+    min-height: 0;
+}
+
+/* the side panel takes a fixed, modest width; the payment panel gives a little, the bill keeps its table */
+.t-till.has-side {
+    --t-side-w: 264px;
+    --t-pay-w: 312px;
+    grid-template-columns: minmax(0, 1fr) var(--t-side-w) var(--t-pay-w);
+    grid-template-areas:
+        "bill side total"
+        "bill side pay";
+}
+
+/* the bill panel */
+.t-bill {
+    grid-area: bill;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    overflow: hidden;
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius);
+    background: var(--k-panel);
+    box-shadow: var(--k-shadow-panel);
+    container: t-bill / inline-size;
+}
+
+.t-bill-scroll {
+    flex: 1 1 auto;
+    min-height: 0;
+    overflow-x: hidden;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+}
+
+/* ---------- the bill ---------- */
+
+.t-ledger {
+    --k-table-edge: var(--k-4);
+    table-layout: fixed;
+}
+
+.t-ledger > thead > tr > th {
+    position: sticky;
+    top: 0;
+    z-index: var(--k-z-sticky);
+    background: var(--k-panel);
+}
+
+.t-ledger th.t-idx { width: 44px; }
+.t-ledger th.t-qty { width: 124px; }
+.t-ledger th.t-rate { width: 104px; }
+.t-ledger th.t-disc { width: 80px; }
+.t-ledger th.t-amount { width: 124px; }
+.t-ledger th.t-x { width: 48px; }
+
+.t-idx {
+    color: var(--k-ink-faint);
+    font-size: var(--k-text-xs);
+    font-weight: 600;
+    text-align: center !important;
+}
+
+.t-ledger > tbody > tr > td {
+    height: 60px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-bottom: 0;
+}
+
+/* each line is its own tbody: its last row carries the divider */
+.t-ledger > tbody > tr:last-child > td {
+    border-bottom: var(--k-hair) solid var(--k-divider);
+}
+
+.t-ledger > tbody.t-line.is-selected > tr > td {
+    background: var(--k-selected);
+}
+
+.t-ledger > tbody.t-line.is-selected > tr > td.t-idx {
+    color: var(--k-accent-ink);
+    font-weight: 700;
+}
+
+.t-item {
+    overflow: hidden;
+}
+
+.t-item-name {
+    display: block;
+    overflow: hidden;
+    color: var(--k-ink-title);
+    font-size: var(--k-text-lg);
+    font-weight: 600;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.t-item-meta {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-xs);
+    font-weight: 400;
+    line-height: 1.35;
+}
+
+.t-item-sub {
+    display: flex;
+    align-items: center;
+    gap: var(--k-2);
+    min-width: 0;
+    min-height: 20px;
+    margin-top: 2px;
+}
+
+/* weight chips take the first line under the name; the notes drop below them */
+.t-item-sub:has(> .t-chips) {
+    flex-wrap: wrap;
+    row-gap: 4px;
+}
+
+.t-item-sub:has(> .t-chips) > .t-item-meta {
+    flex-basis: 100%;
+}
+
+.t-chips {
+    flex-wrap: wrap;
+}
+
+/* the meta is a row of whole notes: one that does not fit drops to a second line that is never shown */
+.t-item-sub > .t-item-meta {
+    flex: 1 1 0;
+    display: flex;
+    flex-wrap: wrap;
+    min-width: 0;
+    height: 1.35em;
+    overflow: hidden;
+    white-space: nowrap;
+}
+
+.t-meta-bit {
+    flex: none;
+    max-width: 100%;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.t-meta-bit + .t-meta-bit::before {
+    content: "\00b7";
+    margin: 0 0.4em;
+}
+
+/* shelf and SKU show only on a bill wide enough to hold them */
+@container t-bill (max-width: 960px) {
+    .t-meta-bit--wide {
+        display: none;
+    }
+}
+
+.t-line-form {
+    display: none;
+}
+
+/* weight chips for kg and litre items */
+.t-chips {
+    flex: none;
+    display: inline-flex;
+    gap: 4px;
+}
+
+.t-chip {
+    height: 22px;
+    padding: 0 8px;
+    border: var(--k-hair) solid var(--k-border-strong);
+    border-radius: var(--k-radius-pill);
+    background: var(--k-panel);
+    color: var(--k-ink);
+    font-size: var(--k-text-xs);
+    font-weight: 600;
+    line-height: 20px;
+    cursor: pointer;
+    transition: background-color var(--k-dur) var(--k-ease-out), border-color var(--k-dur) var(--k-ease-out), color var(--k-dur) var(--k-ease-out);
+}
+
+.t-chip:hover:not(:disabled) {
+    border-color: var(--k-accent);
+    background: var(--k-accent-tint);
+    color: var(--k-accent-ink);
+}
+
+.t-chip.is-on {
+    border-color: var(--k-accent);
+    background: var(--k-accent);
+    color: var(--k-on-accent);
+}
+
+.t-chip:disabled {
+    color: var(--k-ink-faint);
+    cursor: not-allowed;
+    text-decoration: line-through;
+}
+
+/* a figure written in a cell: a soft field inside the row */
+.t-cell-input {
+    width: 100%;
+    height: 34px;
+    padding: 0 var(--k-2);
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-panel);
+    color: var(--k-ink-title);
+    font: inherit;
+    font-size: var(--k-text-md);
+    font-weight: 500;
+    font-variant-numeric: tabular-nums lining-nums;
+    text-align: right;
+    transition: border-color var(--k-dur) var(--k-ease-out), box-shadow var(--k-dur) var(--k-ease-out);
+}
+
+.t-cell-input:hover:not([readonly]) {
+    border-color: var(--k-border-field);
+}
+
+.t-cell-input:focus {
+    outline: 0;
+    border-color: var(--k-accent);
+    box-shadow: var(--k-focus-halo);
+}
+
+.t-cell-input[readonly] {
+    border-color: transparent;
+    background: transparent;
+    color: var(--k-ink-soft);
+    cursor: default;
+}
+
+.t-qty {
+    white-space: nowrap;
+}
+
+td.t-qty .t-cell-input {
+    width: calc(100% - 32px);
+    font-weight: 600;
+}
+
+.t-unit {
+    display: inline-block;
+    width: 28px;
+    margin-left: 4px;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    text-align: left;
+}
+
+td.t-amount {
+    color: var(--k-ink-title);
+    font-size: var(--k-text-lg);
+    font-weight: 600;
+}
+
+td.t-x {
+    padding-left: 0 !important;
+    text-align: center;
+}
+
+.t-icon-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: var(--k-radius-sm);
+    background: transparent;
+    color: var(--k-ink-faint);
+    cursor: pointer;
+    transition: background-color var(--k-dur) var(--k-ease-out), color var(--k-dur) var(--k-ease-out);
+}
+
+.t-icon-btn:hover {
+    background: var(--k-sunk);
+    color: var(--k-ink-title);
+}
+
+/* the confirm step of a remove */
+.t-icon-btn.is-armed {
+    background: var(--k-out);
+    color: var(--k-on-accent);
+}
+
+/* a problem with a line is written under it, in red */
+.t-ledger > tbody > tr.t-line-note > td {
+    height: auto;
+    padding-top: 0;
+    padding-bottom: 10px;
+    color: var(--k-out-ink);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+.t-line-note .bi {
+    margin-right: 6px;
+    color: var(--k-out);
+}
+
+.t-line-note span + span::before {
+    content: " \00b7  ";
+}
+
+.t-line.has-issue > tr > td.t-idx {
+    color: var(--k-out);
+}
+
+.t-line.has-issue td.t-amount {
+    color: var(--k-out);
+}
+
+/* an empty bill */
+.t-ledger > tbody.t-blank > tr > td {
+    height: auto;
+    padding: var(--k-7) var(--k-5);
+    border-bottom: 0;
+}
+
+.t-ledger > tbody.t-blank > tr:hover > td {
+    background: transparent;
+}
+
+.t-blank-note {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--k-2);
+    max-width: 52ch;
+    margin: 0 auto;
+    color: var(--k-ink-soft);
+    text-align: center;
+}
+
+.t-blank-note p {
+    margin: 0;
+}
+
+.t-blank-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 52px;
+    height: 52px;
+    margin-bottom: var(--k-1);
+    border-radius: var(--k-radius-pill);
+    background: var(--k-accent-tint);
+    color: var(--k-accent);
+    font-size: 1.5rem;
+}
+
+.t-blank-title {
+    color: var(--k-ink-title);
+    font-size: var(--k-text-lg);
+    font-weight: 600;
+}
+
+.t-blank-note kbd {
+    margin: 2px 1px;
+}
+
+/* the sale is closed: a calm confirmation over the bill while the receipt opens */
+.t-done {
+    position: absolute;
+    inset: 0;
+    z-index: calc(var(--k-z-sticky) + 2);
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--k-3);
+    background: var(--k-panel);
+    color: var(--k-ink-soft);
+}
+
+.t-done[hidden] {
+    display: none;
+}
+
+.t-done .k-badge {
+    padding: 6px 16px;
+    font-size: var(--k-text-lg);
+}
+
+/* ---------- foot of the bill: note line, line tools, held bills ---------- */
+
+.t-foot {
+    flex: none;
+    border-top: var(--k-hair) solid var(--k-border);
+}
+
+.t-status {
+    display: flex;
+    align-items: center;
+    gap: var(--k-3);
+    min-height: 52px;
+    padding: var(--k-2) var(--k-4);
+}
+
+.t-notice {
+    flex: 1 1 auto;
+    min-width: 0;
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--k-text-md);
+    font-weight: 500;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.t-notice a {
+    margin-left: var(--k-2);
+    font-weight: 600;
+}
+
+.t-notice-idle {
+    color: var(--k-ink-soft);
+    font-weight: 400;
+}
+
+.t-tools {
+    flex: none;
+    display: flex;
+    gap: 6px;
+}
+
+.t-held {
+    display: flex;
+    align-items: center;
+    gap: var(--k-2) var(--k-3);
+    padding: var(--k-2) var(--k-4);
+    border-top: var(--k-hair) solid var(--k-divider);
+    background: var(--k-row-hover);
+}
+
+#till-held {
+    flex: 1 1 auto;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-width: 0;
+    max-height: 84px;
+    overflow-y: auto;
+}
+
+#till-held:empty {
+    display: none;
+}
+
+.t-held-row {
+    display: inline-flex;
+    align-items: center;
+    max-width: 100%;
+    min-height: 36px;
+    padding-right: 2px;
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius);
+    background: var(--k-panel);
+    transition: border-color var(--k-dur) var(--k-ease-out);
+}
+
+.t-held-row:hover {
+    border-color: var(--k-border-field);
+}
+
+.t-held-form {
+    display: contents;
+}
+
+.t-held-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--k-2);
+    min-width: 0;
+    min-height: 34px;
+    padding: 0 var(--k-2);
+    border: 0;
+    border-radius: var(--k-radius);
+    background: transparent;
+    color: var(--k-ink);
+    font: inherit;
+    font-size: var(--k-text-sm);
+    text-align: left;
+    cursor: pointer;
+}
+
+.t-held-btn:hover {
+    color: var(--k-ink-title);
+}
+
+.t-held-label {
+    max-width: 14ch;
+    overflow: hidden;
+    font-weight: 600;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.t-held-meta {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-xs);
+    white-space: nowrap;
+}
+
+.t-held-total {
+    color: var(--k-ink-title);
+    font-weight: 600;
+    white-space: nowrap;
+}
+
+.t-held-x {
+    width: 28px;
+    height: 28px;
+    font-size: var(--k-text-xs);
+}
+
+.t-hold-form {
+    flex: 0 1 auto;
+    display: flex;
+    align-items: center;
+    gap: var(--k-2);
+    margin: 0 0 0 auto;
+}
+
+.t-hold-label {
+    width: 220px;
+    min-width: 0;
+}
+
+/* ---------- side panel: product list, new customer ---------- */
+
+.t-side {
+    grid-area: side;
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+    min-height: 0;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+}
+
+.t-side[hidden],
+.t-panel[hidden] {
+    display: none;
+}
+
+.t-panel {
+    display: flex;
+    flex-direction: column;
+    gap: var(--k-3);
+    min-height: 0;
+    height: 100%;
+    padding: var(--k-4);
+    overflow-y: auto;
+}
+
+.t-panel-head {
+    flex: none;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--k-2);
+    min-height: 32px;
+}
+
+.t-panel-head h2 {
+    margin: 0;
+}
+
+.t-panel > .form-control {
+    flex: none;
+}
+
+.t-cats {
+    flex: none;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    max-height: 72px;
+    overflow-y: auto;
+}
+
+.t-cat {
+    display: inline-flex;
+    align-items: center;
+    height: 28px;
+    padding: 0 var(--k-3);
+    border-radius: var(--k-radius-pill);
+    background: var(--k-sunk);
+    color: var(--k-ink);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+    transition: background-color var(--k-dur) var(--k-ease-out), color var(--k-dur) var(--k-ease-out);
+}
+
+.t-cat:hover {
+    background: var(--k-border);
+    color: var(--k-ink-title);
+}
+
+.t-cat.is-on {
+    background: var(--k-accent-tint);
+    color: var(--k-accent-ink);
+    font-weight: 600;
+}
+
+.t-browse {
+    flex: 1 1 0;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    margin: 0 calc(-1 * var(--k-4));
+}
+
+.t-browse-scroll {
+    flex: 1 1 0;
+    min-height: 120px;
+    overflow-x: hidden;
+    overflow-y: auto;
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+
+.t-browse-list {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.t-browse-list > li {
+    border-bottom: var(--k-hair) solid var(--k-divider);
+}
+
+.t-browse-none {
+    padding: var(--k-5) var(--k-4);
+    color: var(--k-ink-soft);
+}
+
+.t-browse-btn {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: baseline;
+    gap: 2px var(--k-3);
+    width: 100%;
+    min-height: 52px;
+    padding: var(--k-2) var(--k-4);
+    border: 0;
+    background: transparent;
+    color: var(--k-ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+    transition: background-color var(--k-dur) var(--k-ease-out);
+}
+
+.t-browse-btn:hover:not(:disabled),
+.t-browse-btn:focus-visible {
+    background: var(--k-row-hover);
+}
+
+.t-browse-btn:focus-visible {
+    outline-offset: -2px;
+}
+
+.t-browse-btn:disabled {
+    color: var(--k-ink-disabled);
+    cursor: not-allowed;
+}
+
+.t-browse-name {
+    overflow: hidden;
+    color: var(--k-ink-title);
+    font-size: var(--k-text-md);
+    font-weight: 600;
+    line-height: 1.3;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.t-browse-btn:disabled .t-browse-name {
+    color: var(--k-ink-soft);
+}
+
+.t-browse-price {
+    color: var(--k-ink-title);
+    font-weight: 600;
+}
+
+.t-browse-btn > .t-item-meta {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.t-browse-stock,
+.t-browse-btn > .k-state {
+    justify-self: end;
+    font-size: var(--k-text-xs);
+}
+
+.t-browse-stock {
+    color: var(--k-ink-soft);
+}
+
+.t-browse-note {
+    margin: var(--k-2) var(--k-4) 0;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.t-panel > form > .t-browse-note {
+    margin: var(--k-3) 0 0;
+}
+
+.t-browse-note:empty {
+    display: none;
+}
+
+.t-panel-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--k-2);
+    margin-top: var(--k-4);
+}
+
+#till-customer-form .t-field + .t-field {
+    margin-top: var(--k-3);
+}
+
+/* ---------- the payment panel: total on top, then sums, customer, method, tender, close ---------- */
+
+.t-close {
+    grid-area: total;
+    padding: var(--k-4) var(--k-5) 0;
+    border: var(--k-hair) solid var(--k-border);
+    border-bottom: 0;
+    border-radius: var(--k-radius) var(--k-radius) 0 0;
+    background: var(--k-panel);
+}
+
+.t-pay {
+    grid-area: pay;
+    display: flex;
+    flex-direction: column;
+    gap: var(--k-3);
+    min-height: 0;
+    margin: 0;
+    padding: var(--k-3) var(--k-5) var(--k-4);
+    overflow-y: auto;
+    border: var(--k-hair) solid var(--k-border);
+    border-top: 0;
+    border-radius: 0 0 var(--k-radius) var(--k-radius);
+    background: var(--k-panel);
+    box-shadow: var(--k-shadow-panel);
+}
+
+.t-close-btn.t-close-btn--phone {
+    display: none;
+}
+
+.t-total {
+    display: flex;
+    flex-direction: column;
+    padding-bottom: var(--k-3);
+    border-bottom: var(--k-hair) solid var(--k-divider);
+}
+
+.t-total-label {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+.t-total-unit {
+    margin-left: 2px;
+}
+
+.t-total-figure {
+    display: block;
+    color: var(--k-ink-title);
+    font-size: 3rem;
+    font-weight: 600;
+    letter-spacing: -0.02em;
+    line-height: 1.1;
+}
+
+.t-total--long .t-total-figure {
+    font-size: var(--k-text-4xl);
+}
+
+.t-sums {
+    margin: 0;
+}
+
+.t-sums[hidden] {
+    display: none;
+}
+
+.t-sum {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--k-3);
+    min-height: 30px;
+}
+
+.t-sum[hidden] {
+    display: none;
+}
+
+.t-sum dt {
+    color: var(--k-ink-soft);
+    font-weight: 400;
+}
+
+.t-sum dt label {
+    margin: 0;
+}
+
+.t-sum dd {
+    margin: 0;
+    color: var(--k-ink-title);
+    font-weight: 500;
+}
+
+.t-sum--field {
+    min-height: 36px;
+}
+
+.t-rate-input {
+    display: inline-block;
+    width: 72px;
+    height: 30px;
+    min-height: 30px;
+    margin-left: var(--k-1);
+    padding: 0 6px;
+    text-align: right;
+}
+
+.t-compare {
+    margin-top: calc(-1 * var(--k-2));
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+
+.t-field {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.t-field[hidden],
+.t-tender[hidden] {
+    display: none;
+}
+
+.t-field .form-label {
+    margin: 0;
+}
+
+.t-field-head {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--k-2);
+}
+
+.t-field-head .k-key {
+    margin-left: 4px;
+}
+
+.t-optional {
+    color: var(--k-ink-faint);
+    font-size: var(--k-text-xs);
+    font-weight: 400;
+}
+
+.t-link {
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--k-accent-ink);
+    font: inherit;
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+    text-decoration: none;
+    cursor: pointer;
+}
+
+.t-link:hover {
+    text-decoration: underline;
+    text-underline-offset: 0.18em;
+}
+
+.t-link:disabled {
+    color: var(--k-ink-faint);
+    cursor: not-allowed;
+    text-decoration: none;
+}
+
+/* a destructive link stays quiet until it is armed; red is the confirm step only */
+.t-link--out:not(:disabled) {
+    color: var(--k-ink-soft);
+}
+
+.t-link--out.is-armed {
+    color: var(--k-out);
+    font-weight: 600;
+}
+
+.t-customer-note,
+.t-credit-note {
+    margin: 0;
+    font-size: var(--k-text-sm);
+}
+
+.t-customer-note[hidden],
+.t-credit-note[hidden] {
+    display: none;
+}
+
+.t-credit-note {
+    color: var(--k-due-ink);
+    font-weight: 500;
+}
+
+/* how it is paid: a segmented control */
+.t-methods {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: minmax(0, 1fr);
+    gap: 3px;
+    margin: 0;
+    padding: 3px;
+    border: 0;
+    border-radius: var(--k-radius);
+    background: var(--k-sunk);
+}
+
+.t-method {
+    position: relative;
+    margin: 0;
+    cursor: pointer;
+}
+
+.t-method > input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.t-method > span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    min-height: var(--k-control-h);
+    border-radius: var(--k-radius-sm);
+    color: var(--k-ink-soft);
+    font-weight: 600;
+    transition: background-color var(--k-dur) var(--k-ease-out), color var(--k-dur) var(--k-ease-out);
+}
+
+.t-method:hover > span {
+    color: var(--k-ink-title);
+}
+
+.t-method > input:checked + span {
+    background: var(--k-panel);
+    box-shadow: inset 0 0 0 1px var(--k-accent);
+    color: var(--k-accent-ink);
+}
+
+.t-method--credit > input:checked + span {
+    background: var(--k-due-wash);
+    box-shadow: inset 0 0 0 1px var(--k-due);
+    color: var(--k-due-ink);
+}
+
+/* credit overrides the cash or bank choice */
+.t-methods:has(#is_credit:checked) .t-method:not(.t-method--credit) > input:checked + span {
+    background: transparent;
+    box-shadow: none;
+    color: var(--k-ink-soft);
+}
+
+.t-method > input:focus-visible + span {
+    outline: var(--k-focus-ring);
+    outline-offset: 1px;
+}
+
+.t-method .k-key {
+    background: transparent;
+    border-color: currentColor;
+    color: inherit;
+    opacity: 0.7;
+}
+
+.t-tender {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    align-items: end;
+    gap: var(--k-3);
+}
+
+.t-tender-input {
+    font-size: var(--k-text-xl);
+    font-weight: 600;
+    text-align: right;
+}
+
+.t-tender-input::placeholder {
+    font-size: var(--k-text-md);
+    font-weight: 400;
+}
+
+.t-change {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    min-width: 0;
+    text-align: right;
+}
+
+.t-change-label {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+.t-change-figure {
+    display: block;
+    min-height: var(--k-control-h);
+    color: var(--k-ink-title);
+    font-size: var(--k-text-xl);
+    font-weight: 600;
+    line-height: var(--k-control-h);
+}
+
+.t-change.has-change .t-change-figure {
+    color: var(--k-in-ink);
+}
+
+.t-change.is-short .t-change-label,
+.t-change.is-short .t-change-figure {
+    color: var(--k-due-ink);
+}
+
+.t-close-btn {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--k-2);
+    width: 100%;
+    min-height: 52px;
+    border-radius: var(--k-radius);
+    font-size: var(--k-text-lg);
+    font-weight: 600;
+}
+
+.t-close-btn.is-credit {
+    --bs-btn-color: var(--k-on-accent);
+    --bs-btn-bg: var(--k-due);
+    --bs-btn-border-color: var(--k-due);
+    --bs-btn-hover-color: var(--k-on-accent);
+    --bs-btn-hover-bg: var(--k-due-ink);
+    --bs-btn-hover-border-color: var(--k-due-ink);
+    --bs-btn-active-color: var(--k-on-accent);
+    --bs-btn-active-bg: var(--k-due-ink);
+    --bs-btn-active-border-color: var(--k-due-ink);
+    --bs-btn-disabled-color: var(--k-ink-faint);
+    --bs-btn-disabled-bg: var(--k-sunk);
+    --bs-btn-disabled-border-color: var(--k-sunk);
+    background-color: var(--bs-btn-bg);
+    border-color: var(--bs-btn-border-color);
+    color: var(--bs-btn-color);
+}
+
+.t-close-btn.is-credit:hover,
+.t-close-btn.is-credit:focus-visible {
+    background-color: var(--bs-btn-hover-bg);
+    border-color: var(--bs-btn-hover-border-color);
+}
+
+.t-close-btn.is-credit:disabled {
+    background-color: var(--bs-btn-disabled-bg);
+    border-color: var(--bs-btn-disabled-border-color);
+    color: var(--bs-btn-disabled-color);
+}
+
+.t-pay-foot {
+    display: flex;
+    justify-content: center;
+    margin-top: auto;
+}
+
+/* ---------- a narrower bill (a side panel open on the counter PC): the same table, tighter figures ---------- */
+
+@container t-bill (min-width: 441px) and (max-width: 720px) {
+    .t-ledger th.t-idx { width: 28px; }
+    .t-ledger th.t-qty { width: 84px; }
+    .t-ledger th.t-rate { width: 70px; }
+    .t-ledger th.t-disc { width: 54px; }
+    .t-ledger th.t-amount { width: 90px; }
+    .t-ledger th.t-x { width: 36px; }
+
+    .t-ledger > * > tr > :is(th, td):is(.t-qty, .t-rate, .t-disc, .t-amount) {
+        padding-left: 3px;
+        padding-right: 3px;
+    }
+
+    .t-ledger > * > tr > :is(th, td).t-idx {
+        padding-left: 0;
+        padding-right: 0;
+    }
+
+    .t-ledger > * > tr > :is(th, td):nth-child(2) {
+        padding-left: 4px;
+        padding-right: 6px;
+    }
+
+    .t-ledger > tbody > tr > td.t-x {
+        padding-right: 4px;
+    }
+
+    /* a long name takes a second line rather than losing its end */
+    .t-item-name {
+        display: -webkit-box;
+        font-size: var(--k-text-md);
+        white-space: normal;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 2;
+    }
+
+    .t-cell-input {
+        padding: 0 5px;
+    }
+
+    td.t-qty .t-cell-input {
+        width: calc(100% - 26px);
+    }
+
+    .t-unit {
+        width: 22px;
+        margin-left: 2px;
+    }
+
+    td.t-amount {
+        font-size: var(--k-text-md);
+    }
+
+    .t-status {
+        flex-wrap: wrap;
+        row-gap: var(--k-1);
+    }
+
+    .t-notice {
+        flex-basis: 100%;
+    }
+
+    .t-hold-label {
+        width: auto;
+        flex: 1 1 auto;
+    }
+}
+
+/* ---------- a phone-width bill: each line folds into two rows ---------- */
+
+@container t-bill (max-width: 440px) {
+    .t-ledger,
+    .t-ledger > tbody {
+        display: block;
+        width: 100%;
+    }
+
+    .t-item-sub {
+        flex-wrap: wrap;
+        row-gap: 4px;
+    }
+
+    .t-item-sub > .t-item-meta {
+        flex-basis: 100%;
+    }
+
+    .t-ledger > thead,
+    .t-ledger > tbody.t-line {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1.1fr) minmax(0, 1fr) minmax(0, 0.85fr) minmax(0, 1.2fr);
+    }
+
+    .t-ledger > thead {
+        position: sticky;
+        top: 0;
+        z-index: var(--k-z-sticky);
+        border-bottom: var(--k-hair) solid var(--k-border);
+        background: var(--k-panel);
+    }
+
+    .t-ledger > thead > tr {
+        display: contents;
+    }
+
+    .t-ledger > thead > tr > th {
+        position: static;
+        display: block;
+        width: auto !important;
+        height: 34px;
+        min-width: 0;
+        padding: 8px 6px;
+        border-bottom: 0;
+    }
+
+    .t-ledger > thead > tr > th.t-x {
+        display: none;
+    }
+
+    /* the head reads like a line: the item on top, its figures under it */
+    .t-ledger > thead > tr > th.t-idx {
+        grid-column: 1;
+        grid-row: 1;
+    }
+
+    .t-ledger > thead > tr > th:nth-child(2) {
+        grid-column: 2 / -1;
+        grid-row: 1;
+        height: 26px;
+        padding-bottom: 0;
+    }
+
+    .t-ledger > thead > tr > th.t-idx {
+        height: 26px;
+        padding-bottom: 0;
+    }
+
+    .t-ledger > thead > tr > th:is(.t-qty, .t-rate, .t-disc, .t-amount) {
+        grid-row: 2;
+        height: 28px;
+        padding-top: 4px;
+    }
+
+    .t-ledger > thead > tr > th.t-qty { grid-column: 2; }
+    .t-ledger > thead > tr > th.t-rate { grid-column: 3; }
+    .t-ledger > thead > tr > th.t-disc { grid-column: 4; }
+    .t-ledger > thead > tr > th.t-amount { grid-column: 5; }
+
+    .t-ledger > tbody.t-line {
+        border-bottom: var(--k-hair) solid var(--k-divider);
+    }
+
+    .t-ledger > tbody.t-line > tr {
+        display: contents;
+    }
+
+    .t-ledger > tbody.t-line > tr > td {
+        display: block;
+        width: auto;
+        min-width: 0;
+        height: auto;
+        border-bottom: 0;
+    }
+
+    .t-ledger > tbody.t-line > tr.t-line-main > td.t-idx {
+        grid-column: 1;
+        grid-row: 1 / span 2;
+        padding: 12px 0 0 !important;
+    }
+
+    .t-ledger td.t-item {
+        grid-column: 2 / 5;
+        grid-row: 1;
+        padding: 10px 6px 4px;
+    }
+
+    .t-ledger td.t-x {
+        grid-column: 5;
+        grid-row: 1;
+        padding: 6px var(--k-2) 0 0 !important;
+        text-align: right;
+    }
+
+    .t-ledger td.t-qty,
+    .t-ledger td.t-rate,
+    .t-ledger td.t-disc,
+    .t-ledger td.t-amount {
+        grid-row: 2;
+        padding: 0 3px 10px;
+    }
+
+    .t-cell-input {
+        padding: 0 5px;
+    }
+
+    .t-ledger td.t-amount {
+        padding-right: var(--k-3);
+        font-size: var(--k-text-md);
+        line-height: 34px;
+    }
+
+    td.t-qty .t-cell-input {
+        width: calc(100% - 26px);
+    }
+
+    .t-unit {
+        width: 22px;
+    }
+
+    .t-ledger > tbody.t-line > tr.t-line-note > td {
+        grid-row: 3;
+        padding-top: 0;
+        padding-bottom: 10px;
+    }
+
+    .t-ledger > tbody.t-line > tr.t-line-note > td.t-idx {
+        grid-column: 1;
+        padding: 0 !important;
+    }
+
+    .t-ledger > tbody.t-line > tr.t-line-note > td:last-child {
+        grid-column: 2 / -1;
+        padding-left: 6px;
+        white-space: normal;
+    }
+
+    .t-ledger > tbody.t-blank > tr,
+    .t-ledger > tbody.t-blank > tr > td {
+        display: block;
+        width: auto;
+    }
+
+    .t-ledger > tbody.t-blank > tr > td {
+        padding: var(--k-6) var(--k-4);
+    }
+
+    .t-ledger:has(> tbody.t-blank) > thead {
+        display: none;
+    }
+
+    .t-status {
+        flex-wrap: wrap;
+        row-gap: var(--k-2);
+    }
+
+    .t-notice {
+        flex-basis: 100%;
+    }
+
+    body.k-till .t-tools .btn .k-key {
+        display: none;
+    }
+}
+
+/* ---------- phone and tablet: one column, the total and the pay button stay at the bottom ---------- */
+
+@media (max-width: 991.98px) {
+    body.k-till {
+        --t-gap: var(--k-3);
+    }
+
+    body.k-till .k-page.k-page--fixed {
+        height: auto;
+        min-height: 100%;
+        padding: var(--t-gap) var(--t-gap) 0;
+        overflow: visible;
+    }
+
+    .t-scan {
+        max-width: none;
+        height: 40px;
+    }
+
+    .t-scan > .k-key {
+        display: none;
+    }
+
+    .t-suggest {
+        max-height: 50vh;
+    }
+
+    .t-till,
+    .t-till.has-side {
+        display: block;
+        height: auto;
+    }
+
+    .t-bill {
+        overflow: visible;
+    }
+
+    .t-bill-scroll {
+        overflow: visible;
+    }
+
+    .t-ledger > thead,
+    .t-ledger > thead > tr > th {
+        position: static;
+    }
+
+    .t-item-sub {
+        flex-wrap: wrap;
+        row-gap: 4px;
+    }
+
+    .t-item-sub > .t-item-meta {
+        flex-basis: 100%;
+    }
+
+    .t-chip {
+        height: 30px;
+        padding: 0 10px;
+        line-height: 28px;
+    }
+
+    .t-cell-input {
+        height: 40px;
+    }
+
+    .t-ledger td.t-amount {
+        line-height: 40px;
+    }
+
+    .t-icon-btn {
+        width: 40px;
+        height: 40px;
+    }
+
+    .t-status {
+        flex-wrap: wrap;
+        padding: var(--k-2) var(--k-3);
+    }
+
+    .t-notice {
+        flex-basis: 100%;
+        white-space: normal;
+    }
+
+    .t-tools {
+        width: 100%;
+        overflow-x: auto;
+    }
+
+    .t-tools .btn {
+        flex: 1 0 auto;
+        min-height: 40px;
+    }
+
+    .t-held {
+        flex-wrap: wrap;
+        padding: var(--k-2) var(--k-3);
+        border-radius: 0 0 var(--k-radius) var(--k-radius);
+    }
+
+    #till-held {
+        flex-basis: 100%;
+        flex-direction: column;
+        flex-wrap: nowrap;
+        max-height: none;
+    }
+
+    .t-held-row {
+        display: flex;
+    }
+
+    .t-held-btn {
+        flex: 1 1 auto;
+        min-height: 44px;
+    }
+
+    .t-held-label {
+        flex: 1 1 auto;
+        max-width: none;
+    }
+
+    .t-held-x {
+        width: 40px;
+        height: 40px;
+    }
+
+    .t-hold-form {
+        flex: 1 1 100%;
+        margin: 0;
+    }
+
+    .t-hold-label {
+        flex: 1 1 auto;
+        width: auto;
+    }
+
+    .t-hold-form .btn {
+        min-height: 40px;
+    }
+
+    .t-pay {
+        margin-top: var(--t-gap);
+        overflow: visible;
+        padding: var(--k-4);
+        border-top: var(--k-hair) solid var(--k-border);
+        border-radius: var(--k-radius);
+    }
+
+    .t-pay-foot {
+        margin: 0;
+        padding: var(--k-1) 0;
+    }
+
+    .t-close-btn.t-close-btn--desk {
+        display: none;
+    }
+
+    .t-close-btn.t-close-btn--phone {
+        display: flex;
+    }
+
+    /* the total and the pay button, pinned to the bottom of the screen */
+    .t-close {
+        position: sticky;
+        bottom: 0;
+        z-index: calc(var(--k-z-sticky) + 2);
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+        align-items: center;
+        gap: var(--k-3);
+        margin: var(--t-gap) calc(-1 * var(--t-gap)) 0;
+        padding: var(--k-2) var(--k-4);
+        border: 0;
+        border-top: var(--k-hair) solid var(--k-border);
+        border-radius: 0;
+        box-shadow: var(--k-shadow-pop);
+    }
+
+    .t-total {
+        padding: 0;
+        border: 0;
+    }
+
+    .t-total-label {
+        font-size: var(--k-text-xs);
+    }
+
+    .t-total-figure,
+    .t-total--long .t-total-figure {
+        font-size: var(--k-text-3xl);
+        text-align: left;
+    }
+
+    .t-total--long .t-total-figure {
+        font-size: var(--k-text-2xl);
+    }
+
+    .t-close-btn {
+        min-height: 50px;
+    }
+
+    body.k-till .t-pay .k-key,
+    body.k-till .t-hold-form .k-key,
+    body.k-till .t-close-btn .k-key {
+        display: none;
+    }
+
+    /* the side panel covers the page between the scan line and the tab bar */
+    .t-side {
+        position: fixed;
+        top: calc(var(--k-head-h) + 52px);
+        left: 0;
+        right: 0;
+        bottom: var(--k-tabbar-h);
+        z-index: var(--k-z-head);
+        border: 0;
+        border-top: var(--k-hair) solid var(--k-border);
+        border-radius: 0;
+        box-shadow: var(--k-shadow-pop);
+    }
+
+    .t-browse-btn {
+        min-height: 52px;
+    }
+}

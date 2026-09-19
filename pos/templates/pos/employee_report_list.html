@@ -1,53 +1,51 @@
-﻿{% extends "pos/base.html" %}
-{% block title %}Employee Reports{% endblock %}
+{% extends "pos/reports/_shell.html" %}
+{% load currency_tags %}
+{% block title %}Employee reports{% endblock %}
 
-{% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon slate"><i class="bi bi-people-fill"></i></span>
-        <div>
-            <h1 class="page-title">Employee Reports</h1>
-            <p class="page-subtitle">Session time, sales, profit, and wages linked to each login.</p>
-        </div>
+{% block report_body %}
+<section class="k-section rp-results" aria-labelledby="rp-staff-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="rp-staff-title">Staff {% include "pos/partials/_help_tip.html" with tip_id="tipRpStaff" tip_name="Staff" tip_text="Net sales and gross profit are after returns of each user's own invoices." %}</h2>
+        <span class="k-section-note">{{ employee_rows|length }} login{{ employee_rows|length|pluralize }}</span>
     </div>
-    <div class="page-actions">
-        <a href="{% url 'reports_home' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Reports Centre</a>
-    </div>
-</div>
-
-<div class="page-card p-4">
-    <div class="table-responsive">
-        <table class="table align-middle mb-0">
+    <div class="k-ledger-scroll rp-table">
+        <table class="k-table k-ledger--stack">
             <thead>
                 <tr>
-                    <th>User</th>
-                    <th>Role</th>
-                    <th class="text-end">Net Sales</th>
-                    <th class="text-end">Gross Profit</th>
-                    <th class="text-end">Wages Paid</th>
-                    <th class="text-end">Total Time</th>
-                    <th class="text-end">Action</th>
+                    <th scope="col" data-k="what">User</th>
+                    <th scope="col" data-k="meta">Role</th>
+                    <th scope="col" class="k-num" data-k="amount">Net sales</th>
+                    <th scope="col" class="k-num" data-k="more">Returns</th>
+                    <th scope="col" class="k-num" data-k="balance">Gross profit</th>
+                    <th scope="col" class="k-num" data-k="more">Wages paid</th>
+                    <th scope="col" class="k-num" data-k="meta">Total time</th>
                 </tr>
             </thead>
             <tbody>
                 {% for row in employee_rows %}
                 <tr>
-                    <td>
-                        <div class="fw-semibold">{{ row.user.get_full_name|default:row.user.username }}</div>
-                        <div class="small text-muted">{{ row.user.username }} | {{ row.sales_count }} sales</div>
+                    <td class="rp-lead">
+                        <a href="{% url 'employee_report_detail' row.user.id %}{% if page_querystring %}?{{ page_querystring }}{% endif %}">{{ row.user.get_full_name|default:row.user.username }}</a>
+                        <div class="rp-cell-note">{{ row.user.username }}, {{ row.sales_count }} sale{{ row.sales_count|pluralize }}</div>
                     </td>
-                    <td>{{ row.role_label }}</td>
-                    <td class="text-end">Rs {{ row.sales_totals.net_sales|floatformat:2 }}</td>
-                    <td class="text-end">Rs {{ row.sales_totals.gross_profit|floatformat:2 }}</td>
-                    <td class="text-end">Rs {{ row.wages_paid|floatformat:2 }}</td>
-                    <td class="text-end">{{ row.total_time_display }}</td>
-                    <td class="text-end"><a href="{% url 'employee_report_detail' row.user.id %}" class="btn btn-sm btn-outline-dark">Open</a></td>
+                    <td data-label="Role">{{ row.role_label }}</td>
+                    <td class="k-num" data-label="Net sales">{{ row.sales_totals.net_sales|money }}</td>
+                    <td class="k-num{% if row.sales_totals.returns_net %} k-out{% else %} rp-none{% endif %}" data-label="Returns">{{ row.sales_totals.returns_net|money }}</td>
+                    <td class="k-num{% if row.sales_totals.gross_profit < 0 %} k-out{% endif %}" data-label="Gross profit">{{ row.sales_totals.gross_profit|money }}</td>
+                    <td class="k-num" data-label="Wages paid">{{ row.wages_paid|money }}</td>
+                    <td class="k-num" data-label="Total time">{{ row.total_time_display }}</td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="7" class="text-center text-muted py-4">No active users found.</td></tr>
+                <tr>
+                    <td colspan="7" class="k-empty">
+                        <p class="k-empty-title">No active users found</p>
+                        <p>Each login that sells at the till gets a line here. Add staff logins in Settings.</p>
+                        {% if nav_access.settings %}<a href="{% url 'settings_page' %}" class="btn btn-outline-secondary btn-sm">Open settings</a>{% endif %}
+                    </td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-</div>
+</section>
 {% endblock %}

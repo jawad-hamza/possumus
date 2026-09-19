@@ -1,14 +1,25 @@
 {% extends "pos/base.html" %}
-{% block title %}Delete Product{% endblock %}
+{% load static %}
+{% block title %}Delete product{% endblock %}
+{% block page_title %}Delete product{% endblock %}
+
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet">{% endblock %}
 
 {% block content %}
-<h3 class="mb-4">🛑 Confirm Delete</h3>
-
-<p>Are you sure you want to delete <strong>{{ product.name }}</strong>?</p>
-
-<form method="post">
+<form method="post" class="st-form st-form--narrow" data-st-entry data-back-url="{{ back_url }}">
     {% csrf_token %}
-    <button class="btn btn-danger">Yes, Delete</button>
-    <a href="{% url 'product_view' product.id %}" class="btn btn-secondary">Cancel</a>
+    {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+    <section class="k-section" aria-labelledby="delete-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="delete-title">Delete {{ product.display_name }}? {% include "pos/partials/_help_tip.html" with tip_id="tipDelete" tip_name="deleting" tip_text="A product that already has sales or purchases on the books cannot be removed; make it inactive instead so its history stays readable." %}</h2>
+        </div>
+        <p class="mb-0">Are you sure you want to delete <strong>{{ product.display_name }}</strong> (SKU {{ product.sku }})? This cannot be undone.</p>
+        <div class="st-actionbar st-actionbar--inline">
+            <button class="btn btn-danger"><i class="bi bi-trash" aria-hidden="true"></i> Yes, delete</button>
+            <a href="{{ back_url }}" class="btn btn-outline-secondary" data-tip="Keep the product (Esc)">Cancel</a>
+        </div>
+    </section>
 </form>
 {% endblock %}
+
+{% block extra_js %}<script src="{% static 'zehnms/js/pages/stock.js' %}"></script>{% endblock %}

@@ -1,0 +1,88 @@
+{% extends "pos/base.html" %}
+{% load static accounting_tags %}
+
+{% block title %}Expenses by type{% endblock %}
+{% block page_title %}Expenses by type{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="{{ expense_list_url }}#record-expense" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Record expense</a>{% include "accounts/_report_actions.html" %}{% endblock %}
+
+{% block content %}
+<header class="b-print-head">
+    <h2>{{ active_company.name|default:brand_name }}</h2>
+    <p>Expenses by Type. {{ period_label }}.</p>
+</header>
+
+{% include "accounts/_report_header.html" %}
+
+<div class="b-balances">
+    <div class="k-balance">
+        <div class="k-balance-label">Bills</div>
+        <div class="k-balance-figure">{{ total_bills }}</div>
+    </div>
+    <div class="k-balance k-balance--out">
+        <div class="k-balance-label">Total expense</div>
+        <div class="k-balance-figure">{{ total_amount|money }}</div>
+    </div>
+    <div class="k-balance">
+        <div class="k-balance-label">Paid</div>
+        <div class="k-balance-figure">{{ total_paid|money }}</div>
+    </div>
+    <div class="k-balance {% if total_due %}k-balance--due{% endif %}">
+        <div class="k-balance-label">Still due</div>
+        <div class="k-balance-figure">{{ total_due|money }}</div>
+    </div>
+</div>
+
+<section class="k-section" aria-labelledby="ebc-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="ebc-title">{{ period_label }} <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About this report" aria-describedby="tipEbc" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipEbc" role="tooltip" hidden>Recorded expense bills grouped by expense type.</span></span></h2>
+    </div>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack b-bahi">
+            <thead>
+                <tr>
+                    <th scope="col" data-k="what">Expense type</th>
+                    <th scope="col" class="k-num" data-k="field">Bills</th>
+                    <th scope="col" class="k-num" data-k="amount">Amount</th>
+                    <th scope="col" class="k-num" data-k="field">Paid</th>
+                    <th scope="col" class="k-num" data-k="field">Still due</th>
+                    <th scope="col" data-k="more">Share</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr>
+                    <td class="b-stack-title"><a class="b-index-name" href="{{ expense_list_url }}?category={{ row.category_id }}&type={{ row.category_id }}">{{ row.category }}</a></td>
+                    <td class="k-num" data-label="Bills">{{ row.bills }}</td>
+                    <td class="k-num b-bal" data-label="Amount">{{ row.amount|money }}</td>
+                    <td class="k-num" data-label="Paid">{{ row.paid|money }}</td>
+                    <td class="k-num {% if row.due %}k-due{% endif %}" data-label="Still due">{% if row.due %}{{ row.due|money }}{% endif %}</td>
+                    <td data-label="Share">
+                        <div class="b-share">
+                            <div class="progress" role="progressbar" aria-label="Share of total expense" aria-valuenow="{{ row.share }}" aria-valuemin="0" aria-valuemax="100">
+                                <div class="progress-bar" style="width: {{ row.share }}%"></div>
+                            </div>
+                            <span>{{ row.share }}%</span>
+                        </div>
+                    </td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="k-empty"><p class="k-empty-title">No expenses recorded in this period.</p><p>Record a bill and it is grouped here by its expense type.</p></td></tr>
+                {% endfor %}
+            </tbody>
+            {% if rows %}
+            <tfoot>
+                <tr>
+                    <td class="b-stack-title">Total</td>
+                    <td class="k-num" data-label="Bills">{{ total_bills }}</td>
+                    <td class="k-num" data-label="Amount">{{ total_amount|money }}</td>
+                    <td class="k-num" data-label="Paid">{{ total_paid|money }}</td>
+                    <td class="k-num" data-label="Still due">{{ total_due|money }}</td>
+                    <td></td>
+                </tr>
+            </tfoot>
+            {% endif %}
+        </table>
+    </div>
+</section>
+{% endblock %}

@@ -1,61 +1,17 @@
 {% extends "pos/base.html" %}
+{% load static %}
 
-{% block title %}Edit Purchase #{{ purchase.id }}{% endblock %}
+{% block title %}Edit purchase #{{ purchase.id }}{% endblock %}
+{% block page_title %}Edit purchase #{{ purchase.id }}{% endblock %}
+
+{% block page_help %}Correct quantities, costs, or sale pricing with a required audit reason. F4 adds a line; Ctrl+S saves; Esc goes back.{% endblock %}
+
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/pages/entry.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/return-flow.css' %}" rel="stylesheet">{% endblock %}
+
+{% block page_actions %}<button type="button" class="btn btn-outline-secondary" data-quick-toggle aria-controls="quickSetup" aria-expanded="false" data-k-key="F2" data-k-key-label="Open or close quick setup"><i class="bi bi-layout-sidebar-inset-reverse" aria-hidden="true"></i> Quick setup</button><a href="{{ supplier_add_url }}" class="btn btn-outline-secondary" data-tip="Open the full supplier form; you come back to this purchase"><i class="bi bi-building-add" aria-hidden="true"></i> Full supplier form</a><a href="{{ back_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to purchase</a>{% endblock %}
 
 {% block content %}
-<div class="d-flex flex-wrap justify-content-between align-items-center gap-3 mb-4">
-    <div>
-        <h2 class="mb-1">Edit Purchase #{{ purchase.id }}</h2>
-        <p class="text-muted mb-0">Correct quantities, costs, or sale pricing with a required audit reason.</p>
-    </div>
-    <div class="d-flex flex-wrap gap-2">
-        <a href="{{ supplier_add_url }}" class="btn btn-outline-primary"><i class="bi bi-building-add"></i> Full Supplier Form</a>
-        <a href="{% url 'purchase_detail' purchase.id %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Purchase</a>
-    </div>
-</div>
-
-{% include "pos/partials/_purchase_quick_setup.html" %}
-
-<form method="post" class="page-card p-4 p-lg-5" id="purchaseForm">
-    {% csrf_token %}
-    {{ formset.management_form }}
-
-    <div class="row g-4 mb-4">
-        <div class="col-lg-4">{% include "pos/partials/_field.html" with field=purchase_form.supplier %}</div>
-        <div class="col-lg-4">{% include "pos/partials/_field.html" with field=purchase_form.payment_method %}</div>
-        <div class="col-lg-4">{% include "pos/partials/_field.html" with field=purchase_form.bank_account %}</div>
-        <div class="col-lg-4">{% include "pos/partials/_field.html" with field=purchase_form.paid_amount %}</div>
-    </div>
-
-    {% if purchase_form.non_field_errors %}
-    <div class="alert alert-danger">{{ purchase_form.non_field_errors }}</div>
-    {% endif %}
-    {% if formset.non_form_errors %}
-    <div class="alert alert-danger">{{ formset.non_form_errors }}</div>
-    {% endif %}
-
-    {% include "pos/partials/_purchase_line_editor.html" with formset=formset %}
-
-    <div class="row g-4 mt-1">
-        <div class="col-lg-8">
-            <div class="alert alert-light border mb-0">
-                Editing a purchase will restate stock value, supplier balance, and accounting vouchers for this document.
-            </div>
-        </div>
-        <div class="col-lg-4">
-            <label for="reason" class="form-label fw-semibold text-danger">Reason for Edit</label>
-            <textarea id="reason" name="reason" class="form-control" rows="4" required placeholder="Explain why this purchase is being edited.">{{ purchase.edit_reason }}</textarea>
-        </div>
-    </div>
-
-    <div class="d-flex justify-content-end gap-2 mt-4 pt-3 border-top">
-        <a href="{% url 'purchase_detail' purchase.id %}" class="btn btn-outline-secondary">Cancel</a>
-        <button type="submit" class="btn btn-dark">Save Changes</button>
-    </div>
-</form>
+{% include "pos/partials/_purchase_entry.html" with back_url=back_url save_label="Save changes" %}
 {% endblock %}
 
-{% block extra_js %}
-    {% include "pos/partials/_purchase_workspace_js.html" %}
-{% endblock %}
-
+{% block extra_js %}<script src="{% static 'zehnms/js/pages/stock.js' %}"></script><script src="{% static 'zehnms/js/pages/purchase.js' %}"></script><script src="{% static 'zehnms/js/return-flow.js' %}"></script>{% endblock %}

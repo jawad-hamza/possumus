@@ -1,114 +1,102 @@
 {% extends "pos/base.html" %}
+{% load static %}
 {% load accounting_tags %}
+{% load currency_tags %}
 
-{% block title %}Sale Return{% endblock %}
+{% block title %}Sale return{% endblock %}
+{% block page_title %}Sale return for invoice {{ sale.display_number }}{% endblock %}
+{% block page_help %}Return only the quantities received back from the customer. Stock and accounts will update automatically. Ctrl+S saves the return.{% endblock %}
+
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet">{% endblock %}
+
+{% block page_actions %}<a href="{% url 'invoice' sale.id %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to receipt</a>{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon danger"><i class="bi bi-arrow-counterclockwise"></i></span>
-        <div>
-            <h1 class="page-title">Sale Return for Invoice #{{ sale.id }}</h1>
-            <p class="page-subtitle">Return only the quantities received back from the customer. Stock and accounts will update automatically.</p>
-        </div>
+<section class="k-section" aria-label="Sale summary">
+    <div class="st-stats">
+        <div class="k-balance"><div class="k-balance-label">Customer</div><div class="k-balance-figure k-balance-figure--text">{{ sale.customer|default:"Walk-in" }}</div></div>
+        <div class="k-balance"><div class="k-balance-label">Sale total</div><div class="k-balance-figure">{{ sale.total_amount|money }}</div></div>
+        <div class="k-balance k-balance--in"><div class="k-balance-label">Paid</div><div class="k-balance-figure">{{ sale.paid_amount|money }}</div></div>
+        <div class="k-balance{% if sale.balance_due > 0 %} k-balance--due{% endif %}"><div class="k-balance-label">Balance</div><div class="k-balance-figure">{{ sale.balance_due|money }}</div></div>
     </div>
-    <div class="page-actions">
-        <a href="{% url 'invoice' sale.id %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left"></i> Back to Receipt</a>
-    </div>
-</div>
-
-<div class="row g-3 mb-4">
-    <div class="col-md-3"><div class="metric-card primary"><div class="metric-label">Customer</div><div class="metric-value fs-4">{{ sale.customer|default:"Walk-in" }}</div></div></div>
-    <div class="col-md-3"><div class="metric-card info"><div class="metric-label">Sale Total</div><div class="metric-value fs-4">{{ sale.total_amount|money }}</div></div></div>
-    <div class="col-md-3"><div class="metric-card success"><div class="metric-label">Paid</div><div class="metric-value fs-4">{{ sale.paid_amount|money }}</div></div></div>
-    <div class="col-md-3"><div class="metric-card warning"><div class="metric-label">Balance</div><div class="metric-value fs-4">{{ sale.balance_due|money }}</div></div></div>
-</div>
+</section>
 
 <div class="row g-4">
-    <div class="col-xl-7">
-        <div class="page-card p-0 overflow-hidden">
-            <div class="section-heading p-4 border-bottom mb-0">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon"><i class="bi bi-box-seam"></i></span>
-                    <div>
-                        <h2 class="section-title">Return Quantities</h2>
-                        <p class="section-copy">Only enter the quantity being returned now. The maximum available is based on earlier returns already recorded.</p>
-                    </div>
-                </div>
+    <div class="col-xl-8">
+        <section class="k-section" aria-labelledby="return-lines-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="return-lines-title">What is coming back {% include "pos/partials/_help_tip.html" with tip_id="tipReturnLines" tip_name="return quantities" tip_text="Only enter the quantity being returned now. The maximum available is based on earlier returns already recorded." %}</h2>
             </div>
-            <div class="table-responsive">
-                <table class="table align-middle mb-0">
-                    <thead class="table-light">
-                        <tr>
-                            <th class="ps-4">Product</th>
-                            <th class="text-end">Sold</th>
-                            <th class="text-end">Already Returned</th>
-                            <th class="text-end">Available</th>
-                            <th class="text-end pe-4">Return Now</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in item_rows %}
-                        <tr>
-                            <td class="ps-4">
-                                <div class="fw-semibold">{{ row.item.product.name }}</div>
-                                <div class="small text-muted">Unit {{ row.item.discounted_unit_price|money }}</div>
-                            </td>
-                            <td class="text-end">{{ row.item.quantity }}</td>
-                            <td class="text-end">{{ row.returned_qty }}</td>
-                            <td class="text-end">{{ row.returnable_qty }}</td>
-                            <td class="text-end pe-4">
-                                <input class="form-control form-control-sm text-end" type="number" min="0" max="{{ row.returnable_qty }}" name="qty_{{ row.item.id }}" value="0" form="sale-return-form">
-                            </td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
-            </div>
-        </div>
+            <table class="k-ledger k-ledger--stack" data-return-ledger>
+                <thead>
+                    <tr>
+                        <th scope="col" data-k="what">Product</th>
+                        <th scope="col" class="text-end" data-k="more">Sold</th>
+                        <th scope="col" class="text-end" data-k="more">Already returned</th>
+                        <th scope="col" class="text-end" data-k="flag">Available</th>
+                        <th scope="col" class="text-end" data-k="field">Return now</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for row in item_rows %}
+                    <tr>
+                        <td class="st-wrap" data-k="what">
+                            <span class="st-name">{{ row.item.product.display_name }}</span>
+                            <span class="st-sub">Unit {{ row.item.discounted_unit_price|money }}</span>
+                        </td>
+                        <td class="k-num text-end" data-k="more" data-label="Sold">{{ row.item.quantity|qty_short:row.item.product.unit }}</td>
+                        <td class="k-num text-end" data-k="more" data-label="Already returned">{% if row.returned_qty %}{{ row.returned_qty|qty }}{% else %}<span class="st-dim">{{ row.returned_qty|qty }}</span>{% endif %}</td>
+                        <td class="k-num text-end" data-k="flag" data-label="Available">{% if row.returnable_qty > 0 %}{{ row.returnable_qty|qty_short:row.item.product.unit }}{% else %}<span class="k-badge">Returned</span>{% endif %}</td>
+                        <td class="text-end" data-k="field" data-label="Return now">
+                            <div class="input-group st-return-input">
+                                <input class="form-control text-end" type="number" min="0" max="{{ row.returnable_qty|qty }}" step="{{ row.item.product|qty_step }}" inputmode="decimal" name="qty_{{ row.item.id }}" value="0" form="sale-return-form" data-returnable="{{ row.returnable_qty|qty_short:row.item.product.unit }}" aria-label="Quantity of {{ row.item.product.display_name }} to return"{% if row.returnable_qty <= 0 %} readonly{% endif %}>
+                                <span class="input-group-text">{{ row.item.product.unit }}</span>
+                            </div>
+                            <div class="st-over-note" data-over-note hidden></div>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
     </div>
 
-    <div class="col-xl-5">
-        <div class="page-card p-4">
-            <div class="section-heading mb-3">
-                <div class="section-heading-copy">
-                    <span class="section-title-icon section-icon-danger"><i class="bi bi-receipt"></i></span>
-                    <div>
-                        <h2 class="section-title">Return Posting</h2>
-                        <p class="section-copy">Choose whether the return reduces customer receivable or refunds from cash/bank.</p>
-                    </div>
-                </div>
+    <div class="col-xl-4">
+        <section class="k-section" aria-labelledby="return-post-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="return-post-title">Refund {% include "pos/partials/_help_tip.html" with tip_id="tipReturnPost" tip_name="refund" tip_text="Choose whether the return reduces customer receivable or refunds from cash/bank. Inventory goes back up. Sales are reversed through accounting, and if you pick receivable the customer balance is reduced instead of refunding cash." %}</h2>
             </div>
-            <form method="post" id="sale-return-form">
+            <form method="post" id="sale-return-form" data-st-entry data-back-url="{% url 'invoice' sale.id %}">
                 {% csrf_token %}
-                <div class="mb-3">{% include "pos/partials/_field.html" with field=form.refund_method %}</div>
-                <div class="mb-3">{% include "pos/partials/_field.html" with field=form.bank_account %}</div>
-                <div class="mb-3">{% include "pos/partials/_field.html" with field=form.reason %}</div>
-                <div class="mb-3">{% include "pos/partials/_field.html" with field=form.notes %}</div>
-                {% if form.non_field_errors %}<div class="text-danger small mb-3">{{ form.non_field_errors|join:', ' }}</div>{% endif %}
-                <div class="alert alert-light border small mb-0">Inventory goes back up. Sales are reversed through accounting, and if you pick receivable the customer balance is reduced instead of refunding cash.</div>
-                <div class="d-flex justify-content-end mt-4"><button class="btn btn-dark"><i class="bi bi-arrow-counterclockwise"></i> Save Return</button></div>
-            </form>
-        </div>
-
-        <div class="page-card p-4 mt-4">
-            <h2 class="section-title mb-3">Existing Returns</h2>
-            <div class="vstack gap-3">
-                {% for entry in existing_returns %}
-                <div class="border rounded-4 p-3 bg-white">
-                    <div class="d-flex justify-content-between gap-3">
-                        <div>
-                            <div class="fw-semibold">Return #{{ entry.id }}</div>
-                            <div class="small text-muted">{{ entry.created_at|date:"d M Y H:i" }} | {{ entry.reason }}</div>
-                        </div>
-                        <div class="text-end fw-semibold">{{ entry.total_amount|money }}</div>
-                    </div>
+                {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors|join:', ' }}</div>{% endif %}
+                <div class="k-form-grid">
+                    <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.refund_method %}</div>
+                    <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.bank_account %}</div>
+                    <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.reason %}</div>
+                    <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.notes %}</div>
                 </div>
+                <div class="st-actionbar st-actionbar--inline">
+                    <button class="btn btn-primary" data-return-save data-k-key="Ctrl+S" data-k-key-label="Save the return"><i class="bi bi-arrow-counterclockwise" aria-hidden="true"></i> Save return</button>
+                    <span class="st-actionbar-note" data-return-count></span>
+                </div>
+            </form>
+        </section>
+
+        <section class="k-section" aria-labelledby="past-returns-title">
+            <div class="k-section-head"><h2 class="k-section-title" id="past-returns-title">Earlier returns</h2></div>
+            <ul class="st-past">
+                {% for entry in existing_returns %}
+                <li>
+                    <span><span class="st-name">Return #{{ entry.id }}</span><span class="st-sub">{{ entry.created_at|date:"d M Y H:i" }} &middot; {{ entry.reason }}</span></span>
+                    <span>{{ entry.total_amount|money }}</span>
+                </li>
                 {% empty %}
-                <div class="text-muted">No returns recorded for this sale yet.</div>
+                <li><span class="st-dim">No returns recorded for this sale yet.</span></li>
                 {% endfor %}
-            </div>
-        </div>
+            </ul>
+        </section>
     </div>
 </div>
 {% endblock %}
+
+{% block extra_js %}<script src="{% static 'zehnms/js/pages/stock.js' %}"></script>{% endblock %}

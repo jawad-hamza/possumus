@@ -1,184 +1,107 @@
-# POS IMS
+# ZehnMS
 
-POS IMS is a Django-based point of sale, inventory, parties, expenses, and accounting system built for small and medium retail operations.
+ZehnMS is a point of sale, inventory and double-entry accounting system for small and
+medium shops of any kind, in any country. It is a server-rendered Django application that
+ships in three forms: an offline Windows installer for a single shop, a Vercel deployment,
+or a classic VPS install.
 
-It combines day-to-day selling with stock movement, supplier and customer balances, expense tracking, money desk operations, and double-entry accounting so operational actions stay aligned with the books.
+One install or deployment serves one shop.
 
-## What the system covers
+## What it covers
 
-- POS checkout with barcode or SKU scan
-- Product, category, brand, supplier, and customer management
-- Purchases with cost price, sale price, stock increase, and supplier payable handling
-- Credit sales and customer receivable tracking
-- Category-based GST or manual cart tax
-- Stock control, stock take, sale returns, and purchase returns
-- Expense tracking and later payment settlement
-- Cash, generic bank, and multiple bank ledgers
-- Owner capital, money transfer, and money breakdown views
-- Accounting dashboard, trial balance, profit and loss, and balance sheet
-- Backup snapshots and audit logging
-- Admin, cashier, and custom role-based access
+- POS checkout with barcode / SKU scan, held carts, cash, bank and credit sales, thermal receipts and PDF invoices
+- Products with units (`pcs`, `box`, `pack`, `dozen`, `kg`, `g`, `l`, `ml`, `m`, `ft`); weighed and measured goods sell in fractions (1 kg, 0.5 kg, 250 g) with quantities kept to three decimals
+- Pricing by fixed sale price or by **markup percent on cost**, alongside a minimum-margin guard
+- Configurable currency symbol and code, configurable tax label and tax mode (per category, per payment method, or manual)
+- Purchases with weighted-average cost, supplier payables, purchase returns
+- Sale returns, stock adjustments, opening stock, low-stock and expiry reports
+- Customers and suppliers with ledgers, statements and settlements
+- Expenses, money desk (owner capital, transfers), multiple bank ledgers
+- Trial balance, profit and loss, balance sheet, account ledgers
+- Owner, cashier and custom roles; per-user timezones; audit log; backups
+- Trial period and offline licence files for the desktop build; optional online subscription billing and Google sign-in for hosted deployments
 
-## Main apps
+## Quick start (development)
 
-- `pos` - POS, products, purchases, parties, dashboard, reports, settings, and operational workflows
-- `accounts` - chart of accounts, bank ledgers, vouchers, party ledgers, expenses, money desk, audit log, and backups
-- `api` - party statement and settlement endpoints used by the UI
-- `possumus` - Django project configuration
-
-## Core business flow
-
-### 1. Setup
-
-1. Create the first admin account from `setup/admin/`.
-2. Open `Settings` and configure:
-   - business identity and receipt branding
-   - GST mode and label
-   - POS permissions such as credit sales, price override, and line discount
-   - bank ledgers
-   - cashier accounts
-3. Add categories, brands, and suppliers as needed.
-
-### 2. Build stock through purchases
-
-Use `Purchases` to bring products into inventory. Purchases:
-
-- increase stock quantity
-- update product cost and sale pricing
-- post inventory value into accounting
-- record what was paid now versus what remains payable to the supplier
-
-### 3. Sell through POS
-
-Use `POS` to:
-
-- scan by barcode or SKU
-- add products to cart
-- edit line price or discount within business rules
-- sell for cash, bank, or credit
-- attach a customer for credit sales
-- print a receipt sized for the configured thermal printer width
-
-### 4. Manage follow-up activity
-
-- `Parties` tracks customer receivables and supplier payables.
-- `Expenses` records rent, utilities, transport, and other operating costs.
-- `Money Desk` records owner capital, bank transfers, and later expense payments.
-- `Stock Control` is for corrections, losses, damages, and stock take differences.
-- `Returns` reverse sales or purchases and adjust stock and accounting accordingly.
-
-## Accounting behavior
-
-This system uses double-entry accounting.
-
-Examples:
-
-- Paid purchase: Inventory increases and Cash or Bank decreases.
-- Credit purchase: Inventory increases and Accounts Payable increases.
-- Cash sale: Cash increases, Sales increases, and stock moves to cost of goods sold.
-- Credit sale: Accounts Receivable increases instead of immediate money.
-- Unpaid expense: Expense increases and Expense Payable increases.
-- Later expense payment: Expense Payable decreases and Cash or Bank decreases.
-- Owner capital: Cash or Bank increases and Owner Capital increases.
-
-## Roles
-
-### Admin
-
-- full access across the system
-- manage settings, team, pricing rules, backups, and accounting
-
-### Cashier
-
-- access limited to POS and their own receipts
-- session login and logout times are recorded
-- each sale is tagged to the cashier who created it
-
-## Key operational areas
-
-### POS
-
-- live cart with protected pricing rules
-- customer selection for credit sale
-- tax mode awareness from settings
-- touch-friendly layout
-
-### Purchases
-
-- quick setup for missing supplier, category, brand, or product
-- partial payment or full credit handling
-- supplier ledger alignment
-
-### Parties
-
-- customer detail and supplier detail pages
-- statement history
-- settlements through the API-backed flow
-
-### Accounts
-
-- money available now, money breakdown, and bank ledger visibility
-- trial balance, profit and loss, balance sheet, and account ledger views
-- business-language KPI cards on dashboard
-
-### Settings
-
-- branding and receipt identity
-- GST and POS rules
-- bank ledgers
-- user and role management
-- audit history and backup snapshots
-
-## Local development
-
-This project currently runs with:
-
-- Django on SQLite for local use
-- Python virtual environment stored in `.venv`
-- media uploads for company logos
-
-Typical local commands:
+Python 3.12 or newer (developed and tested on 3.14).
 
 ```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe manage.py migrate
-.\.venv\Scripts\python.exe manage.py check
-.\.venv\Scripts\python.exe manage.py test
 .\.venv\Scripts\python.exe manage.py runserver
 ```
 
-## Production readiness status
+On Linux/macOS use `python3 -m venv .venv` and `.venv/bin/python` instead.
 
-Current status: suitable for localhost demos, internal UAT, and supervised pilot use, but not ready to hand to a client VPS as-is.
+Open http://127.0.0.1:8000/, create the owner account and the business, then add products or
+record a purchase and start selling. No configuration is needed for development: SQLite,
+debug mode and console email are the defaults. To change anything, copy `.env.example` to
+`.env`; it documents every setting.
 
-Current deployment blockers:
+```powershell
+.\.venv\Scripts\python.exe manage.py test
+.\.venv\Scripts\python.exe manage.py check --deploy
+python -m pyflakes pos accounts api possumus desktop scripts
+```
 
-- `possumus/settings.py` is still hardcoded for development: `DEBUG=True`, fixed `SECRET_KEY`, empty `ALLOWED_HOSTS`, and no HTTPS/cookie/HSTS production settings.
-- Static files are not production-configured yet. `STATIC_ROOT` and a real collectstatic serving strategy are missing.
-- The app is still configured for SQLite by default. That is not a good default for a concurrent commercial VPS deployment.
-- Backup/restore is SQLite-only today, so it will not cover a PostgreSQL production setup without further work.
-- `requirements.txt` is not a clean server runtime file yet. It looks like a workstation dump and is missing clear application runtime pins such as Django/DRF/report generation dependencies.
+## Ways to ship it
 
-Before any client VPS rollout, use the deployment checklist in [docs/DEPLOYMENT.md](/C:/Users/Jawad%20Hamza/Desktop/codex/possumus/docs/DEPLOYMENT.md).
+| Target | Command | Details |
+| --- | --- | --- |
+| Windows installer (offline, one shop) | `powershell -ExecutionPolicy Bypass -File desktop\build.ps1` | [desktop/README.md](desktop/README.md) |
+| Vercel + hosted Postgres | `vercel deploy --prod` | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#3-vercel) |
+| VPS (gunicorn, PostgreSQL, nginx) | `pip install -r requirements-server.txt` | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#4-vps-gunicorn--postgresql--nginx) |
 
-## Documentation files created in this repository
+`GET /healthz/` answers `{"status": "ok", "db": "ok"}` on every target.
 
-- `README.md` - project overview and quick start
-- `docs/HOW_TO_USE.md` - operator-facing usage guide
-- `docs/FULL_DOCUMENTATION.md` - full introduction and technical/business documentation
-- `docs/TUTORIAL.md` - step-by-step training guide with workflow screenshots
-- `docs/DEPLOYMENT.md` - deployment readiness status and VPS checklist
-- `docs/How_to_Use_POS_IMS.pdf` - PDF user guide
-- `docs/POS_IMS_Full_Documentation.pdf` - PDF introduction and documentation
-- `docs/POS_IMS_Source_Code.pdf` - PDF export of source files
-- `docs/POS_IMS_Source_Code.txt` - text export used to build the source-code PDF
-- `docs/generate_pdfs.py` - generator script for the documentation PDFs
-- `docs/capture_snapshots.py` - renders authenticated HTML pages for documentation screenshots
-- `docs/capture_images.ps1` - turns rendered HTML pages into PNG snapshots using a local browser
-- `docs/snapshots/images/` - representative app screenshots used in the manuals
+## Project layout
 
-## Regenerating the PDFs
+| Path | Content |
+| --- | --- |
+| `pos/` | Main app: POS, products, purchases, parties, reports, settings, onboarding, billing, licensing. Views live in the `pos/views/` package, business logic in `pos/services/` |
+| `accounts/` | Ledger: chart of accounts, vouchers, journal posting, expenses, money desk, statements, audit log, backups (`accounts/services/`) |
+| `api/` | Two DRF endpoints used by the UI (party statement, settlements); session authentication only |
+| `possumus/` | Django project package: `settings.py` (environment driven), `urls.py`, `wsgi.py` |
+| `desktop/` | Windows launcher, PyInstaller spec, Inno Setup script, build script |
+| `scripts/vercel_build.py`, `vercel.json`, `.python-version`, `.vercelignore` | Vercel deployment |
+| `licensing/` | Licence key pair location (`public_key.pem` is bundled; `private_key.pem` is git-ignored and must never be shipped) |
+| `docs/` | User guide, tutorial, full documentation, deployment guide |
 
-After updating the Markdown docs or source files, regenerate the PDFs with:
+Requirements files: `requirements.txt` (runtime, exact pins, cross-platform),
+`requirements-server.txt` (+ gunicorn), `requirements-desktop.txt` (+ waitress, PyInstaller),
+`requirements-dev.txt` (+ waitress, pyflakes, ruff).
+
+## How the books stay right
+
+Every operational action posts a balanced journal entry:
+
+- Paid purchase: Inventory up, Cash or Bank down. Credit purchase: Inventory up, Accounts Payable up.
+- Cash sale: Cash up, Sales up, and cost moves from Inventory to Cost of Goods Sold. Credit sale: Accounts Receivable instead of cash.
+- Unpaid expense: Expense up, Expense Payable up; paying it later moves Expense Payable against Cash or Bank.
+- Owner capital: Cash or Bank up, Owner Capital up. Opening stock credits Opening Balance Equity.
+- Returns reverse the original sale or purchase, stock included.
+
+Money is `Decimal` rounded through `quantize_money`; quantities are `Decimal` with three
+places through `quantize_qty`; stock changes lock the product row. The default chart of
+accounts is created when the business is set up.
+
+## Roles
+
+- **Owner / admin**: everything, including settings, team, pricing rules, backups and accounting. The owner cannot be demoted or disabled.
+- **Cashier**: POS and their own receipts; can return only their own sales; sign-in and sign-out times are recorded.
+- **Custom roles**: per-module view / manage access.
+
+## Documentation
+
+- [docs/HOW_TO_USE.md](docs/HOW_TO_USE.md): operator guide
+- [docs/TUTORIAL.md](docs/TUTORIAL.md): step-by-step training walkthrough
+- [docs/FULL_DOCUMENTATION.md](docs/FULL_DOCUMENTATION.md): business and technical reference
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): local, desktop installer, Vercel, VPS
+- [desktop/README.md](desktop/README.md): building and supporting the Windows installer
+- `.env.example`: every configuration variable
+
+The PDF manuals in `docs/` are generated from the Markdown files:
 
 ```powershell
 .\.venv\Scripts\python.exe docs\capture_snapshots.py

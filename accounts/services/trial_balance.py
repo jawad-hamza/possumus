@@ -1,87 +1,63 @@
-# from django.db.models import Sum
-# from accounts.models import Account, VoucherLine
+from accounts.services.report_utils import (
+    OPENING_DIFFERENCE_LABEL,
+    ZERO,
+    account_totals,
+    opening_difference,
+    parse_report_date,
+)
 
 
-# def get_trial_balance():
-#     """
-#     Returns trial balance rows and totals.
-#     """
-#     rows = []
-#     total_debit = 0
-#     total_credit = 0
-
-#     accounts = Account.objects.filter(is_active=True).order_by("type", "title")
-
-#     for acc in accounts:
-#         sums = VoucherLine.objects.filter(account=acc).aggregate(
-#             debit=Sum("debit"),
-#             credit=Sum("credit"),
-#         )
-
-#         debit = sums["debit"] or 0
-#         credit = sums["credit"] or 0
-
-#         # Skip accounts with zero movement
-#         if debit == 0 and credit == 0:
-#             continue
-
-#         rows.append({
-#             "account": acc.title,
-#             "type": acc.type,
-#             "debit": debit,
-#             "credit": credit,
-#         })
-
-#         total_debit += debit
-#         total_credit += credit
-
-#     return {
-#         "rows": rows,
-#         "total_debit": total_debit,
-#         "total_credit": total_credit,
-#         "balanced": total_debit == total_credit,
-#     }
-
-from django.db.models import Sum
-from accounts.models import Account, VoucherLine
-
-
-def get_trial_balance():
+def get_trial_balance(as_of_date=None):
     """
-    Returns trial balance rows and totals.
+    Trial balance as of a date (everything posted when no date is given).
+
+    Debit and credit are gross totals including the account's opening balance.
+    Opening balances that were entered one-sided are carried on their own row
+    and reported as `opening_difference`, so `balanced` keeps meaning what it
+    is used for: every posting has matching debits and credits.
     """
+    as_of_date = parse_report_date(as_of_date)
     rows = []
-    total_debit = 0
-    total_credit = 0
+    total_debit = ZERO
+    total_credit = ZERO
 
-    accounts = Account.objects.filter(is_active=True).order_by("type", "title")
-
-    for acc in accounts:
-        sums = VoucherLine.objects.filter(account=acc).aggregate(
-            debit=Sum("debit"),
-            credit=Sum("credit"),
-        )
-
-        debit = sums["debit"] or 0
-        credit = sums["credit"] or 0
-
-        if debit == 0 and credit == 0:
-            continue
-
+    for account, debit, credit in account_totals(end=as_of_date):
+        net = debit - credit
         rows.append({
-            "account_id": acc.id,
-            "account": acc.title,
-            "type": acc.type,
+            "account_id": account.id,
+            "account": account.title,
+            "type": account.type,
+            "is_active": account.is_active,
             "debit": debit,
             "credit": credit,
+            "balance_debit": net if net > 0 else ZERO,
+            "balance_credit": -net if net < 0 else ZERO,
         })
+        total_debit += debit
+        total_credit += credit
 
+    difference = opening_difference()
+    if difference != 0:
+        debit = -difference if difference < 0 else ZERO
+        credit = difference if difference > 0 else ZERO
+        rows.append({
+            "account_id": None,
+            "account": OPENING_DIFFERENCE_LABEL,
+            "type": "equity",
+            "is_active": True,
+            "debit": debit,
+            "credit": credit,
+            "balance_debit": debit,
+            "balance_credit": credit,
+        })
         total_debit += debit
         total_credit += credit
 
     return {
         "rows": rows,
+        "as_of_date": as_of_date,
         "total_debit": total_debit,
         "total_credit": total_credit,
+        "opening_difference": difference,
         "balanced": total_debit == total_credit,
     }

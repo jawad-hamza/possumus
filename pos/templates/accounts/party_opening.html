@@ -1,0 +1,33 @@
+{% extends "pos/base.html" %}
+{% load static accounting_tags %}
+
+{% block title %}Opening balance - {{ party }}{% endblock %}
+{% block page_title %}Opening balance{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="{{ statement_url }}" class="btn btn-outline-secondary"><i class="bi bi-journal-text" aria-hidden="true"></i> View statement</a>{% endblock %}
+
+{% block content %}
+<div class="k-form">
+    <section class="k-section b-leaf">
+        <div>
+            <h2 class="b-leaf-name">{{ party }}</h2>
+            <ul class="b-leaf-meta"><li>{{ party_kind|title }}</li></ul>
+        </div>
+        {% if party_opening %}
+        <div class="b-leaf-balance">
+            <div class="b-leaf-label">Recorded opening balance</div>
+            <div class="b-leaf-figure {% if party_opening.direction == 'receivable' %}b-state--due{% else %}b-state--out{% endif %}">{{ party_opening.amount|money }}</div>
+            <div class="b-leaf-words"><span class="k-badge {% if party_opening.direction == 'receivable' %}k-badge--amber{% else %}k-badge--red{% endif %}">Recorded: {% if party_opening.direction == "receivable" %}they owe you{% else %}you owe them{% endif %} as of {{ party_opening.date }}</span></div>
+        </div>
+        {% endif %}
+    </section>
+
+    <section class="k-section" aria-labelledby="opening-form-title">
+        <div class="k-section-head"><h2 class="k-section-title" id="opening-form-title">{% if party_opening %}Replace opening balance{% else %}Opening balance{% endif %}</h2></div>
+        {% if party_opening %}
+        <div class="alert alert-warning">An opening balance is already recorded. Saving again replaces it; it does not add to it.</div>
+        {% endif %}
+        {% include "accounts/_party_opening_form.html" %}
+    </section>
+</div>
+{% endblock %}

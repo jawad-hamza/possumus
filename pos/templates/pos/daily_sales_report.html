@@ -1,155 +1,100 @@
-{% extends "pos/base.html" %}
-{% block title %}Sales Report{% endblock %}
+{% extends "pos/reports/_shell.html" %}
+{% load currency_tags %}
+{% block title %}Sales report{% endblock %}
 
-{% block extra_css %}
-<style>
-    .quick-range {
-        display: inline-flex;
-        align-items: center;
-        justify-content: center;
-        text-decoration: none;
-        border-radius: 999px;
-        padding: 8px 14px;
-        border: 1px solid #cbd5e1;
-        color: #0f172a;
-        background: #fff;
-        font-weight: 600;
-        font-size: 0.92rem;
-    }
-
-    .quick-range:hover {
-        border-color: #94a3b8;
-        background: #f8fafc;
-    }
-
-    .report-stat {
-        border: 1px solid #e2e8f0;
-        border-radius: 16px;
-        padding: 16px;
-        background: linear-gradient(180deg, #ffffff 0%, #f8fafc 100%);
-    }
-</style>
-{% endblock %}
-
-{% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon success"><i class="bi bi-receipt"></i></span>
-        <div>
-            <h1 class="page-title">Sales Report</h1>
-            <p class="page-subtitle">{{ range_label }}. Track billed sales, collections, cost, and gross profit invoice by invoice.</p>
+{% block report_body %}
+<section class="k-section rp-summary" aria-label="Summary">
+    <div class="rp-sums rp-sums--flat">
+        <div class="k-balance rp-sum">
+            <div class="k-balance-label">Net sales {% include "pos/partials/_help_tip.html" with tip_id="tipRpNet" tip_name="Net sales" tip_text="After discounts and returns, before tax." %}</div>
+            <div class="k-balance-figure">{{ totals.net_sales|money }}</div>
+            <div class="k-balance-note">{{ totals.invoices }} invoice{{ totals.invoices|pluralize }}</div>
+        </div>
+        <div class="k-balance rp-sum">
+            <div class="k-balance-label">Cost {% include "pos/partials/_help_tip.html" with tip_id="tipRpCost" tip_name="Cost" tip_text="Cost of goods sold, less returned stock." %}</div>
+            <div class="k-balance-figure">{{ totals.cost|money }}</div>
+            <div class="k-balance-note">Margin {{ gross_margin|floatformat:2 }}%</div>
+        </div>
+        <div class="k-balance rp-sum{% if totals.gross_profit < 0 %} k-balance--out{% elif totals.gross_profit > 0 %} k-balance--in{% endif %}">
+            <div class="k-balance-label">Gross profit {% include "pos/partials/_help_tip.html" with tip_id="tipRpProfit" tip_name="Gross profit" tip_text="Net sales less cost, before overhead expenses." %}</div>
+            <div class="k-balance-figure">{{ totals.gross_profit|money }}</div>
+        </div>
+        <div class="k-balance rp-sum{% if totals.paid > 0 %} k-balance--in{% endif %}">
+            <div class="k-balance-label">Paid {% include "pos/partials/_help_tip.html" with tip_id="tipRpPaid" tip_name="Paid" tip_text="Collected less refunds." %}</div>
+            <div class="k-balance-figure">{{ totals.paid|money }}</div>
+            <div class="k-balance-note">Collection rate {{ collection_rate|floatformat:2 }}%</div>
+        </div>
+        <div class="k-balance rp-sum{% if totals.due > 0 %} k-balance--due{% endif %}">
+            <div class="k-balance-label">Due {% include "pos/partials/_help_tip.html" with tip_id="tipRpDue" tip_name="Due" tip_text="Outstanding balances on these invoices." %}</div>
+            <div class="k-balance-figure">{{ totals.due|money }}</div>
         </div>
     </div>
-    <div class="page-actions">
-        <a href="{% url 'reports_home' %}" class="btn btn-outline-secondary"><i class="bi bi-grid"></i> Reports Centre</a>
-        <a href="{% url 'low_stock_list' %}" class="btn btn-outline-secondary"><i class="bi bi-exclamation-triangle"></i> Low Stock</a>
-    </div>
-</div>
+    <dl class="rp-facts">
+        <div><dt>Sales before returns</dt><dd>{{ totals.gross_sales|money }}</dd></div>
+        <div><dt>Returns ({{ totals.returns_count }})</dt><dd>{{ totals.returns_net|money }}</dd></div>
+        <div><dt>{{ tax_label }} collected</dt><dd>{{ totals.tax|money }}</dd></div>
+        <div><dt>Average invoice</dt><dd>{{ totals.avg_invoice|money }}</dd></div>
+    </dl>
+</section>
 
-<div class="page-card p-4 mb-4">
-    <div class="section-heading">
-        <div class="section-heading-copy">
-            <span class="section-title-icon"><i class="bi bi-calendar-range"></i></span>
-            <div>
-                <h2 class="section-title">Date Range</h2>
-                <p class="section-copy">Choose a reporting period or jump to a quick range below.</p>
-            </div>
+<section class="k-section rp-results" aria-labelledby="rp-results-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="rp-results-title">Invoices <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Invoices" aria-describedby="tipRpInvoices" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipRpInvoices" role="tooltip" hidden>Amounts in the table are in {{ currency_symbol }}. Open an invoice to see its receipt. Export CSV has every column.</span></span></h2>
+        <div class="form-check form-switch rp-more-toggle">
+            <input class="form-check-input" type="checkbox" role="switch" id="rp-show-extra" data-rp-extra-toggle>
+            <label class="form-check-label" for="rp-show-extra">Show {{ tax_label }} and cost</label>
         </div>
     </div>
-    <form method="get" class="row g-3 align-items-end mb-3">
-        <div class="col-md-4">
-            <label for="start" class="form-label fw-semibold">Start Date</label>
-            <input id="start" type="date" name="start" value="{{ start|date:'Y-m-d' }}" class="form-control">
-        </div>
-        <div class="col-md-4">
-            <label for="end" class="form-label fw-semibold">End Date</label>
-            <input id="end" type="date" name="end" value="{{ end|date:'Y-m-d' }}" class="form-control">
-        </div>
-        <div class="col-md-4 d-grid">
-            <button class="btn btn-dark"><i class="bi bi-funnel"></i> Apply Range</button>
-        </div>
-    </form>
-    <div class="d-flex flex-wrap gap-2">
-        {% for item in quick_ranges %}
-        <a href="{{ item.url }}" class="quick-range {% if item.label == 'Reports Centre' %}bg-dark text-white border-dark{% endif %}">{{ item.label }}</a>
-        {% endfor %}
-    </div>
-</div>
-
-<div class="row g-3 mb-4">
-    <div class="col-md-2 col-sm-6"><div class="metric-card slate"><div class="d-flex justify-content-between align-items-start gap-3"><div><div class="metric-label">Invoices</div><div class="metric-value">{{ totals.invoices }}</div><div class="metric-meta">Invoices in this range</div></div><span class="metric-icon"><i class="bi bi-files"></i></span></div></div></div>
-    <div class="col-md-2 col-sm-6"><div class="metric-card primary"><div class="d-flex justify-content-between align-items-start gap-3"><div><div class="metric-label">Net Sales</div><div class="metric-value">Rs {{ totals.net_sales|floatformat:2 }}</div><div class="metric-meta">After order discount</div></div><span class="metric-icon"><i class="bi bi-cash-stack"></i></span></div></div></div>
-    <div class="col-md-2 col-sm-6"><div class="metric-card success"><div class="d-flex justify-content-between align-items-start gap-3"><div><div class="metric-label">Gross Profit</div><div class="metric-value">Rs {{ totals.gross_profit|floatformat:2 }}</div><div class="metric-meta">Before overhead expenses</div></div><span class="metric-icon"><i class="bi bi-graph-up-arrow"></i></span></div></div></div>
-    <div class="col-md-2 col-sm-6"><div class="metric-card warning"><div class="d-flex justify-content-between align-items-start gap-3"><div><div class="metric-label">Cost</div><div class="metric-value">Rs {{ totals.cost|floatformat:2 }}</div><div class="metric-meta">Cost of goods sold</div></div><span class="metric-icon"><i class="bi bi-box-seam"></i></span></div></div></div>
-    <div class="col-md-2 col-sm-6"><div class="metric-card info"><div class="d-flex justify-content-between align-items-start gap-3"><div><div class="metric-label">Paid</div><div class="metric-value">Rs {{ totals.paid|floatformat:2 }}</div><div class="metric-meta">Money collected</div></div><span class="metric-icon"><i class="bi bi-wallet2"></i></span></div></div></div>
-    <div class="col-md-2 col-sm-6"><div class="metric-card danger"><div class="d-flex justify-content-between align-items-start gap-3"><div><div class="metric-label">Due</div><div class="metric-value">Rs {{ totals.due|floatformat:2 }}</div><div class="metric-meta">Outstanding balances</div></div><span class="metric-icon"><i class="bi bi-hourglass-split"></i></span></div></div></div>
-</div>
-
-<div class="row g-3 mb-4">
-    <div class="col-md-4">
-        <div class="report-stat h-100">
-            <div class="text-muted small">Collection Rate</div>
-            <div class="fs-5 fw-bold mt-1">{{ collection_rate|floatformat:2 }}%</div>
-            <div class="small text-muted mt-2">Paid against invoice totals in this range.</div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="report-stat h-100">
-            <div class="text-muted small">Gross Margin</div>
-            <div class="fs-5 fw-bold mt-1">{{ gross_margin|floatformat:2 }}%</div>
-            <div class="small text-muted mt-2">Gross profit divided by net sales.</div>
-        </div>
-    </div>
-    <div class="col-md-4">
-        <div class="report-stat h-100">
-            <div class="text-muted small">Average Invoice</div>
-            <div class="fs-5 fw-bold mt-1">Rs {{ totals.avg_invoice|floatformat:2 }}</div>
-            <div class="small text-muted mt-2">Average net sales value per invoice.</div>
-        </div>
-    </div>
-</div>
-
-<div class="page-card p-0 overflow-hidden">
-    <div class="table-responsive">
-        <table class="table align-middle mb-0">
-            <thead class="table-light">
+    <div class="k-ledger-scroll rp-table" data-rp-extra>
+        <table class="k-table k-ledger--stack report-table">
+            <thead>
                 <tr>
-                    <th class="ps-4">Invoice</th>
-                    <th>Date</th>
-                    <th>Customer</th>
-                    <th class="text-end">Subtotal</th>
-                    <th class="text-end">Discount</th>
-                    <th class="text-end">{{ tax_label }}</th>
-                    <th class="text-end">Total</th>
-                    <th class="text-end">Cost</th>
-                    <th class="text-end">Gross Profit</th>
-                    <th class="text-end">Paid</th>
-                    <th class="text-end">Due</th>
-                    <th class="text-end pe-4">Action</th>
+                    <th scope="col" data-k="what">Invoice</th>
+                    <th scope="col" data-k="meta">Customer</th>
+                    <th scope="col" class="k-num rp-extra" data-k="more">Subtotal</th>
+                    <th scope="col" class="k-num rp-extra" data-k="more">Discount</th>
+                    <th scope="col" class="k-num rp-extra" data-k="more">{{ tax_label }}</th>
+                    <th scope="col" class="k-num" data-k="amount">Total</th>
+                    <th scope="col" class="k-num rp-extra" data-k="more">Cost</th>
+                    <th scope="col" class="k-num" data-k="more">Profit</th>
+                    <th scope="col" class="k-num" data-k="more">Paid</th>
+                    <th scope="col" class="k-num" data-k="balance">Due</th>
+                    <th scope="col" data-k="flag"><span class="visually-hidden">Status</span></th>
                 </tr>
             </thead>
             <tbody>
                 {% for sale in sales %}
                 <tr>
-                    <td class="ps-4 fw-semibold">#{{ sale.id }}</td>
-                    <td>{{ sale.created_at|date:"d M Y H:i" }}</td>
-                    <td>{{ sale.customer|default:"Walk-in Customer" }}</td>
-                    <td class="text-end">Rs {{ sale.report_subtotal|floatformat:2 }}</td>
-                    <td class="text-end">Rs {{ sale.report_discount_amount|floatformat:2 }}</td>
-                    <td class="text-end">Rs {{ sale.report_tax_amount|floatformat:2 }}</td>
-                    <td class="text-end">Rs {{ sale.total_amount|floatformat:2 }}</td>
-                    <td class="text-end">Rs {{ sale.report_cost_total|floatformat:2 }}</td>
-                    <td class="text-end {% if sale.report_gross_profit < 0 %}text-danger{% else %}text-success{% endif %}">Rs {{ sale.report_gross_profit|floatformat:2 }}</td>
-                    <td class="text-end">Rs {{ sale.paid_amount|floatformat:2 }}</td>
-                    <td class="text-end">Rs {{ sale.report_balance_due|floatformat:2 }}</td>
-                    <td class="text-end pe-4"><a href="{% url 'invoice' sale.id %}" class="btn btn-sm btn-outline-primary">Receipt</a></td>
+                    <td class="rp-lead text-nowrap"><a href="{% url 'invoice' sale.id %}" data-tip="Open the receipt">{{ sale.report_number }}</a><div class="rp-cell-note">{{ sale.created_at|date:"d M Y H:i" }}</div></td>
+                    <td class="rp-clip" data-label="Customer">{{ sale.customer|default:"Walk-in Customer" }}</td>
+                    <td class="k-num rp-extra" data-label="Subtotal">{{ sale.report_subtotal|amount }}</td>
+                    <td class="k-num rp-extra" data-label="Discount">{{ sale.report_discount_amount|amount }}</td>
+                    <td class="k-num rp-extra" data-label="{{ tax_label }}">{{ sale.report_tax_amount|amount }}</td>
+                    <td class="k-num fw-semibold" data-label="Total">{{ sale.total_amount|amount }}{% if sale.report_returned_total %}<div class="rp-cell-note k-out">-{{ sale.report_returned_total|amount }} returned</div>{% endif %}</td>
+                    <td class="k-num rp-extra" data-label="Cost">{{ sale.report_cost_total|amount }}</td>
+                    <td class="k-num{% if sale.report_gross_profit < 0 %} k-out{% endif %}" data-label="Gross profit">{{ sale.report_gross_profit|amount }}</td>
+                    <td class="k-num" data-label="Paid">{{ sale.paid_amount|amount }}</td>
+                    <td class="k-num{% if sale.report_balance_due > 0 %} k-due{% endif %}" data-label="Due">{{ sale.report_balance_due|amount }}</td>
+                    <td class="text-end text-nowrap" data-label="Status">{% if sale.report_balance_due > 0 %}<span class="k-badge k-badge--amber">Credit</span>{% else %}<span class="k-badge k-badge--green">Paid</span>{% endif %}{% if sale.report_returned_total %} <span class="k-badge">Returned</span>{% endif %}</td>
                 </tr>
                 {% empty %}
-                <tr><td colspan="12" class="text-center text-muted py-5">No sales found for this range.</td></tr>
+                <tr>
+                    <td colspan="11" class="k-empty">
+                        <p class="k-empty-title">No sales found for this range</p>
+                        <p>Invoices appear here as soon as they are saved at the till.</p>
+                        <div class="k-actions">
+                            <a href="{% url 'pos_screen' %}" class="btn btn-primary btn-sm">New sale</a>
+                            {% for item in quick_ranges %}{% if not item.active %}{% if item.label == "Last 7 days" or item.label == "This month" or item.label == "All time" %}<a href="{{ item.url }}" class="btn btn-outline-secondary btn-sm" data-rp-preset="{{ item.label }}">{{ item.label }}</a>{% endif %}{% endif %}{% endfor %}
+                        </div>
+                    </td>
+                </tr>
                 {% endfor %}
             </tbody>
         </table>
     </div>
-</div>
+</section>
+{% if totals.returns_count %}
+<p class="rp-foot-note">The totals above are net of {{ totals.returns_count }} return{{ totals.returns_count|pluralize }} worth {{ totals.returns_total|money }} recorded in this period. Invoice rows show the original invoice and what came back.</p>
+{% endif %}
+{% include "pos/reports/_pagination.html" %}
 {% endblock %}
-

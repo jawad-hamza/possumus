@@ -1,0 +1,21 @@
+{% if quick_add %}
+<aside class="rf-panel" id="rfQuickPanel" data-rf-panel aria-labelledby="rfQuickTitle" hidden>
+    <div class="rf-panel-head">
+        <h2 class="rf-panel-title" id="rfQuickTitle" data-rf-panel-title>Add</h2>
+        <button type="button" class="btn-close" data-rf-close aria-label="Close without saving"></button>
+    </div>
+    {% for panel in quick_add %}
+    <form class="rf-panel-form" data-rf-quick-form="{{ panel.kind }}" data-rf-title="{{ panel.title }}" action="{{ panel.url }}" method="post" novalidate hidden>
+        {% csrf_token %}
+        {% for field in panel.form.visible_fields %}
+        {% include "pos/partials/_entry_field.html" with field=field %}
+        {% endfor %}
+        <div class="rf-feedback" data-rf-feedback role="alert" hidden></div>
+        <div class="rf-panel-actions">
+            <button type="submit" class="btn btn-primary">{{ panel.save_label }}</button>
+            <button type="button" class="btn btn-outline-secondary" data-rf-close>Cancel</button>
+        </div>
+    </form>
+    {% endfor %}
+</aside>
+{% endif %}

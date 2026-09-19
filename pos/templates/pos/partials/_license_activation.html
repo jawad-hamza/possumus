@@ -1,0 +1,35 @@
+{# One licence panel, used by both the Billing page and the Licence page. #}
+<section class="k-section" id="licence">
+    <div class="k-section-head">
+        <h2 class="k-section-title">Licence key<span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About the licence key" aria-describedby="tipLicKey" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipLicKey" role="tooltip" hidden>Works without internet. Paste the key once and you are done.</span></span></h2>
+        {% if billing_license %}<span class="k-badge k-badge--green k-badge--lg">Licensed</span>{% endif %}
+    </div>
+
+    {% if billing_license %}
+    <dl class="set-facts">
+        <div><dt>Licensed to</dt><dd>{{ billing_license.licensee }}{% if billing_license.email %}<span class="set-sub">{{ billing_license.email }}</span>{% endif %}</dd></div>
+        <div><dt>Edition</dt><dd>{{ billing_license.edition_label }}<span class="set-sub">Plan: {{ billing_license.plan_label }}</span></dd></div>
+        <div><dt>Valid until</dt><dd>{% if billing_license.expires_at %}{{ billing_license.expires_at|date:"d M Y" }}<span class="set-sub">{{ billing_license.days_remaining }} day{{ billing_license.days_remaining|pluralize }} left</span>{% else %}No end date<span class="set-sub">Lifetime licence. No renewal needed.</span>{% endif %}</dd></div>
+        <div><dt>Users</dt><dd>{{ billing_license.max_users_label }}</dd></div>
+        <div><dt>Modules</dt><dd>{% if billing_license.modules is None %}Every module of the {{ billing_license.edition_label }} edition{% else %}{{ billing_license.modules|length }} module{{ billing_license.modules|length|pluralize }} chosen for this shop{% endif %}{% if is_admin_user %}<span class="set-sub"><a href="{% url 'settings_page' %}#features">See them in Settings</a></span>{% endif %}</dd></div>
+    </dl>
+    {% endif %}
+
+    {% if billing_can_activate_license %}
+    <form method="post" action="{% url 'license_page' %}" class="lic-form">
+        {% csrf_token %}
+        <label for="license_key" class="form-label">
+            {% if billing_license %}Replace or renew with a new key{% else %}Paste your licence key{% endif %}<span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About pasting the key" aria-describedby="license_key_helptext" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="license_key_helptext" role="tooltip" hidden>Spaces and line breaks from an email or chat message are fine.</span></span>
+        </label>
+        <textarea id="license_key" name="license_key" rows="4" class="form-control lic-key{% if typed_license_key %} is-invalid{% endif %}" required
+                  spellcheck="false" autocomplete="off" autocapitalize="off"
+                  placeholder="Paste the whole key here" aria-describedby="license_key_helptext"
+                  {% if not billing_license and billing_requires_action %}autofocus{% endif %}>{{ typed_license_key }}</textarea>
+        <div class="k-form-actions">
+            <button type="submit" class="btn btn-primary"><i class="bi bi-unlock me-2" aria-hidden="true"></i>Activate</button>
+        </div>
+    </form>
+    {% else %}
+    <div class="alert alert-warning mb-0">Ask the owner or an admin to enter the licence key. Your account cannot activate it.</div>
+    {% endif %}
+</section>

@@ -1,72 +1,32 @@
-﻿{% extends "pos/base.html" %}
+{% extends "pos/base.html" %}
+{% load static currency_tags %}
 {% block title %}Customers{% endblock %}
+{% block page_title %}Customers{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="{% url 'add_customer_from_pos' %}" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add customer</a>{% if nav_access.reports %}<a href="{% url 'report_sales_by_customer' %}" class="btn btn-outline-secondary">Sales by customer</a>{% endif %}<a href="{% url 'supplier_list' %}" class="btn btn-outline-secondary">Suppliers</a>{% endblock %}
 
 {% block content %}
-<div class="page-header">
-    <div class="page-header-copy">
-        <span class="page-title-icon"><i class="bi bi-people"></i></span>
-        <div>
-            <h1 class="page-title">Customers</h1>
-            <p class="page-subtitle">{{ total_customers }} customer records with live receivable status.</p>
+<div class="b-balances b-balances--tight">
+    <a href="?balance=receivable" data-tip="{{ balance_summary.owed_to_us_count }} customer{{ balance_summary.owed_to_us_count|pluralize }} to collect from. Open the list, biggest first.">
+        <div class="k-balance {% if balance_summary.owed_to_us %}k-balance--due{% endif %}">
+            <div class="k-balance-label">Customers owe you</div>
+            <div class="k-balance-figure">{{ balance_summary.owed_to_us|money }}</div>
+            <div class="k-balance-note">{{ balance_summary.owed_to_us_count }} customer{{ balance_summary.owed_to_us_count|pluralize }}</div>
         </div>
-    </div>
-    <div class="page-actions">
-        <a href="{% url 'add_customer_from_pos' %}" class="btn btn-dark"><i class="bi bi-plus-circle"></i> Add Customer</a>
+    </a>
+    <a href="?balance=advance" data-tip="{{ balance_summary.owed_by_us_count }} customer{{ balance_summary.owed_by_us_count|pluralize }} paid more than they bought.">
+        <div class="k-balance {% if balance_summary.owed_by_us %}k-balance--out{% endif %}">
+            <div class="k-balance-label">Advances you hold</div>
+            <div class="k-balance-figure">{{ balance_summary.owed_by_us|money }}</div>
+            <div class="k-balance-note">{{ balance_summary.owed_by_us_count }} customer{{ balance_summary.owed_by_us_count|pluralize }}</div>
+        </div>
+    </a>
+    <div class="k-balance">
+        <div class="k-balance-label">Customers</div>
+        <div class="k-balance-figure">{{ total_customers }}</div>
+        <div class="k-balance-note">{% if search_term or balance_filter %}Matching this view{% else %}On the books{% endif %}</div>
     </div>
 </div>
 
-<form method="get" class="page-card p-3 p-lg-4 mb-4" id="customer-search-form">
-    <div class="section-heading mb-3">
-        <div class="section-heading-copy">
-            <span class="section-title-icon"><i class="bi bi-search"></i></span>
-            <div>
-                <h2 class="section-title">Find Customer</h2>
-                <p class="section-copy">Search by name, phone, email, or address.</p>
-            </div>
-        </div>
-    </div>
-    <input class="form-control" id="customer-search-input" name="search" placeholder="Search name, phone, email, address" value="{{ search_term }}" autocomplete="off">
-</form>
-
-<div class="row g-3">
-{% for customer in customers %}
-    <div class="col-lg-6">
-        <div class="page-card p-3 h-100 d-flex justify-content-between align-items-start gap-3">
-            <div class="d-flex align-items-start gap-3">
-                <span class="section-title-icon"><i class="bi bi-person"></i></span>
-                <div>
-                    <div class="fw-semibold fs-5">{{ customer.name }}</div>
-                    <div class="text-muted small">{{ customer.phone|default:"-" }}{% if customer.email %} | {{ customer.email }}{% endif %}</div>
-                </div>
-            </div>
-            <div class="text-end">
-                <div><span class="status-chip {{ customer.balance_type }}">{{ customer.balance_type|title }}{% if customer.balance_amount %}: {{ customer.balance_amount }}{% endif %}</span></div>
-                <a href="{% url 'customer_detail' customer.id %}" class="btn btn-sm btn-outline-primary mt-2">View</a>
-            </div>
-        </div>
-    </div>
-{% empty %}
-    <div class="col-12"><div class="alert alert-light border mb-0">No customers found.</div></div>
-{% endfor %}
-</div>
+{% include "parties/_party_list_body.html" with parties=customers party_icon="bi-person" detail_url_name="customer_detail" search_placeholder="Search name, phone, email, address" empty_message="No customers found." %}
 {% endblock %}
-
-{% block extra_js %}
-<script>
-(function () {
-    const form = document.getElementById("customer-search-form");
-    const input = document.getElementById("customer-search-input");
-    if (!form || !input) return;
-    let timer = null;
-    input.addEventListener("input", function () {
-        window.clearTimeout(timer);
-        timer = window.setTimeout(function () {
-            form.requestSubmit ? form.requestSubmit() : form.submit();
-        }, 250);
-    });
-})();
-</script>
-{% endblock %}
-
-
-

@@ -1,0 +1,26 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Not allowed | {{ brand_name|default:"ZehnMS" }}</title>
+    <link href="{% static 'vendor/bootstrap/css/bootstrap.min.css' %}" rel="stylesheet">
+    <link href="{% static 'vendor/bootstrap-icons/bootstrap-icons.min.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/tokens.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/components.css' %}" rel="stylesheet">
+    <link href="{% static 'zehnms/css/auth.css' %}" rel="stylesheet">
+</head>
+<body>
+<main class="k-lone">
+    <div class="k-lone-sheet">
+        <p class="k-lone-code"><span class="k-badge k-badge--amber k-badge--lg">403 &middot; No entry</span></p>
+        <h1>Your login cannot open this page</h1>
+        <p>This part of the shop is switched off for your role. Ask the owner to give your role access from Settings, or go back to a page you use.</p>
+        <div class="k-actions">
+            <a class="btn btn-primary" href="/"><i class="bi bi-house" aria-hidden="true"></i>Go to the start page</a>
+        </div>
+    </div>
+</main>
+</body>
+</html>
