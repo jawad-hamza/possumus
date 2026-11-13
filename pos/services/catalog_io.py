@@ -25,6 +25,8 @@ from pos.models import (
     Supplier,
     SystemSettings,
     format_qty,
+    packaging_enabled,
+    quantize_money,
     quantize_qty,
 )
 from pos.services.stock_control import create_stock_adjustment
@@ -60,6 +62,12 @@ if _HAS_TRACK_STOCK:
 # Added later, so they come last and older spreadsheets keep their column order.
 # markup_amount is the other way to price from cost; the variant pair names a size of one item ("Bread", "Small").
 COLUMNS.extend(["markup_amount", "variant_group", "variant_label"])
+# Cartons and boxes. With these filled, cost_price, price and markup_amount are for the largest pack.
+PACKING_COLUMNS = ("pieces_per_box", "boxes_per_carton")
+COLUMNS.extend(PACKING_COLUMNS)
+# Kept per base unit in the database; in the file they are for the largest pack the row has.
+PACK_MONEY_COLUMNS = ("cost_price", "price", "markup_amount")
+MAX_PACK_COUNT = 100000
 
 COLUMN_GUIDE = [
     ("name", "Required", "Product name as it should print on the receipt."),
@@ -88,6 +96,29 @@ COLUMN_GUIDE.extend(
     ]
 )
 
+# What changes in the guide while cartons and boxes are switched on.
+_PACK_COLUMN_GUIDE = {
+    "cost_price": "What one carton costs you. A row without cartons: one box. Without boxes either: one unit.",
+    "price": "Sale price of the same pack as the cost: the carton, else the box, else one unit.",
+    "markup_amount": "Or: sale price = cost + this fixed amount, for the same pack as the cost. Fill one markup at most.",
+    "opening_stock": "Quantity on the shelf today, counted in single units (pieces), not cartons. New products only; weights may use decimals (2.5).",
+    "low_stock_threshold": "Warn when stock falls to this many single units (pieces). Blank means 5.",
+}
+_PACKING_COLUMN_GUIDE = [
+    ("pieces_per_box", "Optional", "Pieces in one box. Blank or 1: the product has no boxes."),
+    ("boxes_per_carton", "Optional", "Boxes in one carton (pieces, when there are no boxes). Blank or 1: no cartons."),
+]
+
+
+def column_guide():
+    """The column help for the import page, worded in packs only while cartons and boxes are switched on."""
+    if not packaging_enabled():
+        return list(COLUMN_GUIDE)
+    return [
+        (column, requirement, _PACK_COLUMN_GUIDE.get(column, help_text))
+        for column, requirement, help_text in COLUMN_GUIDE
+    ] + _PACKING_COLUMN_GUIDE
+
 _EXAMPLE_ROWS = [
     {
         "name": "Example Flour",
@@ -115,6 +146,19 @@ _EXAMPLE_ROWS = [
         "expiry_date": "2027-12-31",
     },
 ]
+# Offered while cartons and boxes are switched on: prices for one carton, stock in pieces (10 cartons).
+_PACKED_EXAMPLE_ROW = {
+    "name": "Example Biscuits",
+    "sku": f"{EXAMPLE_SKU_PREFIX}3",
+    "category": "Grocery",
+    "unit": "pcs",
+    "pieces_per_box": "12",
+    "boxes_per_carton": "12",
+    "cost_price": "1000.00",
+    "price": "1250.00",
+    "opening_stock": "1440",
+    "low_stock_threshold": "288",
+}
 
 _UNIT_ALIASES = {
     "piece": "pcs", "pieces": "pcs", "pc": "pcs", "each": "pcs", "unit": "pcs", "nos": "pcs", "no": "pcs",
@@ -199,13 +243,22 @@ def _csv_text(rows):
 
 
 def template_csv_text():
-    return _csv_text(_EXAMPLE_ROWS)
+    rows = list(_EXAMPLE_ROWS)
+    if packaging_enabled():
+        rows.append(_PACKED_EXAMPLE_ROW)
+    return _csv_text(rows)
+
+
+def _pack_money(product, value):
+    """A stored per-unit figure as the file carries it: for the largest pack, two places."""
+    return quantize_money(Decimal(value or 0) * product.pack_factor(product.top_pack_level))
 
 
 def export_catalog_csv_text(queryset=None):
     if queryset is None:
         queryset = Product.objects.all()
     queryset = queryset.select_related("category", "brand", "supplier", "variant_group").order_by("name", "variant_label", "id")
+    packaging = packaging_enabled()
 
     rows = []
     for product in queryset:
@@ -217,18 +270,22 @@ def export_catalog_csv_text(queryset=None):
             "brand": product.brand.name if product.brand_id else "",
             "supplier": product.supplier.name if product.supplier_id else "",
             "unit": product.unit,
-            "cost_price": f"{Decimal(product.cost_price or 0):.2f}",
+            # Money is written for the largest pack the row states, so the import reads back the same figures.
+            "cost_price": f"{_pack_money(product, product.cost_price):.2f}",
             "markup_percent": "" if product.markup_percent is None else f"{product.markup_percent:.2f}",
-            "markup_amount": "" if product.markup_amount is None else f"{product.markup_amount:.2f}",
+            "markup_amount": "" if product.markup_amount is None else f"{_pack_money(product, product.markup_amount):.2f}",
             "variant_group": product.variant_group.name if product.variant_group_id else "",
             "variant_label": product.variant_label if product.variant_group_id else "",
-            "price": f"{Decimal(product.price or 0):.2f}",
+            "price": f"{_pack_money(product, product.price):.2f}",
             "minimum_margin_percent": f"{Decimal(product.minimum_margin_percent or 0):.2f}",
-            # Current stock, so the file can seed another install as its opening stock.
+            # Current stock, so the file can seed another install as its opening stock. Always in base units.
             "opening_stock": format_qty(product.stock),
             "low_stock_threshold": format_qty(product.low_stock_threshold),
             "location": product.location,
             "expiry_date": product.expiry_date.isoformat() if product.expiry_date else "",
+            # Blank while cartons and boxes are switched off: every figure is then for one unit.
+            "pieces_per_box": str(product.pieces_per_box) if packaging else "",
+            "boxes_per_carton": str(product.boxes_per_carton) if packaging else "",
         }
         if _HAS_TRACK_STOCK:
             row["track_stock"] = "yes" if product.track_stock else "no"
@@ -287,6 +344,19 @@ def _parse_decimal(text, column, *, decimal_comma):
     if number < 0:
         raise _CellError(f"{column}: cannot be negative.")
     return number
+
+
+def _parse_pack_count(text, column):
+    """How many a box or a carton holds: a whole number, 1 meaning the level is not there."""
+    try:
+        count = Decimal(text.replace(" ", "").replace(NO_BREAK_SPACE, ""))
+    except InvalidOperation as exc:
+        raise _CellError(f"{column}: '{text}' is not a number. Use a whole number such as 12.") from exc
+    if not count.is_finite() or count != count.to_integral_value() or count < 1:
+        raise _CellError(f"{column}: use a whole number, 1 or more.")
+    if count > MAX_PACK_COUNT:
+        raise _CellError(f"{column}: is too large.")
+    return int(count)
 
 
 def _parse_date(text):
@@ -425,6 +495,7 @@ def parse_catalog(raw, *, update_existing=False):
             taken_skus.add(sku.lower())
     sku_generator = _SkuGenerator(taken_skus)
     default_markup = SystemSettings.load().default_markup_percent
+    packaging = packaging_enabled()
     ignored_opening_stock = 0
     # Sizes already in the shop and in this file: (family, size) -> who holds it.
     taken_sizes = {
@@ -465,6 +536,8 @@ def parse_catalog(raw, *, update_existing=False):
         is_new = existing is None
         product = Product() if is_new else existing
         touched = []
+        # What the shop holds for one base unit, read before the row starts changing the product.
+        stored_money = {} if is_new else {column: getattr(product, column) for column in PACK_MONEY_COLUMNS}
 
         def assign(attribute, value):
             setattr(product, attribute, value)
@@ -554,8 +627,46 @@ def parse_catalog(raw, *, update_existing=False):
         except _CellError as exc:
             problems.append(str(exc))
 
+        # Packing before money: cost, price and the fixed markup are for the largest pack the row has.
+        packing = {}
+        for column in PACKING_COLUMNS:
+            if not cells.get(column):
+                continue
+            try:
+                packing[column] = _parse_pack_count(cells[column], column)
+            except _CellError as exc:
+                problems.append(str(exc))
+        if packaging:
+            for column, count in packing.items():
+                assign(column, count)
+        elif any(count > 1 for count in packing.values()):
+            problems.append(
+                f"{next(column for column, count in packing.items() if count > 1)}: cartons and boxes are switched off "
+                "in this shop. Switch them on in Settings > Features, or empty the packing columns and give prices per unit."
+            )
+        factor = product.pack_factor(product.top_pack_level)
+        # A packed product in a file that does not state the packing: its prices cannot be read safely.
+        packing_unstated = packaging and not is_new and product.has_packaging and len(packing) < len(PACKING_COLUMNS)
+
+        def assign_money(attribute, value):
+            """A money cell is for the row's largest pack; the product keeps it for one base unit."""
+            if value != quantize_money(value):
+                problems.append(f"{attribute}: use at most 2 decimal places.")
+                return
+            stored = stored_money.get(attribute)
+            if stored is not None and quantize_money(Decimal(stored) * factor) == value:
+                # The figure the shop already has, as an export writes it: left exactly as stored.
+                return
+            if packing_unstated:
+                problems.append(
+                    f"{attribute}: this product is packed ({product.packing_display}). Fill pieces_per_box and "
+                    "boxes_per_carton on this row so the figure is read for the right pack."
+                )
+                return
+            assign(attribute, product.quantize_unit_money(value / factor))
+
         if "cost_price" in numbers:
-            assign("cost_price", numbers["cost_price"])
+            assign_money("cost_price", numbers["cost_price"])
         if "minimum_margin_percent" in numbers:
             assign("minimum_margin_percent", numbers["minimum_margin_percent"])
         if "low_stock_threshold" in numbers:
@@ -566,14 +677,17 @@ def parse_catalog(raw, *, update_existing=False):
         if "markup_percent" in present:
             assign("markup_percent", numbers.get("markup_percent"))
         if "markup_amount" in present:
-            assign("markup_amount", numbers.get("markup_amount"))
+            if numbers.get("markup_amount") is None:
+                assign("markup_amount", None)
+            else:
+                assign_money("markup_amount", numbers["markup_amount"])
         # One markup at a time: a file that fills only one of the two columns switches the product to it.
         if numbers.get("markup_amount") is not None and "markup_percent" not in present:
             assign("markup_percent", None)
         if numbers.get("markup_percent") is not None and "markup_amount" not in present:
             assign("markup_amount", None)
         if "price" in numbers:
-            assign("price", numbers["price"])
+            assign_money("price", numbers["price"])
 
         if is_new and "price" not in numbers and not product.has_markup and default_markup is not None:
             # Same default the Add Product form offers.

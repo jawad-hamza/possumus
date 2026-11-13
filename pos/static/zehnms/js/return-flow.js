@@ -86,7 +86,7 @@
     var openTarget = null;
 
     // The endpoint's reply names the record after its kind.
-    var REPLY_KEY = { brand: 'brand', category: 'category', supplier: 'supplier', product: 'product', expense_type: 'expense_type', bank: 'bank' };
+    var REPLY_KEY = { brand: 'brand', category: 'category', supplier: 'supplier', product: 'product', expense_type: 'expense_type', bank: 'bank', route: 'route', order_booker: 'order_booker', delivery_man: 'delivery_man', vehicle: 'vehicle', customer: 'customer' };
 
     function panelForm(kind) {
         return panel ? panel.querySelector('[data-rf-quick-form="' + kind + '"]') : null;

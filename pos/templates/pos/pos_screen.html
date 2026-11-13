@@ -11,6 +11,7 @@
 
 {% block extra_css %}
 <link href="{% static 'zehnms/css/pages/till.css' %}" rel="stylesheet">
+<link href="{% static 'zehnms/css/pages/till-discount.css' %}" rel="stylesheet">
 <noscript><style>.t-side, .t-side [data-panel="browse"] { display: block !important; }</style></noscript>
 {% endblock %}
 
@@ -51,7 +52,7 @@
                 <p class="t-notice" id="till-notice" role="status" aria-live="polite">{% if checkout_disabled %}<span class="k-out">Fix the marked lines before closing this sale.</span>{% else %}<span class="t-notice-idle">{% if cart_rows %}{{ cart_rows|length }} line{{ cart_rows|length|pluralize }} on this bill{% else %}Ready for the next customer{% endif %}</span>{% endif %}</p>
                 <div class="t-tools" role="toolbar" aria-label="Selected line">
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="till-qty-key" data-k-key="F4" data-k-key-label="Quantity of the selected line">Qty <span class="k-key">F4</span></button>
-                    <button type="button" class="btn btn-sm btn-outline-secondary" id="till-disc-key" data-k-key="F6" data-k-key-label="Discount: the line, then the whole bill">Disc <span class="k-key">F6</span></button>
+                    <button type="button" class="btn btn-sm btn-outline-secondary" id="till-disc-key" data-k-key="F6" data-k-key-label="Discount: the line, then the whole bill, then percent or cash">Disc <span class="k-key">F6</span></button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="till-remove-key">Remove <span class="k-key">Del</span></button>
                     <button type="button" class="btn btn-sm btn-outline-secondary" id="till-browse-key" data-k-key="F3" data-k-key-label="Product list by category" aria-controls="till-side" aria-expanded="false">List <span class="k-key">F3</span></button>
                 </div>
@@ -90,7 +91,7 @@
                 <div class="t-browse-scroll" id="till-browse-scroll">
                     <ul class="t-browse-list" id="till-browse-rows">
                         {% for product in products|slice:":60" %}
-                        <li><button class="t-browse-btn" name="product_id" value="{{ product.id }}" {% if product.track_stock and product.stock <= 0 %}disabled{% endif %}><span class="t-browse-name">{{ product.display_name }}</span><span class="t-browse-price k-num">{{ product.price|money }}{{ product|per_unit }}</span><span class="t-item-meta">{{ product.sku }}{% if product.brand %} &middot; {{ product.brand.name }}{% endif %}{% if product.location %} &middot; {{ product.location }}{% endif %}</span>{% if product.track_stock and product.stock <= 0 %}<span class="k-state k-state--out">Out of stock</span>{% else %}<span class="t-browse-stock k-num">{{ product.stock_display }}</span>{% endif %}</button></li>
+                        <li><button class="t-browse-btn" name="product_id" value="{{ product.id }}" {% if product.track_stock and product.stock <= 0 %}disabled{% endif %}><span class="t-browse-name">{{ product.display_name }}</span><span class="t-browse-price k-num">{{ product.till_price|money }}{{ product.till_per_unit }}</span><span class="t-item-meta">{{ product.sku }}{% if product.brand %} &middot; {{ product.brand.name }}{% endif %}{% if product.location %} &middot; {{ product.location }}{% endif %}</span>{% if product.track_stock and product.stock <= 0 %}<span class="k-state k-state--out">Out of stock</span>{% else %}<span class="t-browse-stock k-num">{{ product.stock_display }}</span>{% endif %}</button></li>
                         {% empty %}
                         <li class="t-browse-none">No products in this category yet.</li>
                         {% endfor %}
@@ -109,11 +110,7 @@
             <form method="post" action="{{ pos_customer_add_url }}" id="till-customer-form" novalidate>
                 {% csrf_token %}
                 {% for field in till_customer_form %}
-                <div class="t-field">
-                    <label class="form-label" for="till_{{ field.id_for_label }}">{{ field.label }}{% if not field.field.required %} <span class="t-optional">optional</span>{% endif %}</label>
-                    {% if field.name == "address" %}<textarea name="address" id="till_{{ field.id_for_label }}" class="form-control" rows="2"></textarea>{% else %}<input type="{% if field.name == 'email' %}email{% elif field.name == 'phone' %}tel{% else %}text{% endif %}" name="{{ field.name }}" id="till_{{ field.id_for_label }}" class="form-control"{% if field.field.max_length %} maxlength="{{ field.field.max_length }}"{% endif %}{% if field.field.required %} required{% endif %} autocomplete="off">{% endif %}
-                    <div class="k-error" data-error-for="{{ field.name }}" hidden></div>
-                </div>
+                {% include "pos/partials/till_customer_field.html" %}
                 {% endfor %}
                 <div class="k-error" data-error-for="__all__" hidden></div>
                 <div class="t-panel-actions">
@@ -126,18 +123,18 @@
         {% endif %}
     </aside>
 
-    <form method="post" id="checkout-form" class="t-pay" aria-label="Payment">
+    <form method="post" enctype="multipart/form-data" id="checkout-form" class="t-pay" aria-label="Payment">
         {% csrf_token %}
         <input type="hidden" name="action" value="checkout">
         <input type="hidden" name="selected_customer_id" value="{{ selected_customer_id }}" id="selected_customer_id_hidden">
         <input type="hidden" name="selected_category" value="{{ selected_category }}">
 
         <dl class="t-sums">
-            <div class="t-sum"><dt>Subtotal</dt><dd class="k-num" id="subtotal-amount">{{ sale_preview.subtotal|money }}</dd></div>
             <div class="t-sum" id="line-discount-row" {% if sale_preview.line_discount_total <= 0 %}hidden{% endif %}><dt>Line discounts given</dt><dd class="k-num" id="line-discount-amount">{{ sale_preview.line_discount_total|money }}</dd></div>
+            <div class="t-sum"><dt>Subtotal</dt><dd class="k-num" id="subtotal-amount">{{ sale_preview.subtotal|money }}</dd></div>
             <div class="t-sum t-sum--field">
-                <dt><label for="discount_rate">Bill discount</label> <input type="number" name="discount_rate" id="discount_rate" class="form-control form-control-sm t-rate-input" value="{{ discount_rate_value|floatformat:2 }}" min="0" max="100" step="0.01" inputmode="decimal"> %</dt>
-                <dd class="k-num" id="discount-amount">{{ sale_preview.discount_amount|money }}</dd>
+                <dt><label for="discount_rate">Discount<span class="visually-hidden"> on the whole bill</span></label> <input type="number" name="discount_rate" id="discount_rate" class="form-control form-control-sm t-rate-input" value="{{ bill_discount.value|floatformat:2 }}" min="0" {% if not bill_discount.is_amount %}max="100" {% endif %}step="0.01" inputmode="decimal" data-percent="{{ bill_discount.percent|floatformat:2 }}" data-amount="{{ bill_discount.amount|floatformat:2 }}" data-subtotal="{{ bill_discount.subtotal|floatformat:2 }}" aria-describedby="till-discount-note"{% if bill_discount.error %} aria-invalid="true"{% endif %}>{% include "pos/partials/till_discount_unit.html" %}</dt>
+                <dd class="k-num" id="discount-amount">{{ bill_discount.other_display }}</dd>
             </div>
             {% if manual_tax_enabled %}
             <div class="t-sum t-sum--field">
@@ -154,6 +151,7 @@
             <input type="hidden" name="tax_rate" id="tax_rate" value="0">
             {% endif %}
         </dl>
+        <p class="t-discount-note" id="till-discount-note" role="alert"{% if not bill_discount.error %} hidden{% endif %}>{{ bill_discount.error }}</p>
         <dl class="t-sums t-compare" id="till-compare" {% if not sale_preview.comparison_totals %}hidden{% endif %}>
             {% for option in sale_preview.comparison_totals %}
             <div class="t-sum"><dt data-tip="{{ option.tax_label_display }}">If paid by {{ option.label|lower }}</dt><dd class="k-num">{{ option.total_amount|money }}</dd></div>
@@ -173,6 +171,7 @@
                 {% endfor %}
             </select>
             <p class="t-customer-note" id="till-customer-note" {% if not till_customer or till_customer.balance_type == "clear" %}hidden{% endif %}>{% if till_customer.balance_type == "receivable" %}<span class="k-state k-state--due">Owes {{ till_customer.balance }}</span>{% elif till_customer.balance_type == "advance" %}<span class="k-state k-state--due">Paid {{ till_customer.balance }} in advance</span>{% endif %}</p>
+            {% include "pos/partials/till_customer_terms.html" %}
         </div>
         {% endif %}
 
@@ -195,6 +194,7 @@
                 <option value="{{ bank.id }}" {% if selected_bank_account_id == bank.id|stringformat:'s' %}selected{% endif %}>{{ bank.display_name }}</option>
                 {% endfor %}
             </select>
+            {% include "pos/partials/_till_receipt.html" %}
         </div>
 
         <div class="t-tender" id="till-tender">
@@ -242,5 +242,7 @@ window.tillSend = function (url, body) {
     });
 };
 </script>
+<script src="{% static 'zehnms/js/till-receipt.js' %}"></script>
+<script src="{% static 'zehnms/js/till-discount.js' %}"></script>
 <script src="{% static 'zehnms/js/till.js' %}"></script>
 {% endblock %}

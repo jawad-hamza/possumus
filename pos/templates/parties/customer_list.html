@@ -2,8 +2,8 @@
 {% load static currency_tags %}
 {% block title %}Customers{% endblock %}
 {% block page_title %}Customers{% endblock %}
-{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
-{% block page_actions %}<a href="{% url 'add_customer_from_pos' %}" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add customer</a>{% if nav_access.reports %}<a href="{% url 'report_sales_by_customer' %}" class="btn btn-outline-secondary">Sales by customer</a>{% endif %}<a href="{% url 'supplier_list' %}" class="btn btn-outline-secondary">Suppliers</a>{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/pages/field-sales.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="{% url 'add_customer_from_pos' %}" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add customer</a>{% if feature_modules.field_sales %}<a href="{% url 'route_list' %}" class="btn btn-outline-secondary">Routes</a><a href="{% url 'order_booker_list' %}" class="btn btn-outline-secondary">Order bookers</a>{% endif %}{% if nav_access.reports %}<a href="{% url 'report_receivables_by_area' %}" class="btn btn-outline-secondary">Receivables by city</a><a href="{% url 'report_sales_by_customer' %}" class="btn btn-outline-secondary">Sales by customer</a>{% endif %}<a href="{% url 'supplier_list' %}" class="btn btn-outline-secondary">Suppliers</a>{% endblock %}
 
 {% block content %}
 <div class="b-balances b-balances--tight">
@@ -24,9 +24,9 @@
     <div class="k-balance">
         <div class="k-balance-label">Customers</div>
         <div class="k-balance-figure">{{ total_customers }}</div>
-        <div class="k-balance-note">{% if search_term or balance_filter %}Matching this view{% else %}On the books{% endif %}</div>
+        <div class="k-balance-note">{% if search_term or balance_filter or area_filter_active %}Matching this view{% else %}On the books{% endif %}</div>
     </div>
 </div>
 
-{% include "parties/_party_list_body.html" with parties=customers party_icon="bi-person" detail_url_name="customer_detail" search_placeholder="Search name, phone, email, address" empty_message="No customers found." %}
+{% include "parties/_party_list_body.html" with parties=customers party_icon="bi-person" detail_url_name="customer_detail" search_placeholder="Search name, phone, city, address" empty_message="No customers found." %}
 {% endblock %}

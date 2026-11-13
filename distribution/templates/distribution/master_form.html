@@ -1,0 +1,24 @@
+{% extends "distribution/_base.html" %}
+{% block title %}{% if instance %}Edit {{ instance }}{% else %}Add {{ spec.singular }}{% endif %}{% endblock %}
+{% block page_title %}{% if instance %}Edit {{ spec.singular }}{% else %}Add {{ spec.singular }}{% endif %}{% endblock %}
+{% block page_help %}{{ spec.help }}{% endblock %}
+{% block page_actions %}<a href="{{ back_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>{% endblock %}
+
+{% block dist_content %}
+<div class="k-form">
+    <form method="post" novalidate>
+        {% csrf_token %}
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+        {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+        <section class="k-section">
+            <div class="k-form-grid">
+                {% for field in form %}{% include "pos/partials/_field.html" with field=field %}{% endfor %}
+            </div>
+        </section>
+        <div class="k-form-actions">
+            <button type="submit" class="btn btn-primary">Save {{ spec.singular }}</button>
+            <a href="{{ back_url }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% endblock %}

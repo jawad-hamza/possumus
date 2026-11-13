@@ -4,7 +4,7 @@ from decimal import Decimal, InvalidOperation
 from django import template
 from django.utils.safestring import mark_safe
 
-from pos.models import Product, format_qty
+from pos.models import PACK_PIECE, Product, format_qty
 from pos.services.currency import (
     currency_symbol as active_currency_symbol,
     format_amount,
@@ -75,6 +75,58 @@ def per_unit(product):
     if not unit or unit == Product.UNIT_PIECE:
         return ""
     return f" / {unit}"
+
+
+# ------------------------------------------------------------------ cartons, boxes, pieces
+@register.filter
+def in_packs(quantity, product):
+    """A base quantity in the product's packs: "12 Ctn 3 Box 5 pcs"; "12.5 kg" for a plain product."""
+    if getattr(product, "has_packaging", False):
+        return product.format_quantity(quantity)
+    return qty_unit(quantity, getattr(product, "unit", None))
+
+
+@register.filter
+def in_packs_short(quantity, product):
+    """Like in_packs, but a plain product counted in pieces stays a bare number."""
+    if getattr(product, "has_packaging", False):
+        return product.format_quantity(quantity)
+    return qty_short(quantity, getattr(product, "unit", None))
+
+
+@register.simple_tag
+def pack_quantity(product, quantity, top_level=None):
+    """A base quantity from a chosen level down: {% pack_quantity product product.stock "box" %} gives "147 Box 5 pcs"."""
+    return product.format_quantity(quantity, top_level or None)
+
+
+@register.filter
+def price_unit(product):
+    """The unit a product's shown cost and price are for: "Ctn", "Box", "kg"; empty for plain pieces."""
+    if getattr(product, "has_packaging", False):
+        return product.top_pack_label
+    unit = getattr(product, "unit", "") or ""
+    return "" if unit == Product.UNIT_PIECE else unit
+
+
+@register.filter
+def line_qty(item):
+    """A sale, purchase or return line's quantity in the unit it was entered in: "10 Ctn", "5 pcs".
+
+    A plain product keeps the short form it always had: "2", "0.5 kg".
+    """
+    if item.unit_level == PACK_PIECE and not item.product.has_packaging:
+        return qty_short(item.quantity, item.product.unit)
+    return item.quantity_display
+
+
+@register.filter
+def line_unit(item):
+    """The unit a line's rate is for: "Ctn", "Box", "kg"; empty for plain pieces."""
+    if item.unit_level != PACK_PIECE or item.product.has_packaging:
+        return item.unit_label
+    unit = item.product.unit or ""
+    return "" if unit == Product.UNIT_PIECE else unit
 
 
 @register.simple_tag

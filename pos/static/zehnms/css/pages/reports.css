@@ -91,13 +91,22 @@
     margin-bottom: var(--k-1);
 }
 
-.rp-field input[type="date"] {
+.rp-field input[type="date"],
+.rp-field input[type="month"] {
     width: 11rem;
+}
+
+.rp-field input[type="number"] {
+    width: 7rem;
 }
 
 .rp-field .form-select {
     min-width: 13rem;
     max-width: 22rem;
+}
+
+.rp-field .rp-period-select {
+    min-width: 11rem;
 }
 
 /* date shortcuts: one segmented control */
@@ -239,6 +248,19 @@
 .rp-none,
 .rp-soft {
     color: var(--k-ink-soft);
+}
+
+/* a report listed in groups: a heading line names the group ("City : Mirpur A.K"), a subtotal line closes it */
+.report-table > tbody > tr.rp-group-row > th {
+    padding-top: var(--k-4);
+    border-bottom-color: var(--k-border);
+    color: var(--k-ink-title);
+    font-weight: 600;
+    text-align: left;
+}
+
+.report-table > tbody > tr.rp-subtotal-row > td {
+    border-bottom: 0;
 }
 
 /* columns the reader turns on */
@@ -500,6 +522,8 @@
     }
 
     .rp-field input[type="date"],
+    .rp-field input[type="month"],
+    .rp-field input[type="number"],
     .rp-field .form-select {
         width: 100%;
         min-width: 0;

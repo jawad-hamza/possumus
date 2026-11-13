@@ -114,6 +114,13 @@
     display: grid;
 }
 
+/* a choice that belongs with the switches above it (what a sale over the credit limit does) */
+.set-toggles + .set-credit-limit {
+    margin-top: var(--k-4);
+    padding-top: var(--k-4);
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+
 .set-toggle {
     display: flex;
     align-items: center;

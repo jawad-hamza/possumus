@@ -1,0 +1,54 @@
+{% extends "pricing/_base.html" %}
+{% block title %}Schemes{% endblock %}
+{% block page_title %}Schemes{% endblock %}
+{% block page_help %}Trade offers on a product or a category: free goods, a percentage off or an amount off each unit once a bill line reaches a quantity. When several apply to one line, the one worth most to the customer wins. Free goods go on the bill at zero and leave stock at cost.{% endblock %}
+{% block page_actions %}{% if can_manage %}<a href="{% url 'pricing_scheme_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary" data-k-key="F2" data-k-key-label="Add a scheme"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add scheme</a>{% endif %}{% if nav_access.reports %}<a href="{% url 'report_scheme_usage' %}" class="btn btn-outline-secondary" data-tip="Free goods and discounts given, by scheme, customer, route or day"><i class="bi bi-graph-up" aria-hidden="true"></i> Scheme usage</a>{% endif %}{% endblock %}
+
+{% block pricing_content %}
+<section class="k-section" aria-labelledby="schemes-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="schemes-title">{% for value, label in filters %}{% if value == show %}{{ label }} schemes{% endif %}{% endfor %}</h2>
+        <div class="b-filter-tabs" role="group" aria-label="Show">
+            {% for value, label in filters %}<a href="?show={{ value }}" class="btn btn-sm" aria-pressed="{% if value == show %}true{% else %}false{% endif %}">{{ label }}</a>{% endfor %}
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack b-index">
+            <thead>
+                <tr>
+                    <th scope="col" data-k="what">Scheme</th>
+                    <th scope="col" data-k="meta">Offer</th>
+                    <th scope="col" data-k="more">On</th>
+                    <th scope="col" data-k="more">For</th>
+                    <th scope="col" data-k="more">Dates</th>
+                    <th scope="col" class="k-num" data-k="amount">Bill lines</th>
+                    <th scope="col" data-k="flag">Status</th>
+                    <th scope="col" data-k="hide"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for scheme in schemes %}
+                <tr id="touched-{{ scheme.id }}">
+                    <td class="b-stack-title" data-k="what">{% if can_manage %}<a href="{% url 'pricing_scheme_edit' scheme.id %}?next={{ request.get_full_path|urlencode }}" class="b-index-name">{{ scheme.name }}</a>{% else %}<span class="b-index-name">{{ scheme.name }}</span>{% endif %}</td>
+                    <td data-label="Offer" data-k="meta"><span class="pr-offer">{{ scheme.offer_label }}</span></td>
+                    <td data-label="On" data-k="more">{{ scheme.goods_label }}</td>
+                    <td data-label="For" data-k="more">{{ scheme.scope_label }}</td>
+                    <td data-label="Dates" data-k="more">{{ scheme.window_label }}</td>
+                    <td class="k-num" data-label="Bill lines" data-k="amount">{{ scheme.uses }}</td>
+                    <td data-label="Status" data-k="flag">{% with status=scheme.status_label %}{% if status == "Running" %}<span class="k-badge k-badge--green">{{ status }}</span>{% else %}<span class="k-badge">{{ status }}</span>{% endif %}{% endwith %}</td>
+                    <td class="text-end" data-k="hide">{% if can_manage %}<span class="k-row-actions"><form method="post" action="{% url 'pricing_scheme_toggle' scheme.id %}" class="d-inline">{% csrf_token %}<input type="hidden" name="next" value="{{ request.get_full_path }}"><button type="submit" class="k-icon-btn" aria-label="{% if scheme.is_active %}Switch off{% else %}Switch on{% endif %} {{ scheme.name }}" data-tip="{% if scheme.is_active %}Switch off{% else %}Switch on{% endif %}"><i class="bi {% if scheme.is_active %}bi-pause-circle{% else %}bi-play-circle{% endif %}" aria-hidden="true"></i></button></form><a href="{% url 'pricing_scheme_edit' scheme.id %}?next={{ request.get_full_path|urlencode }}" class="k-icon-btn" aria-label="Edit {{ scheme.name }}" data-tip="Edit"><i class="bi bi-pencil" aria-hidden="true"></i></a></span>{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="8" class="k-empty" data-k="note">
+                        <i class="bi bi-gift" aria-hidden="true"></i>
+                        <p class="k-empty-title">No schemes here.</p>
+                        {% if can_manage %}<a class="btn btn-primary" href="{% url 'pricing_scheme_add' %}">Add scheme</a>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

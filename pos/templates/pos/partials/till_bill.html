@@ -1,19 +1,41 @@
-{% load currency_tags %}{% for row in cart_rows %}
-<tbody class="t-line{% if row.pricing_error or row.stock_error %} has-issue{% endif %}{% if row.product_id|stringformat:'s' == selected_line_id %} is-selected{% endif %}" data-line="{{ row.product_id }}" data-line-total="{{ row.line_total|floatformat:2 }}" data-tax-rate="{{ row.category_tax_rate|floatformat:2 }}" data-cash-tax-rate="{{ row.cash_category_tax_rate|floatformat:2 }}" data-bank-tax-rate="{{ row.bank_category_tax_rate|floatformat:2 }}">
+{% load currency_tags %}{% for row in cart_rows %}{% if row.is_free %}
+<tbody class="t-line t-line--free{% if row.free_note %} has-note{% endif %}{% if row.line_id == selected_line_id %} is-selected{% endif %}" data-line="{{ row.line_id }}" data-line-total="0.00" data-tax-rate="0.00" data-cash-tax-rate="0.00" data-bank-tax-rate="0.00" data-free-line>
     <tr class="t-line-main">
         <td class="t-idx">{{ forloop.counter }}</td>
         <td class="t-item">
             <span class="t-item-name">{{ row.name }}</span>
-            <span class="t-item-sub">{% if row.product and row.allows_fraction %}{% quantity_chips row.unit row.stock as chips %}{% if chips %}<span class="t-chips" role="group" aria-label="Quick quantities for {{ row.name }}">{% for chip in chips %}<button type="button" class="t-chip{% if chip.quantity == row.quantity_display %} is-on{% endif %}" data-quantity-chip="{{ chip.quantity }}"{% if chip.disabled %} disabled title="Not enough stock"{% endif %}>{{ chip.label }}</button>{% endfor %}</span>{% endif %}{% endif %}<span class="t-item-meta">{% if row.product %}{% if row.has_custom_price %}<span class="t-meta-bit">Rate changed from {{ row.original_price|money }}</span>{% endif %}{% if row.has_line_discount %}<span class="t-meta-bit">Net {{ row.effective_unit_price|money }}{{ row.product|per_unit }}</span>{% endif %}{% if row.stock is not None %}<span class="t-meta-bit">{{ row.product.stock_display }} in stock</span>{% endif %}{% if uses_category_gst and row.category_tax_rate > 0 %}<span class="t-meta-bit">{% if row.cash_category_tax_rate != row.bank_category_tax_rate %}Cash {{ row.cash_category_tax_rate|floatformat:2 }}% / Bank {{ row.bank_category_tax_rate|floatformat:2 }}%{% else %}{{ tax_label_value }} {{ row.category_tax_rate|floatformat:2 }}%{% endif %}</span>{% endif %}{% if row.product.location %}<span class="t-meta-bit t-meta-bit--wide">{{ row.product.location }}</span>{% endif %}<span class="t-meta-bit t-meta-bit--wide">{{ row.product.sku|default:"No SKU" }}</span>{% endif %}</span></span>
+            <span class="t-item-sub"><span class="t-item-meta"><span class="t-meta-bit t-meta-bit--free" data-tip="Given free by this scheme. It follows the quantity of the line above.">Free, {{ row.scheme_name }}</span>{% if row.stock is not None %}<span class="t-meta-bit">{{ row.product.stock_display }} in stock</span>{% endif %}</span></span>
+            {% if row.removable %}<form method="post" id="till-r-{{ row.line_id }}" class="t-line-form" data-remove-form>{% csrf_token %}<input type="hidden" name="action" value="remove_all"><input type="hidden" name="product_id" value="{{ row.line_id }}"></form>{% endif %}
+        </td>
+        <td class="t-qty k-num" data-label="Qty">{{ row.quantity|qty }} <span class="t-unit">{{ row.unit }}</span></td>
+        <td class="t-rate k-num" data-label="Rate">{{ row.unit_price|amount }}</td>
+        <td class="t-disc k-num" data-label="Disc %"></td>
+        <td class="t-amount k-num" data-label="Amount">{{ row.line_total|money }}</td>
+        <td class="t-x">{% if row.removable %}<button form="till-r-{{ row.line_id }}" class="t-icon-btn" data-tip="Take the free goods off this bill (Del)" aria-label="Take the free {{ row.name }} off"><i class="bi bi-x-lg" aria-hidden="true"></i></button>{% endif %}</td>
+    </tr>
+    {% if row.free_note %}
+    <tr class="t-line-note">
+        <td class="t-idx"></td>
+        <td colspan="6"><i class="bi bi-info-circle" aria-hidden="true"></i><span>{{ row.free_note }}</span></td>
+    </tr>
+    {% endif %}
+</tbody>
+{% else %}
+<tbody class="t-line{% if row.pricing_error or row.stock_error %} has-issue{% endif %}{% if row.line_id == selected_line_id %} is-selected{% endif %}" data-line="{{ row.product_id }}" data-line-total="{{ row.line_total|floatformat:2 }}" data-tax-rate="{{ row.category_tax_rate|floatformat:2 }}" data-cash-tax-rate="{{ row.cash_category_tax_rate|floatformat:2 }}" data-bank-tax-rate="{{ row.bank_category_tax_rate|floatformat:2 }}">
+    <tr class="t-line-main">
+        <td class="t-idx">{{ forloop.counter }}</td>
+        <td class="t-item">
+            <span class="t-item-name">{{ row.name }}</span>
+            <span class="t-item-sub">{% if row.product and row.allows_fraction %}{% quantity_chips row.unit row.stock as chips %}{% if chips %}<span class="t-chips" role="group" aria-label="Quick quantities for {{ row.name }}">{% for chip in chips %}<button type="button" class="t-chip{% if chip.quantity == row.quantity_display %} is-on{% endif %}" data-quantity-chip="{{ chip.quantity }}"{% if chip.disabled %} disabled title="Not enough stock"{% endif %}>{{ chip.label }}</button>{% endfor %}</span>{% endif %}{% endif %}<span class="t-item-meta">{% if row.product %}{% if row.scheme_name %}<span class="t-meta-bit t-meta-bit--free" data-tip="{% if row.scheme_price is not None %}The scheme takes {{ row.scheme_amount_off|money }} off the list rate of {{ row.original_price|money }}.{% else %}The scheme's discount is on this line.{% endif %}">{{ row.scheme_name }}</span>{% endif %}{% if row.has_custom_price %}<span class="t-meta-bit">Rate changed from {{ row.original_price|money }}</span>{% endif %}{% if row.has_line_discount %}<span class="t-meta-bit">Net {{ row.effective_unit_price|money }}{{ row.per_unit }}</span>{% endif %}{% if row.stock is not None %}<span class="t-meta-bit">{{ row.product.stock_display }} in stock</span>{% endif %}{% if uses_category_gst and row.category_tax_rate > 0 %}<span class="t-meta-bit">{% if row.cash_category_tax_rate != row.bank_category_tax_rate %}Cash {{ row.cash_category_tax_rate|floatformat:2 }}% / Bank {{ row.bank_category_tax_rate|floatformat:2 }}%{% else %}{{ tax_label_value }} {{ row.category_tax_rate|floatformat:2 }}%{% endif %}</span>{% endif %}{% if row.product.location %}<span class="t-meta-bit t-meta-bit--wide">{{ row.product.location }}</span>{% endif %}<span class="t-meta-bit t-meta-bit--wide">{{ row.product.sku|default:"No SKU" }}</span>{% endif %}</span></span>
             {% if row.product %}
             <form method="post" id="till-q-{{ row.product_id }}" class="t-line-form" data-quantity-form>{% csrf_token %}<input type="hidden" name="action" value="set_quantity"><input type="hidden" name="product_id" value="{{ row.product_id }}"></form>
             <form method="post" id="till-p-{{ row.product_id }}" class="t-line-form" data-inline-pricing>{% csrf_token %}<input type="hidden" name="action" value="update_line"><input type="hidden" name="product_id" value="{{ row.product_id }}"></form>
             {% endif %}
             <form method="post" id="till-r-{{ row.product_id }}" class="t-line-form" data-remove-form>{% csrf_token %}<input type="hidden" name="action" value="remove_all"><input type="hidden" name="product_id" value="{{ row.product_id }}"></form>
         </td>
-        <td class="t-qty k-num" data-label="Qty">
+        <td class="t-qty k-num{% if row.unit_options %} t-qty--units{% endif %}" data-label="Qty">
             {% if row.product %}
-            <input form="till-q-{{ row.product_id }}" type="number" class="t-cell-input" name="quantity" value="{{ row.quantity_display }}" min="0" {% if row.stock is not None %}max="{{ row.stock|qty }}" {% endif %}step="{{ row.quantity_step }}" inputmode="{% if row.allows_fraction %}decimal{% else %}numeric{% endif %}" data-quantity-input data-field="qty" aria-label="Quantity of {{ row.name }} in {{ row.unit }}"><span class="t-unit">{{ row.unit }}</span>
+            <input form="till-q-{{ row.product_id }}" type="number" class="t-cell-input" name="quantity" value="{{ row.quantity_display }}" min="0" {% if row.max_quantity is not None %}max="{{ row.max_quantity|qty }}" {% endif %}step="{{ row.quantity_step }}" inputmode="{% if row.allows_fraction %}decimal{% else %}numeric{% endif %}" data-quantity-input data-field="qty" aria-label="Quantity of {{ row.name }} in {{ row.unit }}">{% if row.unit_options %}<select class="t-unit-select" data-unit-select aria-label="Unit of {{ row.name }}" data-tip="Sell by the carton, box or piece. In the quantity box, press C, B or P.">{% for option in row.unit_options %}<option value="{{ option.code }}" data-key="{{ option.code|slice:':1' }}"{% if option.code == row.unit_level %} selected{% endif %}>{{ option.label }}</option>{% endfor %}</select>{% else %}<span class="t-unit">{{ row.unit }}</span>{% endif %}
             {% else %}{{ row.quantity|qty }}{% endif %}
         </td>
         <td class="t-rate k-num" data-label="Rate">
@@ -24,6 +46,7 @@
         <td class="t-disc k-num" data-label="Disc %">
             {% if row.product %}
             <input form="till-p-{{ row.product_id }}" type="number" class="t-cell-input" name="line_discount" min="0" max="100" step="0.01" value="{{ row.discount_percent|floatformat:2 }}" data-discount-input data-field="disc" data-minimum="{{ row.minimum_price|floatformat:2 }}" aria-label="Discount percent on {{ row.name }}"{% if not allow_line_discount %} readonly tabindex="-1"{% endif %}>
+            {% if row.has_line_discount %}<span class="t-disc-amt">= {{ row.line_discount_amount|money }}</span>{% endif %}
             {% endif %}
         </td>
         <td class="t-amount k-num" data-label="Amount">{{ row.line_total|money }}</td>
@@ -36,14 +59,14 @@
     </tr>
     {% endif %}
 </tbody>
-{% empty %}
+{% endif %}{% empty %}
 <tbody class="t-blank">
     <tr>
         <td colspan="7">
             <div class="t-blank-note">
                 <span class="t-blank-icon" aria-hidden="true"><i class="bi bi-upc-scan"></i></span>
                 <p class="t-blank-title">Nothing on this bill yet</p>
-                <p>Scan a barcode, or type a name or code. A quantity can lead: <kbd class="k-key">0.5 flour</kbd> <kbd class="k-key">2*soap</kbd> <kbd class="k-key">500g sugar</kbd></p>
+                <p>Scan a barcode, or type a name or code. A quantity can lead: <kbd class="k-key">0.5 flour</kbd> <kbd class="k-key">2*soap</kbd> <kbd class="k-key">500g sugar</kbd>{% if feature_modules.packaging %} <kbd class="k-key">5 ctn biscuits</kbd>{% endif %}</p>
             </div>
         </td>
     </tr>

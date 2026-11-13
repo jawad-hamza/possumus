@@ -21,30 +21,33 @@
         <div class="k-balance{% if product.track_stock and product.stock <= product.low_stock_threshold %} k-balance--due{% endif %}">
             <div class="k-balance-label">Current stock</div>
             <div class="k-balance-figure">{% if not product.track_stock %}<span class="st-dim">{{ product.stock_display }}</span>{% else %}{{ product.stock_display }}{% endif %}</div>
-            <div class="k-balance-note">{% if product.track_stock %}{% if product.stock <= 0 %}<span class="k-badge k-badge--red">Out</span> {% elif product.stock <= product.low_stock_threshold %}<span class="k-badge k-badge--amber">Low</span> {% endif %}{% endif %}<span data-tip="Low stock threshold">Low at {{ product.low_stock_threshold|qty }} {{ product.unit }}</span></div>
+            <div class="k-balance-note">{% if product.track_stock %}{% if product.stock <= 0 %}<span class="k-badge k-badge--red">Out</span> {% elif product.stock <= product.low_stock_threshold %}<span class="k-badge k-badge--amber">Low</span> {% endif %}{% endif %}<span data-tip="Low stock threshold">Low at {{ product.low_stock_threshold|in_packs:product }}</span></div>
         </div>
+        {# Cost and price are the largest pack's figures: a carton when the product has one. #}
+        {% with unit=product|price_unit %}
         <div class="k-balance">
             <div class="k-balance-label">Sale price</div>
-            <div class="k-balance-figure">{{ product.price|money }}</div>
-            <div class="k-balance-note">{% if product|per_unit %}per {{ product.unit }}{% endif %}{% if product.has_markup %}{% if product|per_unit %} &middot; {% endif %}{{ product.markup_display }}{% endif %}</div>
+            <div class="k-balance-figure">{{ product.top_pack_price|money }}</div>
+            <div class="k-balance-note">{% if unit %}per {{ unit }}{% endif %}{% if product.has_markup %}{% if unit %} &middot; {% endif %}{{ product.markup_display }}{% endif %}</div>
         </div>
         <div class="k-balance">
             <div class="k-balance-label">Cost price</div>
-            <div class="k-balance-figure">{{ product.cost_price|money }}</div>
-            <div class="k-balance-note">{% if product|per_unit %}per {{ product.unit }}{% endif %}</div>
+            <div class="k-balance-figure">{{ product.top_pack_cost|money }}</div>
+            <div class="k-balance-note">{% if unit %}per {{ unit }}{% endif %}</div>
         </div>
         <div class="k-balance{% if product.margin_status == 'below' %} k-balance--due{% endif %}">
             <div class="k-balance-label">Current margin</div>
             <div class="k-balance-figure">{% if product.current_margin_percent is not None %}{{ product.current_margin_percent|floatformat:2 }}%{% else %}<span class="st-dim">&ndash;</span>{% endif %}</div>
-            <div class="k-balance-note">{% if product.margin_status == 'below' %}Below the minimum. {% endif %}Minimum sale {{ product.minimum_sale_price|money }}</div>
+            <div class="k-balance-note">{% if product.margin_status == 'below' %}Below the minimum. {% endif %}Minimum sale {{ product.top_pack_minimum_price|money }}{% if product.has_packaging %} per {{ unit }}{% endif %}</div>
         </div>
+        {% endwith %}
         <div class="k-balance">
             <div class="k-balance-label">Total purchased</div>
-            <div class="k-balance-figure">{{ total_purchased|qty_unit:product.unit }}</div>
+            <div class="k-balance-figure">{{ total_purchased|in_packs:product }}</div>
         </div>
         <div class="k-balance">
             <div class="k-balance-label">Total sold</div>
-            <div class="k-balance-figure">{{ total_sold|qty_unit:product.unit }}</div>
+            <div class="k-balance-figure">{{ total_sold|in_packs:product }}</div>
         </div>
     </div>
 </section>
@@ -58,6 +61,7 @@
                 <div><dt>Brand</dt><dd>{{ product.brand|default:"–" }}</dd></div>
                 <div><dt>Category</dt><dd>{{ product.category|default:"–" }}</dd></div>
                 <div><dt>Supplier</dt><dd>{{ product.supplier|default:"–" }}</dd></div>
+                {% if product.has_packaging %}<div><dt>Packing</dt><dd>{{ product.packing_display }}</dd></div>{% endif %}
                 <div><dt>Location</dt><dd>{{ product.location|default:"–" }}</dd></div>
                 <div><dt>Expiry</dt><dd>{{ product.expiry_date|date:"d M Y"|default:"–" }}</dd></div>
                 <div><dt>Status</dt><dd>{% if product.is_active %}<span class="k-badge k-badge--green">Active</span>{% else %}<span class="k-badge">Inactive</span>{% endif %}</dd></div>
@@ -65,6 +69,30 @@
         </section>
     </div>
     <div class="col-lg-8">
+        {% if product.has_packaging %}
+        <section class="k-section" aria-labelledby="packs-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="packs-title">Price by pack {% include "pos/partials/_help_tip.html" with tip_id="tipPacks" tip_name="Price by pack" tip_text="The carton figures are the ones typed on the product; the box and the piece follow from the packing." %}</h2>
+                <span class="k-section-note">{{ product.packing_display }}</span>
+            </div>
+            <table class="k-ledger" data-pack-prices>
+                <thead>
+                    <tr><th scope="col">Unit</th><th scope="col" class="text-end">Holds</th><th scope="col" class="text-end">Cost</th><th scope="col" class="text-end">Sale price</th></tr>
+                </thead>
+                <tbody>
+                    {% for level in product.pack_price_list %}
+                    <tr>
+                        <td>{{ level.name }}</td>
+                        <td class="k-num text-end">{% if level.factor > 1 %}{{ level.factor|qty_unit:product.unit }}{% else %}<span class="st-dim">&ndash;</span>{% endif %}</td>
+                        <td class="k-num text-end">{{ level.cost|money }}</td>
+                        <td class="k-num text-end">{{ level.price|money }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+        {% endif %}
+
         {% if variant_siblings %}
         <section class="k-section" aria-labelledby="sizes-title">
             <div class="k-section-head"><h2 class="k-section-title" id="sizes-title">Sizes and variants</h2></div>
@@ -78,8 +106,8 @@
                     <tr{% if sibling.pk == product.pk %} aria-current="true" class="is-selected"{% endif %}>
                         <td>{% if sibling.pk == product.pk %}<strong>{{ sibling.variant_label }}</strong> <span class="k-badge k-badge--blue">this one</span>{% else %}<a href="{% url 'product_view' sibling.pk %}">{{ sibling.variant_label }}</a>{% endif %}</td>
                         <td>{{ sibling.sku }}</td>
-                        <td class="k-num text-end">{{ sibling.cost_price|money }}</td>
-                        <td class="k-num text-end">{{ sibling.price|money }}</td>
+                        <td class="k-num text-end">{{ sibling.top_pack_cost|money }}{% if sibling.has_packaging %}<span class="st-sub">per {{ sibling.top_pack_label }}</span>{% endif %}</td>
+                        <td class="k-num text-end">{{ sibling.top_pack_price|money }}{% if sibling.has_packaging %}<span class="st-sub">per {{ sibling.top_pack_label }}</span>{% endif %}</td>
                         <td class="k-num text-end">{{ sibling.stock_display }}</td>
                     </tr>
                     {% endfor %}
@@ -100,8 +128,8 @@
                     <tr>
                         <td data-k="what"><a href="{% url 'invoice' sale_item.sale.id %}">{{ sale_item.sale.display_number }}</a></td>
                         <td data-k="meta">{{ sale_item.sale.created_at|date:"d M Y" }}</td>
-                        <td class="k-num text-end" data-k="balance">{{ sale_item.quantity|qty_short:product.unit }}</td>
-                        <td class="k-num text-end" data-k="amount">{{ sale_item.price|money }}</td>
+                        <td class="k-num text-end" data-k="balance">{{ sale_item|line_qty }}</td>
+                        <td class="k-num text-end" data-k="amount">{{ sale_item.price|money }}{% if sale_item|line_unit %}<span class="st-sub">per {{ sale_item|line_unit }}</span>{% endif %}</td>
                     </tr>
                     {% empty %}
                     <tr><td colspan="4" class="k-empty" data-k="note">No sales yet.</td></tr>
@@ -114,19 +142,21 @@
             <div class="k-section-head"><h2 class="k-section-title" id="purchases-title">Recent purchases</h2></div>
             <table class="k-ledger k-ledger--stack">
                 <thead>
-                    <tr><th scope="col" data-k="what">Purchase</th><th scope="col" data-k="meta">Date</th><th scope="col" class="text-end" data-k="balance">Qty</th><th scope="col" class="text-end" data-k="amount">Cost</th><th scope="col" class="text-end" data-k="more">Sale</th></tr>
+                    <tr><th scope="col" data-k="what">Purchase</th><th scope="col" data-k="meta">Date</th><th scope="col" data-k="more">Supplier</th><th scope="col" data-k="more">Bill no.</th><th scope="col" class="text-end" data-k="balance">Qty</th><th scope="col" class="text-end" data-k="amount">Cost</th><th scope="col" class="text-end" data-k="more">Sale</th></tr>
                 </thead>
                 <tbody>
                     {% for purchase_item in recent_purchases %}
                     <tr>
                         <td data-k="what"><a href="{% url 'purchase_detail' purchase_item.purchase.id %}">#{{ purchase_item.purchase.id }}</a></td>
                         <td data-k="meta">{{ purchase_item.purchase.created_at|date:"d M Y" }}</td>
-                        <td class="k-num text-end" data-k="balance">{{ purchase_item.quantity|qty_short:product.unit }}</td>
-                        <td class="k-num text-end" data-k="amount">{{ purchase_item.cost_price|money }}</td>
+                        <td data-k="more" data-label="Supplier">{% if purchase_item.purchase.supplier %}{{ purchase_item.purchase.supplier }}{% else %}<span class="st-dim">&ndash;</span>{% endif %}</td>
+                        <td data-k="more" data-label="Bill no.">{% if purchase_item.purchase.supplier_invoice_number %}{{ purchase_item.purchase.supplier_invoice_number }}{% else %}<span class="st-dim">&ndash;</span>{% endif %}</td>
+                        <td class="k-num text-end" data-k="balance">{{ purchase_item|line_qty }}</td>
+                        <td class="k-num text-end" data-k="amount">{{ purchase_item.cost_price|money }}{% if purchase_item|line_unit %}<span class="st-sub">per {{ purchase_item|line_unit }}</span>{% endif %}</td>
                         <td class="k-num text-end" data-k="more" data-label="Sale">{{ purchase_item.sale_price|money }}</td>
                     </tr>
                     {% empty %}
-                    <tr><td colspan="5" class="k-empty" data-k="note">No purchases yet.</td></tr>
+                    <tr><td colspan="7" class="k-empty" data-k="note">No purchases yet.</td></tr>
                     {% endfor %}
                 </tbody>
             </table>

@@ -1,0 +1,161 @@
+{% extends "pos/base.html" %}
+{% load static %}
+{% load currency_tags %}
+
+{% block title %}New builty{% endblock %}
+{% block page_title %}New builty{% endblock %}
+{% block page_help %}Add the transporter's freight bill to the purchases it brought. Pick the day, tick the purchases, enter the amount: the split per line shows as you type. Ctrl+S saves; Esc goes back.{% endblock %}
+
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/pages/entry.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/return-flow.css' %}" rel="stylesheet">{% endblock %}
+
+{% block page_actions %}<a href="{% url 'builty_list' %}" class="btn btn-outline-secondary" data-tip="Every builty recorded so far"><i class="bi bi-truck-flatbed" aria-hidden="true"></i> All builties</a><a href="{{ back_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>{% endblock %}
+
+{% block content %}
+<section class="k-section" aria-label="Choose the day">
+    <form class="st-filters" method="get" id="builty-day-form" role="search" aria-label="Purchases of a day">
+        {% if from_purchase %}<input type="hidden" name="purchase" value="{{ from_purchase.id }}">{% endif %}
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+        <div class="st-filter">
+            <label class="form-label" for="day">Purchases of</label>
+            <input id="day" name="day" type="date" value="{{ day|date:'Y-m-d' }}" class="form-control" data-day-picker>
+        </div>
+        <div class="st-filter">
+            <label class="form-label" for="supplier">Supplier</label>
+            <select id="supplier" name="supplier" class="form-select" data-day-picker>
+                <option value="">All suppliers</option>
+                {% for supplier in suppliers %}
+                <option value="{{ supplier.id }}" {% if supplier.id == selected_supplier %}selected{% endif %}>{{ supplier.name }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        <div class="st-filters-actions">
+            <button class="btn btn-outline-secondary" type="submit">Show</button>
+        </div>
+    </form>
+</section>
+
+<div class="st-work" id="builtyWork">
+    <form method="post" enctype="multipart/form-data" id="builtyForm" data-st-entry data-back-url="{{ back_url }}">
+        {% csrf_token %}
+        <input type="hidden" name="day" value="{{ day|date:'Y-m-d' }}">
+        {% if selected_supplier %}<input type="hidden" name="supplier" value="{{ selected_supplier }}">{% endif %}
+        {% if from_purchase %}<input type="hidden" name="purchase" value="{{ from_purchase.id }}">{% endif %}
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+
+        {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors|join:' ' }}</div>{% endif %}
+
+        <section class="k-section" aria-labelledby="builty-purchases-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="builty-purchases-title">{% if day_is_today %}Today's purchases{% else %}Purchases of {{ day|date:"d M Y" }}{% endif %} {% include "pos/partials/_help_tip.html" with tip_id="tipBuiltyPurchases" tip_name="Purchases" tip_text="Tick the purchases this freight was paid on. Every line of a ticked purchase takes a share." %}</h2>
+                <span class="k-badge">{{ purchases|length }} purchase{{ purchases|length|pluralize }}</span>
+            </div>
+            <table class="k-ledger k-ledger--stack" data-builty-purchases>
+                <thead>
+                    <tr>
+                        <th scope="col" data-k="flag"><input type="checkbox" class="form-check-input" data-tick-all aria-label="Tick every purchase"></th>
+                        <th scope="col" data-k="meta">Purchase</th>
+                        <th scope="col" data-k="what">Supplier</th>
+                        <th scope="col" class="text-end" data-k="more">Lines</th>
+                        <th scope="col" class="text-end" data-k="amount">Bill total</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for purchase in purchases %}
+                    <tr>
+                        <td data-k="flag"><input type="checkbox" class="form-check-input" name="purchases" value="{{ purchase.id }}" id="buy-{{ purchase.id }}"{% if purchase.is_ticked %} checked{% endif %} data-purchase-tick></td>
+                        <td data-k="meta"><label for="buy-{{ purchase.id }}" class="st-name">#{{ purchase.id }}</label><span class="st-sub">{{ purchase.created_at|date:"d M Y, g:i A" }}</span></td>
+                        <td data-k="what" class="st-wrap">{{ purchase.supplier|default:"Cash purchase" }}{% if purchase.supplier_invoice_number %}<span class="st-sub">Bill {{ purchase.supplier_invoice_number }}</span>{% endif %}{% if purchase.freight_total %}<span class="st-sub">Builty already on it {{ purchase.freight_total|money }}</span>{% endif %}</td>
+                        <td class="k-num text-end" data-k="more" data-label="Lines">{{ purchase.line_count }}</td>
+                        <td class="k-num text-end" data-k="amount" data-label="Bill total">{{ purchase.total_amount|money }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="5" class="k-empty" data-k="note">
+                            <i class="bi bi-truck" aria-hidden="true"></i>
+                            <p class="k-empty-title">No purchases on this day{% if selected_supplier %} from this supplier{% endif %}.</p>
+                            <p>Pick the day the goods were received.</p>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </section>
+
+        <section class="k-section" aria-labelledby="builty-bill-title">
+            <div class="k-section-head"><h2 class="k-section-title" id="builty-bill-title">Builty</h2></div>
+            <div class="k-form-grid">
+                <div>{% include "pos/partials/_entry_field.html" with field=form.date %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=form.builty_number %}</div>
+                <div class="k-span-2">
+                    {% include "pos/partials/_entry_field.html" with field=form.transporter %}
+                    <div class="rf-add-row"><a class="rf-add" href="#quickSetup" data-quick-open="supplier" aria-controls="quickSetup"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add transporter</a></div>
+                </div>
+                <div>{% include "pos/partials/_entry_field.html" with field=form.amount %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=form.basis %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=form.payment_method %}</div>
+                <div data-bank-only>{% include "pos/partials/_entry_field.html" with field=form.bank_account %}</div>
+                <div class="k-span-2" data-bank-only>{% include "pos/partials/_entry_field.html" with field=form.bank_receipt %}</div>
+                <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.notes %}</div>
+            </div>
+        </section>
+
+        <section class="k-section" aria-labelledby="builty-split-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="builty-split-title">Split over the goods {% include "pos/partials/_help_tip.html" with tip_id="tipBuiltySplit" tip_name="Split" tip_text="Each line's share is the amount times its count over all counts, to the paisa; leftover paisas go to the lines with the largest remainder, so the shares add up to the builty exactly. On saving, the share of goods still on the shelf raises the product's average cost; the share of goods already sold goes to cost of goods sold." %}</h2>
+                <span class="st-sub" data-split-hint></span>
+            </div>
+            <table class="k-ledger k-ledger--stack" data-split-table>
+                <thead>
+                    <tr>
+                        <th scope="col" data-k="what">Product</th>
+                        <th scope="col" class="text-end" data-k="meta">Qty</th>
+                        <th scope="col" class="text-end" data-k="more">Counted as</th>
+                        <th scope="col" class="text-end" data-k="more">Freight per unit</th>
+                        <th scope="col" class="text-end" data-k="more">Landed cost</th>
+                        <th scope="col" class="text-end" data-k="amount">Freight on line</th>
+                    </tr>
+                </thead>
+                <tbody data-split-body>
+                    <tr><td colspan="6" class="k-empty" data-k="note">Tick a purchase and enter the freight amount to see the split.</td></tr>
+                </tbody>
+                <tfoot>
+                    <tr>
+                        <td colspan="5" data-k="what">Total</td>
+                        <td class="k-num text-end" data-k="amount" data-split-total>0.00</td>
+                    </tr>
+                </tfoot>
+            </table>
+        </section>
+
+        <div class="st-actionbar">
+            <span class="st-actionbar-note">Freight <strong data-bar-amount>0.00</strong> over <strong data-bar-lines>0</strong> line<span data-bar-plural>s</span></span>
+            <a href="{{ back_url }}" class="btn btn-outline-secondary" data-tip="Go back without saving (Esc)">Cancel</a>
+            <button type="submit" class="btn btn-primary" data-k-key="Ctrl+S" data-k-key-label="Save builty"{% if not purchases %} disabled{% endif %}>Save builty</button>
+        </div>
+    </form>
+
+    <aside class="k-side" id="quickSetup" aria-labelledby="quickSetupTitle" hidden>
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="quickSetupTitle">Add transporter {% include "pos/partials/_help_tip.html" with tip_id="tipQuickTransporter" tip_name="Add transporter" tip_text="The transporter is kept as a supplier, so what you owe it, its statement and its payments work like any supplier's. It is chosen on this builty as soon as it is saved." %}</h2>
+            <button type="button" class="btn-close" data-quick-close aria-label="Close"></button>
+        </div>
+        <details class="st-quick" open>
+            <summary>Transporter <i class="bi bi-chevron-down" aria-hidden="true"></i></summary>
+            <form id="quickSupplierForm" class="quick-create-form" data-kind="supplier" action="{{ quick_create_supplier_url }}" method="post" novalidate>
+                {% csrf_token %}
+                <div class="k-form-grid">
+                    <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=quick_supplier_form.name %}</div>
+                    <div>{% include "pos/partials/_entry_field.html" with field=quick_supplier_form.phone %}</div>
+                    <div>{% include "pos/partials/_entry_field.html" with field=quick_supplier_form.city %}</div>
+                </div>
+                <div class="st-feedback d-none" data-form-feedback role="status"></div>
+                <button type="submit" class="btn btn-outline-secondary mt-4">Save transporter</button>
+            </form>
+        </details>
+    </aside>
+</div>
+{{ preview|json_script:"builtyPreview" }}
+<script id="builtyConfig" type="application/json">{"currency": "{{ currency_symbol|escapejs }}", "transporter": "{{ form.transporter.id_for_label }}", "amount": "{{ form.amount.id_for_label }}", "basis": "{{ form.basis.id_for_label }}", "payment": "{{ form.payment_method.id_for_label }}"}</script>
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'zehnms/js/pages/stock.js' %}"></script><script src="{% static 'zehnms/js/pages/builty.js' %}"></script>{% endblock %}

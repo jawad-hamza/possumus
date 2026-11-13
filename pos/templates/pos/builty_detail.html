@@ -1,0 +1,117 @@
+{% extends "pos/base.html" %}
+{% load static %}
+{% load currency_tags %}
+
+{% block title %}{{ builty.display_number }}{% endblock %}
+{% block page_title %}{{ builty.display_number }}{% endblock %}
+{% block page_help %}The freight on this builty, how it was shared over the goods, and the entries it posted.{% endblock %}
+
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet">{% endblock %}
+
+{% block page_actions %}<a href="{% url 'builty_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> All builties</a>{% endblock %}
+
+{% block content %}
+<section class="k-section" aria-label="Summary">
+    <div class="k-section-head">
+        <h2 class="k-section-title">{{ builty.transporter|default:"No transporter" }}</h2>
+        {% if builty.is_reversed %}<span class="k-badge">Reversed</span>{% elif builty.payment_method == 'credit' %}<span class="k-badge k-badge--amber">On account</span>{% else %}<span class="k-badge k-badge--green">Paid</span>{% endif %}
+        <span class="k-section-note">Dated {{ builty.date|date:"d M Y" }} &middot; {{ builty.get_basis_display }}{% if builty.created_by %} &middot; recorded by {{ builty.created_by }}{% endif %}</span>
+    </div>
+    <div class="st-stats">
+        <div class="k-balance">
+            <div class="k-balance-label">Freight</div>
+            <div class="k-balance-figure">{{ builty.amount|money }}</div>
+        </div>
+        <div class="k-balance">
+            <div class="k-balance-label">Into stock value {% include "pos/partials/_help_tip.html" with tip_id="tipIntoStock" tip_name="Into stock value" tip_text="The share of goods still on the shelf when the builty was saved. It raised those products' average cost." %}</div>
+            <div class="k-balance-figure">{{ builty.stock_amount|money }}</div>
+        </div>
+        <div class="k-balance">
+            <div class="k-balance-label">Cost of goods sold {% include "pos/partials/_help_tip.html" with tip_id="tipIntoCogs" tip_name="Cost of goods sold" tip_text="The share of goods already sold (or no longer on the shelf) when the builty was saved. It is a cost of what was sold, so it went straight to cost of goods sold." %}</div>
+            <div class="k-balance-figure">{{ builty.cogs_amount|money }}</div>
+        </div>
+        <div class="k-balance">
+            <div class="k-balance-label">Paid</div>
+            <div class="k-balance-figure k-balance-figure--text">{{ builty.payment_display }}</div>
+            {% load bank_receipt_tags %}{% bank_receipt_panel builty "note" %}
+        </div>
+    </div>
+    {% if builty.notes %}<p class="st-sub">{{ builty.notes|linebreaksbr }}</p>{% endif %}
+    {% if builty.is_reversed %}<p class="st-sub">Reversed on {{ builty.reversed_at|date:"d M Y, g:i A" }}{% if builty.reversed_by %} by {{ builty.reversed_by }}{% endif %}: {{ builty.reversal_reason }}. {{ builty.reversal_stock_amount|money }} came back out of stock value and {{ builty.reversal_cogs_amount|money }} off cost of goods sold.</p>{% endif %}
+</section>
+
+<section class="k-section" aria-labelledby="split-title">
+    <div class="k-section-head"><h2 class="k-section-title" id="split-title">Split over the goods</h2><span class="k-badge">{{ builty.get_basis_display }}</span></div>
+    <table class="k-ledger k-ledger--stack">
+        <thead>
+            <tr>
+                <th scope="col" data-k="what">Product</th>
+                <th scope="col" class="text-end" data-k="meta">Counted as</th>
+                <th scope="col" class="text-end" data-k="more">Freight per unit</th>
+                <th scope="col" class="text-end" data-k="more">Landed cost {% include "pos/partials/_help_tip.html" with tip_id="tipDetailLanded" tip_name="Landed cost" tip_text="Purchase cost of one unit as bought plus this builty's freight on it." %}</th>
+                <th scope="col" class="text-end" data-k="more">To stock / sold {% include "pos/partials/_help_tip.html" with tip_id="tipStockSold" tip_name="To stock / sold" tip_text="Where the line's share went: into the value of goods still on the shelf, or to cost of goods sold for goods already gone." %}</th>
+                <th scope="col" class="text-end" data-k="more">Cost per piece {% include "pos/partials/_help_tip.html" with tip_id="tipCostMove" tip_name="Cost per piece" tip_text="The product's average cost of one piece before and after this builty." %}</th>
+                <th scope="col" class="text-end" data-k="amount">Freight</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for row in allocations %}
+            <tr>
+                <td class="st-wrap" data-k="what"><span class="st-name">{{ row.product.display_name }}</span><span class="st-sub"><a href="{% url 'purchase_detail' row.purchase_item.purchase_id %}">Purchase #{{ row.purchase_item.purchase_id }}</a> &middot; {{ row.purchase_item.quantity_display }}</span></td>
+                <td class="k-num text-end" data-k="meta" data-label="Counted as">{{ row.counted_display }}</td>
+                <td class="k-num text-end" data-k="more" data-label="Freight per unit">{% if row.share_per_unit is not None %}{{ row.share_per_unit|floatformat:"-4" }} / {{ row.counted_label }}{% else %}<span class="st-dim">&ndash;</span>{% endif %}</td>
+                <td class="k-num text-end" data-k="more" data-label="Landed cost">{{ row.landed_unit_cost|money }} / {{ row.purchase_item.unit_label }}</td>
+                <td class="k-num text-end" data-k="more" data-label="To stock / sold">{{ row.amount_to_stock|money }}<span class="st-sub">sold {{ row.amount_to_cogs|money }}</span></td>
+                <td class="k-num text-end" data-k="more" data-label="Cost per piece">{{ row.cost_after|floatformat:"-4" }}<span class="st-sub">was {{ row.cost_before|floatformat:"-4" }}</span></td>
+                <td class="k-num text-end" data-k="amount" data-label="Freight">{{ row.amount|money }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="4" data-k="what">Total</td>
+                <td class="k-num text-end" data-k="more">{{ builty.stock_amount|money }}<span class="st-sub">sold {{ builty.cogs_amount|money }}</span></td>
+                <td data-k="more"></td>
+                <td class="k-num text-end" data-k="amount">{{ builty.amount|money }}</td>
+            </tr>
+        </tfoot>
+    </table>
+</section>
+
+<section class="k-section" aria-labelledby="entries-title">
+    <div class="k-section-head"><h2 class="k-section-title" id="entries-title">Entries {% include "pos/partials/_help_tip.html" with tip_id="tipBuiltyEntries" tip_name="Entries" tip_text="What this builty wrote in the books. Debits equal credits on every entry." %}</h2></div>
+    <table class="k-ledger k-ledger--stack">
+        <thead>
+            <tr><th scope="col" data-k="what">Account</th><th scope="col" class="text-end" data-k="more">Debit</th><th scope="col" class="text-end" data-k="amount">Credit</th></tr>
+        </thead>
+        {% for voucher in vouchers %}
+        <tbody>
+            <tr><td colspan="3" data-k="what"><span class="st-name">Voucher #{{ voucher.id }}</span><span class="st-sub">{{ voucher.date|date:"d M Y" }} &middot; {{ voucher.narration }}</span></td></tr>
+            {% for line in voucher.line_rows %}
+            <tr>
+                <td data-k="what">{% if nav_access.accounts %}<a href="{% url 'account_ledger' line.account_id %}">{{ line.account.title }}</a>{% else %}{{ line.account.title }}{% endif %}</td>
+                <td class="k-num text-end" data-k="more" data-label="Debit">{% if line.debit %}{{ line.debit|money }}{% endif %}</td>
+                <td class="k-num text-end" data-k="amount" data-label="Credit">{% if line.credit %}{{ line.credit|money }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        {% endfor %}
+    </table>
+</section>
+
+{% if not builty.is_reversed and manage_access.purchases %}
+<section class="k-section" aria-labelledby="reverse-title">
+    <div class="k-section-head"><h2 class="k-section-title" id="reverse-title">Reverse this builty {% include "pos/partials/_help_tip.html" with tip_id="tipReverse" tip_name="Reverse" tip_text="A builty is never edited. Reversing posts an entry dated today that undoes the payment in full, takes the freight it added per piece back out of the stock still on the shelf (lowering the average cost), and takes the rest back off cost of goods sold. Then record the correct builty." %}</h2></div>
+    <form method="post" action="{% url 'builty_reverse' builty.id %}" class="k-form-grid" data-confirm="Reverse {{ builty.display_number }}? This posts a reversing entry and takes its freight back off the cost of the goods.">
+        {% csrf_token %}
+        <div class="k-span-2 st-field k-form-field">
+            <label class="form-label" for="{{ reverse_form.reason.id_for_label }}">Reason<span class="st-req" title="Required">*</span></label>
+            {{ reverse_form.reason }}
+        </div>
+        <div><button type="submit" class="btn btn-outline-danger">Reverse builty</button></div>
+    </form>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'zehnms/js/pages/builty.js' %}"></script>{% endblock %}

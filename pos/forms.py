@@ -32,6 +32,8 @@ from .models import (
     format_qty,
     quantize_money,
 )
+from .models import PACK_LEVELS
+from accounts.receipt_forms import BankReceiptFormMixin
 from accounts.services.cash_bank import bank_account_queryset
 from .services.access import (
     ACCESS_CHOICES,
@@ -41,6 +43,20 @@ from .services.access import (
 )
 from .services.modules import allowed_unit_choices, locked_settings_flags, module_enabled, module_within_ceiling
 from .services.user_timezones import normalize_time_zone_name, time_zone_choices
+
+# Cartons and boxes on the product and stock adjustment forms.
+from django.core.validators import DecimalValidator
+from .models import (
+    PACK_BOX,
+    PACK_CARTON,
+    PACK_LEVEL_CHOICES,
+    PACK_NAMES,
+    PACK_PIECE,
+    PACK_PLURALS,
+    normalize_pack_level,
+    packaging_enabled,
+    quantize_qty,
+)
 
 
 DASHES = "---------"
@@ -390,6 +406,8 @@ class CustomRoleForm(StyledModelForm):
                 choices=ACCESS_CHOICES,
                 initial=existing_permissions.get(module["key"], "none"),
                 help_text=module["description"],
+                # An area added after a role was written (Distribution) reads as no access when not posted.
+                required=False,
             )
             self.fields[field_name].widget.attrs.setdefault("class", "form-select")
 
@@ -481,10 +499,15 @@ class SystemSettingsForm(StyledModelForm):
             "enable_product_expiry",
             "expiry_alert_days",
             "allow_credit_sales",
+            "credit_limit_action",
             "allow_price_override",
             "allow_line_discount",
             "allow_zero_total_sales",
+            "allow_remove_free_goods",
             "default_sale_payment_method",
+            "till_default_unit",
+            "stock_default_unit",
+            "require_bank_receipt",
             "thermal_printer_width_mm",
             "currency_symbol",
             "currency_code",
@@ -492,6 +515,8 @@ class SystemSettingsForm(StyledModelForm):
             "invoice_prefix",
         ]
         labels = {
+            "till_default_unit": "Sell by",
+            "stock_default_unit": "Buy and count by",
             "gst_enabled": "Charge tax on sales",
             "tax_mode": "Tax mode",
             "tax_label": "Tax label",
@@ -501,10 +526,13 @@ class SystemSettingsForm(StyledModelForm):
             "enable_product_expiry": "Enable product expiry tracking",
             "expiry_alert_days": "Expiry alert window (days)",
             "allow_credit_sales": "Allow credit sales",
+            "credit_limit_action": "Credit sale over a customer's credit limit",
             "allow_price_override": "Allow price override",
             "allow_line_discount": "Allow line discount",
             "allow_zero_total_sales": "Allow zero-total sales",
+            "allow_remove_free_goods": "Cashier may take free goods off a bill",
             "default_sale_payment_method": "Default payment method",
+            "require_bank_receipt": "Require a receipt for bank payments",
             "thermal_printer_width_mm": "Thermal printer width (mm)",
             "currency_symbol": "Currency symbol",
             "currency_code": "Currency code",
@@ -512,12 +540,15 @@ class SystemSettingsForm(StyledModelForm):
             "invoice_prefix": "Invoice number prefix",
         }
         help_texts = {
+            "till_default_unit": "The unit a product goes on the bill in. The cashier can change it on the line.",
+            "stock_default_unit": "The unit purchases start in and stock is shown from.",
             "tax_mode": "Category tax applies each product line's rate from its category. Manual cart tax lets the cashier type one rate for the whole sale.",
             "tax_label": "Examples: GST, VAT, Sales Tax.",
             "use_payment_method_gst": "When enabled, Cash and Bank sales use the two rates below and the POS tax box becomes automatic.",
             "cash_gst_rate": "Applied when the sale is completed as a cash sale.",
             "bank_gst_rate": "Applied when the sale is completed as a bank sale.",
             "enable_product_expiry": "Show expiry date fields across products and purchases.",
+            "credit_limit_action": "Refuse stops the sale at the till until a payment is taken or the limit is raised. Warn only lets the sale through and shows a warning. Customers without a credit limit are never stopped.",
             "allow_zero_total_sales": "Off by default. When on, a sale discounted to zero (a giveaway) can be completed; the stock still leaves and its cost is recorded.",
             "expiry_alert_days": "How many days before expiry the dashboard should start warning you.",
             "thermal_printer_width_mm": "50mm is standard for small thermal receipt printers.",
@@ -533,6 +564,7 @@ class SystemSettingsForm(StyledModelForm):
         self.fields["cash_gst_rate"].required = False
         self.fields["bank_gst_rate"].required = False
         self.fields["enable_product_expiry"].required = False
+        self.fields["credit_limit_action"].required = False
         self.fields["expiry_alert_days"].required = False
         # Optional so a settings POST that predates these fields keeps the stored values.
         self.fields["currency_symbol"].required = False
@@ -540,6 +572,10 @@ class SystemSettingsForm(StyledModelForm):
         self.fields["default_markup_percent"].required = False
         self.fields["default_markup_percent"].widget.attrs.update({"min": "0", "step": "0.01"})
         self.fields["currency_code"].widget.attrs.update({"maxlength": "3", "style": "text-transform: uppercase;"})
+        for name in ("till_default_unit", "stock_default_unit"):
+            self.fields[name].required = False
+            # A plain choice: the unit is never "none".
+            self.fields[name].choices = [choice for choice in self.fields[name].choices if choice[0]]
         # Switches of modules the shop cannot use are read-only: a disabled field ignores the POST,
         # so nobody can turn one on by hand-crafting a request.
         self.locked_flags = locked_settings_flags()
@@ -548,6 +584,13 @@ class SystemSettingsForm(StyledModelForm):
                 self.fields[flag].disabled = True
         if not module_enabled("markup"):
             self.fields["default_markup_percent"].disabled = True
+        if not module_enabled("schemes"):
+            # Not on the page while schemes are off: a disabled field keeps what is stored.
+            self.fields["allow_remove_free_goods"].disabled = True
+
+    def clean_credit_limit_action(self):
+        # A settings POST that predates this choice keeps the stored one.
+        return self.cleaned_data.get("credit_limit_action") or self.instance.credit_limit_action
 
     def clean_tax_label(self):
         return (self.cleaned_data.get("tax_label") or "GST").strip() or "GST"
@@ -582,23 +625,31 @@ class SystemSettingsForm(StyledModelForm):
             cleaned_data["bank_gst_rate"] = self.instance.bank_gst_rate if self.instance.pk else Decimal("0")
         if cleaned_data.get("expiry_alert_days") in (None, ""):
             cleaned_data["expiry_alert_days"] = self.instance.expiry_alert_days if self.instance.pk else 30
+        # A settings POST that leaves the unit choices out keeps what is stored.
+        for name in ("till_default_unit", "stock_default_unit"):
+            if not cleaned_data.get(name):
+                cleaned_data[name] = getattr(self.instance, name)
         return cleaned_data
 
 
-class CustomerForm(StyledModelForm):
+# City, route, order booker and credit limit behave the same on every customer form.
+from .customer_form_mixins import CustomerTermsMixin, PartyCityMixin  # noqa: E402
+
+
+class CustomerForm(CustomerTermsMixin, StyledModelForm):
     class Meta:
         model = Customer
-        fields = ["name", "phone", "email", "address"]
+        fields = ["name", "phone", "email", "address", "city", "route", "order_booker", "credit_limit"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
 
 
-class SupplierForm(StyledModelForm):
+class SupplierForm(PartyCityMixin, StyledModelForm):
     class Meta:
         model = Supplier
-        fields = ["name", "phone", "email", "address"]
+        fields = ["name", "phone", "email", "address", "city"]
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
@@ -619,6 +670,10 @@ def _apply_feature_modules_to_product_form(form):
     if "unit" in form.fields:
         # Whole-number units only while Weights & Measures is off; the choices also validate the POST.
         form.fields["unit"].choices = allowed_unit_choices(getattr(form.instance, "unit", None) if form.instance.pk else None)
+        if module_enabled("packaging"):
+            # How it is sold (carton, box or piece) is picked on each line; this is only the smallest unit.
+            form.fields["unit"].label = "Counted in"
+            form.fields["unit"].help_text = "The smallest unit: a piece, or kg / litre for loose goods. Cartons and boxes go under Packing."
     if not module_enabled("markup"):
         # Only "type the price" is left: no chooser, no markup inputs.
         for name in ("price_by", "markup_percent", "markup_amount"):
@@ -627,6 +682,84 @@ def _apply_feature_modules_to_product_form(form):
     # the field disappears when the edition does not include expiry tracking at all.
     if not module_within_ceiling("expiry"):
         form.fields.pop("expiry_date", None)
+    if not packaging_enabled():
+        # No cartons or boxes: the packing numbers and the unit pickers go, quantities are plain again.
+        for name in (*PACKING_FIELDS, "opening_stock_unit", "low_stock_unit"):
+            form.fields.pop(name, None)
+    if not module_enabled("price_lists") and "retail_price" in form.fields:
+        # The retail price (MRP) belongs to the trade price lists module; a stored one stays as it is.
+        form.fields.pop("retail_price")
+    elif "retail_price" in form.fields:
+        form.fields["retail_price"].required = False
+        form.fields["retail_price"].widget.attrs.update({"min": "0"})
+
+
+# ------------------------------------------------------------------ cartons, boxes, pieces
+# Typed per the largest pack the product has (the carton when there is one); stored per base unit.
+PACK_MONEY_FIELDS = ("cost_price", "price", "markup_amount", "retail_price")
+PACK_MONEY_WORDS = {
+    "cost_price": "Cost",
+    "price": "Sale price",
+    "markup_amount": "Amount on cost",
+    "retail_price": "Retail price (MRP)",
+}
+PACK_MONEY_HELP = {
+    "cost_price": "What one carton costs you, or the largest pack the product has. Box and piece follow from the packing.",
+    "price": "Price of one carton at the till, or of the largest pack. Box and piece follow from the packing.",
+    "markup_amount": "Sale price = cost + this amount, for the same pack as the cost.",
+    "retail_price": "The retail price printed on one carton, or the largest pack. Shown on invoices and load sheets, never charged.",
+}
+PACKING_FIELDS = ("boxes_per_carton", "pieces_per_box")
+PACK_UNIT_WORDS = {PACK_CARTON: "Cartons", PACK_BOX: "Boxes"}
+# The stock columns hold nine whole digits.
+MAX_BASE_QUANTITY = Decimal("999999999")
+
+
+def pack_unit_choices(piece_unit=None):
+    """Cartons / Boxes / the product's own unit, for a quantity that is typed with its unit."""
+    piece_unit = piece_unit or Product.UNIT_PIECE
+    piece_word = "Pieces" if piece_unit == Product.UNIT_PIECE else piece_unit
+    return [(PACK_CARTON, PACK_UNIT_WORDS[PACK_CARTON]), (PACK_BOX, PACK_UNIT_WORDS[PACK_BOX]), (PACK_PIECE, piece_word)]
+
+
+def default_stock_unit():
+    """The unit stock is shown from and entry starts in (Settings): the carton unless the shop changed it."""
+    return normalize_pack_level(SystemSettings.load().stock_default_unit, default=PACK_CARTON)
+
+
+def quantity_in_largest_unit(product, quantity, default_level=None):
+    """(value, level): a base quantity in the largest of the product's units that divides it exactly."""
+    quantity = quantize_qty(quantity)
+    if quantity <= 0:
+        return quantity, product.resolve_pack_level(default_level or PACK_PIECE)
+    for level in product.pack_levels:
+        if level["factor"] > 1 and quantity % level["factor"] == 0:
+            return quantity / level["factor"], level["code"]
+    return quantity, PACK_PIECE
+
+
+def typed_quantity_to_base(form, product, name, quantity, level):
+    """A quantity typed with its unit, in base units. None once the reason it cannot be is on the form."""
+    if level != PACK_PIECE:
+        if level not in product.pack_level_codes:
+            form.add_error(name, f"This product has no {PACK_PLURALS[level]}. Choose another unit.")
+            return None
+        if quantity != quantity.to_integral_value():
+            form.add_error(name, f"{PACK_PLURALS[level].capitalize()} are counted in whole numbers.")
+            return None
+    base = product.to_base_quantity(quantity, level)
+    if abs(base) > MAX_BASE_QUANTITY:
+        form.add_error(name, "That is more than the stock count can hold.")
+        return None
+    return base
+
+
+def _as_plain_money(field):
+    """One piece is priced to six places in the database; on a form money is typed to two."""
+    field.max_digits, field.decimal_places = 12, 2
+    field.validators = [check for check in field.validators if not isinstance(check, DecimalValidator)]
+    field.validators.append(DecimalValidator(12, 2))
+    field.widget.attrs["step"] = "0.01"
 
 
 class ProductForm(StyledModelForm):
@@ -640,6 +773,9 @@ class ProductForm(StyledModelForm):
         decimal_places=3,
         help_text="What is on the shelf today.",
     )
+    # Opening stock and the alert level are typed with their unit (cartons first) and kept in base units.
+    opening_stock_unit = forms.ChoiceField(label="Opening stock unit", choices=PACK_LEVEL_CHOICES, required=False)
+    low_stock_unit = forms.ChoiceField(label="Low stock alert unit", choices=PACK_LEVEL_CHOICES, required=False)
     # A select, not a checkbox: a POST without the field must mean "keep counting stock",
     # and an unticked checkbox cannot be told apart from a missing one.
     track_stock = forms.TypedChoiceField(
@@ -680,11 +816,13 @@ class ProductForm(StyledModelForm):
             "category",
             "supplier",
             "unit",
+            *PACKING_FIELDS,
             "cost_price",
             "markup_percent",
             "markup_amount",
             "price",
             "minimum_margin_percent",
+            "retail_price",
             "low_stock_threshold",
             "location",
             "expiry_date",
@@ -692,8 +830,11 @@ class ProductForm(StyledModelForm):
             *PRODUCT_STOCK_SWITCH_FIELDS,
         ]
         labels = {
+            "retail_price": "Retail price (MRP)",
             "sku": "SKU",
             "unit": "Sold by",
+            "boxes_per_carton": "Boxes in a carton",
+            "pieces_per_box": "Pieces in a box",
             "price": "Sale price",
             "cost_price": "Current cost",
             "markup_percent": "Markup on cost (%)",
@@ -714,7 +855,14 @@ class ProductForm(StyledModelForm):
             "minimum_margin_percent": "No sale price goes below it.",
             "location": "Such as Rack 3 or Shelf A.",
             "expiry_date": "Leave blank if it does not expire.",
+            "retail_price": "The price printed on the pack. Shown on invoices, never charged.",
         }
+
+    def clean_retail_price(self):
+        retail = self.cleaned_data.get("retail_price")
+        if retail is not None and retail < 0:
+            raise forms.ValidationError("The retail price cannot be negative. Leave it empty when there is none.")
+        return retail
 
     def __init__(self, *args, variant_source=None, **kwargs):
         super().__init__(*args, **kwargs)
@@ -724,7 +872,6 @@ class ProductForm(StyledModelForm):
         self.initial["price_by"] = self.instance.price_by
         if self.instance.pk:
             del self.fields["opening_stock"]
-            self.initial["low_stock_threshold"] = format_qty(self.instance.low_stock_threshold)
         elif module_enabled("markup"):
             if self.initial.get("markup_amount") is not None:
                 self.initial["price_by"] = Product.PRICE_BY_AMOUNT
@@ -735,6 +882,7 @@ class ProductForm(StyledModelForm):
                 if default_markup is not None:
                     self.fields["markup_percent"].initial = default_markup
                     self.initial["price_by"] = Product.PRICE_BY_PERCENT
+        self._init_packing()
         self.fields["markup_amount"].widget.attrs.update({"min": "0", "step": "0.01"})
 
         # Sizes: the label shows on a product that belongs to a family, and on a size being added.
@@ -764,19 +912,72 @@ class ProductForm(StyledModelForm):
         self.fields["expiry_date"].widget = forms.DateInput(attrs={"type": "date", "class": "form-control"})
         _apply_feature_modules_to_product_form(self)
 
+    def _init_packing(self):
+        """Cost, price and the fixed markup read per the largest pack; quantities read with their unit."""
+        product = self.instance
+        self.packaging = packaging_enabled()
+        self.default_stock_unit = default_stock_unit() if self.packaging else PACK_PIECE
+        for name in PACKING_FIELDS:
+            self.fields[name].required = False
+            self.fields[name].widget.attrs.update({"min": "1", "step": "1", "inputmode": "numeric"})
+
+        # What is stored for one base unit, read before clean() starts moving values onto the instance.
+        self._stored_pack_money = {name: getattr(product, name) for name in PACK_MONEY_FIELDS} if product.pk else {}
+        top = product.top_pack_level
+        top_factor = product.pack_factor(top)
+        for name in PACK_MONEY_FIELDS:
+            field = self.fields[name]
+            _as_plain_money(field)
+            if self.packaging:
+                # The labels follow the packing numbers in the browser: "Cost per carton".
+                field.widget.attrs.update({"data-plain-label": field.label, "data-pack-label": PACK_MONEY_WORDS[name]})
+                field.help_text = PACK_MONEY_HELP[name]
+                if product.has_packaging:
+                    field.label = f"{PACK_MONEY_WORDS[name]} per {PACK_NAMES[top].lower()}"
+            stored = self._stored_pack_money.get(name)
+            if stored is not None:
+                # Shown multiplied back up to the pack; an untouched figure is never divided again.
+                self.initial[name] = quantize_money(Decimal(stored) * top_factor)
+                field.widget.attrs["data-base"] = format(Decimal(stored), "f")
+
+        unit_choices = pack_unit_choices(product.unit if product.pk else self.initial.get("unit"))
+        for name, label in (("opening_stock_unit", "Opening stock unit"), ("low_stock_unit", "Low stock alert unit")):
+            self.fields[name].choices = unit_choices
+            self.fields[name].widget.attrs["aria-label"] = label
+        if product.pk:
+            del self.fields["opening_stock_unit"]
+            # The alert level reads in the largest unit that divides it exactly: 720 pieces is 5 cartons.
+            value, level = quantity_in_largest_unit(product, product.low_stock_threshold, self.default_stock_unit)
+            self.initial["low_stock_threshold"] = format_qty(value)
+            self.initial["low_stock_unit"] = level
+            # What the page showed, to tell an untouched alert level from a typed one.
+            self._shown_alert_level = (quantize_qty(value), level)
+        else:
+            # A new product starts in the shop's stock unit as soon as its packing gives that level.
+            packing = Product(
+                pieces_per_box=self.initial.get("pieces_per_box") or 1,
+                boxes_per_carton=self.initial.get("boxes_per_carton") or 1,
+            )
+            start_level = packing.resolve_pack_level(self.default_stock_unit)
+            self.initial.setdefault("opening_stock_unit", start_level)
+            self.initial.setdefault("low_stock_unit", start_level)
+
     def clean(self):
         cleaned = super().clean()
         if not cleaned.get("unit"):
             cleaned["unit"] = self.instance.unit or Product.UNIT_PIECE
             self.instance.unit = cleaned["unit"]
+        self._clean_packing(cleaned)
         if "markup_percent" not in self.fields:
             # Markup Pricing is off: the typed price is the price, so a stored markup must not overrule it.
             self.instance.markup_percent = None
             self.instance.markup_amount = None
         self._clean_price_by(cleaned)
+        # Everything here is still as typed: per the largest pack. _store_pack_money divides it at the end.
         markup = cleaned.get("markup_percent")
         markup_amount = cleaned.get("markup_amount")
         cost = cleaned.get("cost_price")
+        price_follows_markup = bool(cost) and (markup is not None or markup_amount is not None)
         if markup is not None and cost:
             cleaned["price"] = quantize_money(cost * (Decimal("1") + markup / Decimal("100")))
             self.instance.price = cleaned["price"]
@@ -799,11 +1000,82 @@ class ProductForm(StyledModelForm):
                     "This item still has stock on the books. Bring it to zero with a stock adjustment first.",
                 )
 
-        opening_stock = cleaned.get("opening_stock")
-        unit = cleaned.get("unit")
-        if opening_stock and unit not in Product.FRACTIONAL_UNITS and opening_stock != opening_stock.to_integral_value():
-            self.add_error("opening_stock", "This unit is counted in whole numbers.")
+        self._clean_stock_quantities(cleaned)
+        self._store_pack_money(cleaned, price_follows_markup)
         return cleaned
+
+    def _clean_packing(self, cleaned):
+        """Put the packing on the instance first: everything typed per pack is read against it."""
+        for name in PACKING_FIELDS:
+            if name not in self.fields or name in self.errors:
+                continue
+            value = cleaned.get(name)
+            if value is None:
+                # Left out of the POST keeps what the product has; an emptied box means the level is not there.
+                omitted = self.fields[name].widget.value_omitted_from_data(self.data, self.files, self.add_prefix(name))
+                value = cleaned[name] = getattr(self.instance, name) if omitted else 1
+            setattr(self.instance, name, value)
+
+    def _clean_stock_quantities(self, cleaned):
+        """Opening stock and the alert level are typed with a unit and kept in base units."""
+        product = self.instance
+        for name, unit_name in (("opening_stock", "opening_stock_unit"), ("low_stock_threshold", "low_stock_unit")):
+            quantity = cleaned.get(name)
+            if name not in self.fields or quantity is None:
+                continue
+            level = normalize_pack_level(cleaned.get(unit_name)) if unit_name in self.fields else PACK_PIECE
+            if name == "low_stock_threshold" and product.pk and self._alert_level_untouched(quantity, cleaned.get(unit_name)):
+                # Untouched: the level stays the same number of pieces whatever happened to the packing.
+                cleaned[name] = product.low_stock_threshold
+                continue
+            if (
+                name == "opening_stock"
+                and level == PACK_PIECE
+                and cleaned.get("unit") not in Product.FRACTIONAL_UNITS
+                and quantity != quantity.to_integral_value()
+            ):
+                self.add_error(name, "This unit is counted in whole numbers.")
+                continue
+            base = typed_quantity_to_base(self, product, name, quantity, level)
+            if base is not None:
+                cleaned[name] = base
+
+    def _alert_level_untouched(self, quantity, posted_unit):
+        """The alert level came back as the page showed it (a POST without the unit counts as the same unit)."""
+        shown = getattr(self, "_shown_alert_level", None)
+        if shown is None:
+            return False
+        shown_quantity, shown_level = shown
+        if quantize_qty(quantity) != shown_quantity:
+            return False
+        return "low_stock_unit" not in self.fields or not posted_unit or normalize_pack_level(posted_unit) == shown_level
+
+    def _store_pack_money(self, cleaned, price_follows_markup=False):
+        """Cost, price and the fixed markup arrive per the largest pack and are kept per base unit.
+
+        A figure the user left alone keeps its stored value exactly: dividing what was shown
+        (two places, multiplied up) would move it a little on every save.
+        """
+        product = self.instance
+        factor = product.pack_factor(product.top_pack_level)
+        # The page lists the figures the user typed over by hand, so "1,000 a carton" typed again
+        # for a carton that changed size is taken as said. Without the page, changed_data decides.
+        typed_by_hand = set((self.data.get(self.add_prefix("pack_money_typed")) or "").split(","))
+        for name in PACK_MONEY_FIELDS:
+            typed = cleaned.get(name)
+            if typed is None:
+                continue
+            stored = self._stored_pack_money.get(name)
+            untouched = stored is not None and (
+                # Exactly what the stored figure reads as at this packing: nothing to change.
+                quantize_money(Decimal(stored) * factor) == quantize_money(typed)
+                or (name not in self.changed_data and name not in typed_by_hand)
+            )
+            if untouched and not (name == "price" and price_follows_markup):
+                cleaned[name] = stored
+            else:
+                cleaned[name] = product.quantize_unit_money(Decimal(typed) / factor)
+            setattr(product, name, cleaned[name])
 
     def _clean_price_by(self, cleaned):
         """One way of pricing at a time. Without the chooser in the POST the filled markup decides."""
@@ -878,6 +1150,7 @@ class QuickProductForm(StyledModelForm):
             "category",
             "supplier",
             "unit",
+            *PACKING_FIELDS,
             "markup_percent",
             "markup_amount",
             "price",
@@ -889,6 +1162,8 @@ class QuickProductForm(StyledModelForm):
         labels = {
             "sku": "SKU",
             "unit": "Sold by",
+            "boxes_per_carton": "Boxes in a carton",
+            "pieces_per_box": "Pieces in a box",
             "markup_percent": "Markup on cost (%)",
             "markup_amount": "Or amount on cost",
             "price": "Opening sale price",
@@ -927,6 +1202,27 @@ class QuickProductForm(StyledModelForm):
             if default_markup is not None:
                 self.fields["markup_percent"].initial = default_markup
         _apply_feature_modules_to_product_form(self)
+        self._init_packing()
+
+    def _init_packing(self):
+        """Money is typed to two places; with cartons and boxes on it is typed for the largest pack."""
+        for name in ("price", "markup_amount"):
+            if name in self.fields:
+                _as_plain_money(self.fields[name])
+        if "pieces_per_box" not in self.fields:
+            # The Cartons and boxes module is off: the packing numbers were taken out above.
+            return
+        for name in PACKING_FIELDS:
+            self.fields[name].required = False
+            self.fields[name].widget.attrs.update({"min": "1", "step": "1", "inputmode": "numeric"})
+        self.fields["price"].help_text = (
+            "The retail price of one carton, or of the largest pack the product has. Leave blank when a markup is set."
+        )
+        if "markup_amount" in self.fields:
+            self.fields["markup_amount"].help_text = (
+                "Or fill this: the purchase line prices the item as cost + this amount, "
+                "for one carton or the largest pack the product has."
+            )
 
     def clean(self):
         cleaned = super().clean()
@@ -945,7 +1241,23 @@ class QuickProductForm(StyledModelForm):
                 # No cost yet: the first purchase line sets the price from the markup.
                 cleaned["price"] = Decimal("0")
                 self.instance.price = cleaned["price"]
+        self._store_pack_money(cleaned)
         return cleaned
+
+    def _store_pack_money(self, cleaned):
+        """The opening price and a fixed markup arrive for the largest pack and are kept for one base unit."""
+        if "pieces_per_box" not in self.fields or any(name in self.errors for name in PACKING_FIELDS):
+            return
+        product = self.instance
+        for name in PACKING_FIELDS:
+            # An emptied box means the product has no such level.
+            cleaned[name] = cleaned.get(name) or 1
+            setattr(product, name, cleaned[name])
+        product.unit = cleaned["unit"]
+        factor = product.pack_factor(product.top_pack_level)
+        for name in ("price", "markup_amount"):
+            if cleaned.get(name):
+                cleaned[name] = product.quantize_unit_money(Decimal(cleaned[name]) / factor)
 
     def save(self, commit=True):
         product = super().save(commit=False)
@@ -961,7 +1273,10 @@ class QuickProductForm(StyledModelForm):
 PURCHASE_BILL_FIELDS = _existing_model_fields(Purchase, ("supplier_invoice_number", "bill_date"))
 
 
-class PurchaseForm(StyledModelForm):
+class PurchaseForm(BankReceiptFormMixin, StyledModelForm):
+    # The amount paid now through a bank carries its receipt (see accounts.receipt_forms).
+    bank_receipt_amount_field = "paid_amount"
+
     class Meta:
         model = Purchase
         fields = ["supplier", *PURCHASE_BILL_FIELDS, "payment_method", "bank_account", "paid_amount"]
@@ -1005,31 +1320,68 @@ class PurchaseForm(StyledModelForm):
         return cleaned_data
 
 
+def purchase_option_attrs(product, packaging=None):
+    """The data-* attributes of a product's option on a purchase line, read by purchase.js.
+
+    The price and a fixed markup amount are for one base unit (a piece): the script multiplies
+    them by the size of the unit the line is in. Packing is only given while the Cartons and
+    boxes module is on, so without it every product reads as plain.
+    """
+    if packaging is None:
+        packaging = packaging_enabled()
+    attrs = {
+        "data-unit": product.unit,
+        "data-step": product.quantity_step,
+        "data-markup": "" if product.markup_percent is None else str(product.markup_percent),
+        "data-markup-amount": (
+            "" if product.markup_amount is None else str(product.quantize_unit_money(product.markup_amount))
+        ),
+        "data-min-margin": str(product.minimum_margin_percent or 0),
+        "data-price": str(product.quantize_unit_money(product.price)) if product.price else "",
+    }
+    if packaging:
+        attrs["data-pieces-per-box"] = str(product.pieces_per_box or 1)
+        attrs["data-boxes-per-carton"] = str(product.boxes_per_carton or 1)
+    return attrs
+
+
 class PurchaseProductSelect(forms.Select):
-    """Product dropdown whose options carry unit and pricing rules for the purchase line script."""
+    """Product dropdown whose options carry unit, packing and pricing rules for the purchase line script."""
+
+    def optgroups(self, name, value, attrs=None):
+        # Asked once for the dropdown, not once for every product in it.
+        self._packaging = packaging_enabled()
+        return super().optgroups(name, value, attrs)
 
     def create_option(self, name, value, label, selected, index, subindex=None, attrs=None):
         option = super().create_option(name, value, label, selected, index, subindex=subindex, attrs=attrs)
         product = getattr(value, "instance", None)
         if product is not None:
-            option["attrs"].update(
-                {
-                    "data-unit": product.unit,
-                    "data-step": product.quantity_step,
-                    "data-markup": "" if product.markup_percent is None else str(product.markup_percent),
-                    "data-markup-amount": "" if product.markup_amount is None else str(product.markup_amount),
-                    "data-min-margin": str(product.minimum_margin_percent or 0),
-                    "data-price": str(product.price or ""),
-                }
-            )
+            option["attrs"].update(purchase_option_attrs(product, getattr(self, "_packaging", None)))
         return option
 
 
+# A carton of 9,999 boxes of 9,999 pieces still fits the unit_factor column.
+LINE_PACKING_MAX = 9999
+# A blank purchase row already posts these, so alone they do not make a line.
+PURCHASE_LINE_UNIT_FIELDS = ("unit_level", *PACKING_FIELDS)
+
+
 class PurchaseItemForm(StyledModelForm):
+    # The chosen product's packing, shown on the line and editable there. These are not columns
+    # of the line: saving the purchase writes them to the product (views.purchases._save_purchase_lines).
+    boxes_per_carton = forms.IntegerField(
+        label="Boxes in a carton", required=False, min_value=1, max_value=LINE_PACKING_MAX
+    )
+    pieces_per_box = forms.IntegerField(
+        label="Pieces in a box", required=False, min_value=1, max_value=LINE_PACKING_MAX
+    )
+
     class Meta:
         model = PurchaseItem
-        fields = ["product", "quantity", "cost_price", "sale_price"]
+        fields = ["product", "quantity", "unit_level", "cost_price", "sale_price"]
         labels = {
+            "unit_level": "Unit",
             "cost_price": "Unit cost",
             "sale_price": "Sale price",
         }
@@ -1040,18 +1392,147 @@ class PurchaseItemForm(StyledModelForm):
             "product": PurchaseProductSelect,
         }
 
-    def __init__(self, *args, **kwargs):
+    def __init__(self, *args, default_unit=None, **kwargs):
         super().__init__(*args, **kwargs)
         self._apply_bootstrap()
         self.empty_permitted = True
+        # (pieces in a box, boxes in a carton) once clean() finds the line changed its product's packing.
+        self.packing_change = None
         # Each size is its own choice, named "Bread - Small".
         self.fields["product"].queryset = Product.objects.filter(is_active=True).order_by("name", "variant_label")
         self.fields["quantity"].widget.attrs.update({"min": "0", "inputmode": "decimal"})
         self.fields["sale_price"].required = False
-        if self.instance.pk and self.instance.product_id:
+        saved = self.instance if self.instance.pk and self.instance.product_id else None
+        # What a line saved earlier holds. The browser keeps that unit and its size on offer until
+        # the line's product, unit or packing is changed.
+        self.saved_line = None
+        if saved is not None:
+            level = normalize_pack_level(saved.unit_level)
             # New rows get their step from the chosen option in the browser.
-            self.fields["quantity"].widget.attrs["step"] = self.instance.product.quantity_step
-            self.initial["quantity"] = format_qty(self.instance.quantity)
+            self.fields["quantity"].widget.attrs["step"] = saved.product.quantity_step if level == PACK_PIECE else "1"
+            self.initial["quantity"] = format_qty(saved.quantity)
+            self.saved_line = {
+                "product_id": saved.product_id,
+                "level": level,
+                "label": saved.unit_label,
+                "factor": format_qty(saved.unit_factor),
+                "pieces_per_box": saved.product.pieces_per_box,
+                "boxes_per_carton": saved.product.boxes_per_carton,
+            }
+        if packaging_enabled():
+            self._init_units(saved, default_unit)
+        else:
+            # No cartons or boxes: the line is in the product's own unit and shows no packing.
+            for name in PURCHASE_LINE_UNIT_FIELDS:
+                del self.fields[name]
+
+    def _init_units(self, saved, default_unit):
+        """The unit dropdown and the two packing boxes of a row."""
+        unit_field = self.fields["unit_level"]
+        # A POST without the unit leaves the line as it is: a new line is in pieces, as before.
+        unit_field.required = False
+        unit_field.widget.attrs.update(
+            {
+                "aria-label": "Unit",
+                "data-tip": "Bought by the carton, box or piece. In the quantity box, press C, B or P.",
+            }
+        )
+        tips = {
+            "boxes_per_carton": "Boxes in one carton. 1 means no cartons. Saved to the product with the purchase.",
+            "pieces_per_box": "Pieces in one box. 1 means no boxes. Saved to the product with the purchase.",
+        }
+        for name in PACKING_FIELDS:
+            field = self.fields[name]
+            field.widget.attrs.update(
+                {
+                    "class": "form-control form-control-sm",
+                    "step": "1",
+                    "inputmode": "numeric",
+                    "aria-label": field.label,
+                    "data-tip": tips[name],
+                }
+            )
+        if saved is not None:
+            for name in PACKING_FIELDS:
+                self.initial[name] = getattr(saved.product, name)
+        else:
+            # A blank row starts in the shop's stock unit; the browser narrows it to the chosen product.
+            self.initial["unit_level"] = normalize_pack_level(default_unit, default=None) or default_stock_unit()
+        unit_field.widget.choices = self._unit_choices(saved)
+
+    def _row_product(self, saved):
+        """The product this row shows: the posted one on a bound form, otherwise the saved line's."""
+        if not self.is_bound:
+            return saved.product if saved is not None else None
+        raw = self.data.get(self.add_prefix("product"))
+        if not raw:
+            return None
+        if saved is not None and str(saved.product_id) == str(raw):
+            return saved.product
+        try:
+            return self.fields["product"].queryset.filter(pk=raw).first()
+        except (TypeError, ValueError):
+            return None
+
+    def _posted_packing(self, name, fallback):
+        try:
+            value = int(self.data.get(self.add_prefix(name)) or 0)
+        except (TypeError, ValueError):
+            return fallback
+        return value if value >= 1 else fallback
+
+    def _unit_choices(self, saved):
+        """What the unit dropdown offers on this row: the levels its product has, or all three."""
+        product = self._row_product(saved)
+        if product is None:
+            return [(code, PACK_NAMES[code]) for code in PACK_LEVELS]
+        per_box, per_carton = product.pieces_per_box, product.boxes_per_carton
+        if self.is_bound:
+            # Sent back with what was typed: the dropdown follows the packing on the row.
+            per_box = self._posted_packing("pieces_per_box", per_box)
+            per_carton = self._posted_packing("boxes_per_carton", per_carton)
+        shape = Product(unit=product.unit, pieces_per_box=per_box, boxes_per_carton=per_carton)
+        names = {
+            level["code"]: level["label"] if level["code"] == PACK_PIECE else level["name"]
+            for level in shape.pack_levels
+        }
+        if saved is not None and saved.product_id == product.pk:
+            # The packing may have changed since the line was written: its own unit still stands.
+            names.setdefault(self.saved_line["level"], PACK_NAMES[self.saved_line["level"]])
+        return [(code, names[code]) for code in PACK_LEVELS if code in names]
+
+    def has_changed(self):
+        if self.instance.pk:
+            return super().has_changed()
+        # A new row is a line once a product, a quantity or a price is on it; its unit and
+        # packing boxes hold defaults and do not count.
+        return any(name not in PURCHASE_LINE_UNIT_FIELDS for name in self.changed_data)
+
+    def clean(self):
+        cleaned = super().clean()
+        product = cleaned.get("product")
+        if product is None or "pieces_per_box" not in self.fields:
+            return cleaned
+        if any(name in self.errors for name in PACKING_FIELDS):
+            return cleaned
+        # An empty box, or a POST without the boxes, leaves the product's packing as it is.
+        per_box = cleaned.get("pieces_per_box") or product.pieces_per_box
+        per_carton = cleaned.get("boxes_per_carton") or product.boxes_per_carton
+        if (per_box, per_carton) == (product.pieces_per_box, product.boxes_per_carton):
+            return cleaned
+        if per_box > 1 and product.unit == "box":
+            self.add_error(
+                "pieces_per_box",
+                f"{product.display_name} is counted by the box. Set its unit to Piece on the product "
+                "before a box of it can hold pieces.",
+            )
+            return cleaned
+        # PurchaseItem.clean() sizes the line's unit from this product, so it holds the new packing first.
+        product.pieces_per_box, product.boxes_per_carton = per_box, per_carton
+        self.packing_change = (per_box, per_carton)
+        # A line saved earlier is resized by the corrected packing too.
+        self.instance.refresh_unit_factor = True
+        return cleaned
 
 
 class BrandForm(StyledModelForm):
@@ -1129,6 +1610,15 @@ class QuickCategoryForm(StyledModelForm):
 
 
 class BasePurchaseItemFormSet(BaseModelFormSet):
+    def get_form_kwargs(self, index):
+        kwargs = super().get_form_kwargs(index)
+        if "default_unit" not in kwargs:
+            # The shop's stock unit is read once for the table, not once for every line.
+            if not hasattr(self, "_default_unit"):
+                self._default_unit = default_stock_unit() if packaging_enabled() else PACK_PIECE
+            kwargs["default_unit"] = self._default_unit
+        return kwargs
+
     def clean(self):
         super().clean()
         active_forms = 0
@@ -1170,6 +1660,9 @@ class StockAdjustmentForm(StyledFieldsMixin, forms.Form):
     adjustment_mode = forms.ChoiceField(choices=StockAdjustment.MODE_CHOICES)
     quantity_delta = forms.DecimalField(required=False, max_digits=12, decimal_places=3, label="Adjustment quantity")
     quantity_after = forms.DecimalField(required=False, min_value=0, max_digits=12, decimal_places=3, label="Counted stock")
+    # A packed product is adjusted and counted in the unit chosen here; the quantity is kept in base units.
+    quantity_delta_unit = forms.ChoiceField(required=False, choices=PACK_LEVEL_CHOICES, label="Adjustment unit")
+    quantity_after_unit = forms.ChoiceField(required=False, choices=PACK_LEVEL_CHOICES, label="Counted stock unit")
     reason_preset = forms.ChoiceField(choices=REASON_CHOICES, label="Reason")
     custom_reason = forms.CharField(required=False, max_length=150, label="Custom reason")
     reason = forms.CharField(max_length=150, widget=forms.HiddenInput())
@@ -1177,6 +1670,16 @@ class StockAdjustmentForm(StyledFieldsMixin, forms.Form):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.default_stock_unit = PACK_PIECE
+        if packaging_enabled():
+            self.default_stock_unit = default_stock_unit()
+            for name in ("quantity_delta_unit", "quantity_after_unit"):
+                self.fields[name].choices = pack_unit_choices()
+                self.fields[name].initial = self.default_stock_unit
+                self.fields[name].widget.attrs["aria-label"] = self.fields[name].label
+        else:
+            del self.fields["quantity_delta_unit"]
+            del self.fields["quantity_after_unit"]
         self._apply_bootstrap()
         self.fields["reason"].widget = forms.HiddenInput()
         self.fields["product"].queryset = Product.objects.filter(is_active=True).order_by("name")
@@ -1214,6 +1717,17 @@ class StockAdjustmentForm(StyledFieldsMixin, forms.Form):
                 self.add_error("quantity_delta", "Enter the adjustment quantity.")
             cleaned_data["quantity_after"] = None
 
+        product = cleaned_data.get("product")
+        for name in ("quantity_delta", "quantity_after"):
+            quantity = cleaned_data.get(name)
+            if product is None or quantity is None:
+                continue
+            # A plain product has one unit, whatever the picker was left on.
+            level = normalize_pack_level(cleaned_data.get(f"{name}_unit")) if product.has_packaging else PACK_PIECE
+            base = typed_quantity_to_base(self, product, name, quantity, level)
+            if base is not None:
+                cleaned_data[name] = base
+
         if reason_preset == "other":
             if not custom_reason:
                 self.add_error("custom_reason", "Enter the reason when Other is selected.")
@@ -1227,7 +1741,11 @@ class StockAdjustmentForm(StyledFieldsMixin, forms.Form):
 
 
 
-class SaleReturnForm(StyledFieldsMixin, forms.Form):
+class SaleReturnForm(BankReceiptFormMixin, StyledFieldsMixin, forms.Form):
+    # A bank refund may carry its receipt; it is never demanded.
+    bank_receipt_method_fields = ("refund_method",)
+    bank_receipt_required = False
+
     refund_method = forms.ChoiceField(choices=SaleReturn.REFUND_METHOD_CHOICES)
     bank_account = forms.ModelChoiceField(queryset=bank_account_queryset(), required=False)
     reason = forms.CharField(max_length=150)
@@ -1248,7 +1766,10 @@ class SaleReturnForm(StyledFieldsMixin, forms.Form):
         return cleaned_data
 
 
-class PurchaseReturnForm(StyledFieldsMixin, forms.Form):
+class PurchaseReturnForm(BankReceiptFormMixin, StyledFieldsMixin, forms.Form):
+    bank_receipt_method_fields = ("settlement_method",)
+    bank_receipt_required = False
+
     settlement_method = forms.ChoiceField(choices=PurchaseReturn.SETTLEMENT_METHOD_CHOICES)
     bank_account = forms.ModelChoiceField(queryset=bank_account_queryset(), required=False)
     reason = forms.CharField(max_length=150)

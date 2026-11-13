@@ -1,0 +1,73 @@
+{% extends "distribution/_base.html" %}
+{% load static currency_tags %}
+{% block title %}{% if order %}Edit {{ order.display_number }}{% else %}New order{% endif %}{% endblock %}
+{% block page_title %}{% if order %}Edit order {{ order.display_number }}{% else %}New order{% endif %}{% endblock %}
+{% block page_help %}Key in an order as the order booker wrote it. Choosing the customer fills their route and order booker and shows what they owe. F4 adds a line; Ctrl+S saves.{% endblock %}
+{% block page_actions %}<a href="{{ customer_add_url }}" class="btn btn-outline-secondary" data-tip="Add a new shop; you come back to this order"><i class="bi bi-person-plus" aria-hidden="true"></i> New customer</a><a href="{{ back_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>{% endblock %}
+
+{% block dist_content %}
+<form method="post" novalidate id="orderForm">
+    {% csrf_token %}
+    {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+
+    <section class="k-section" aria-labelledby="order-head">
+        <div class="k-section-head"><h2 class="k-section-title" id="order-head">Order</h2></div>
+        <div class="k-form-grid">
+            <div class="k-span-2">
+                {% include "pos/partials/_entry_field.html" with field=form.customer %}
+                {% if quick_add_kinds.customer %}<div class="rf-add-row"><a class="rf-add" href="{{ customer_add_url }}" data-rf-quick="customer" data-rf-target="{{ form.customer.id_for_label }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add customer</a></div>{% endif %}
+                <div class="dist-terms" id="distTerms" aria-live="polite"{% if not customer_terms %} hidden{% endif %}>
+                    {% if customer_terms %}
+                    <span>{% if customer_terms.owes %}Owes <strong>{{ customer_terms.balance_text }}</strong>{% elif customer_terms.advance %}Paid in advance <strong>{{ customer_terms.balance_text }}</strong>{% else %}Balance <strong>clear</strong>{% endif %}</span>
+                    {% if customer_terms.has_limit %}<span{% if customer_terms.is_over %} class="dist-over"{% endif %}>Credit limit <strong>{{ customer_terms.limit_text }}</strong>{% if customer_terms.is_over %}, over by <strong>{{ customer_terms.over_text }}</strong>{% else %}, <strong>{{ customer_terms.left_text }}</strong> left{% endif %}</span>{% else %}<span>No credit limit</span>{% endif %}
+                    {% endif %}
+                </div>
+            </div>
+            {% if form.route %}<div>{% include "pos/partials/_entry_field.html" with field=form.route %}</div>
+            <div>{% include "pos/partials/_entry_field.html" with field=form.order_booker %}</div>{% endif %}
+            <div>{% include "pos/partials/_entry_field.html" with field=form.order_date %}</div>
+            <div>{% include "pos/partials/_entry_field.html" with field=form.delivery_date %}</div>
+            <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.notes %}</div>
+        </div>
+    </section>
+
+    <section class="k-section" aria-labelledby="order-lines">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="order-lines">Items {% include "pos/partials/_help_tip.html" with tip_id="tipOrderLines" tip_name="Items" tip_text="Choose the unit the shop ordered in (carton, box or piece). The rate fills from the price list for that unit; the discount is a percentage off this line." %}</h2>
+        </div>
+        <table class="k-ledger st-lines st-lines--packs" id="distLines">
+            <thead>
+                <tr>
+                    <th scope="col">Product</th>
+                    <th scope="col" class="st-col-qty text-end">Quantity</th>
+                    <th scope="col" class="st-col-money text-end">Rate</th>
+                    <th scope="col" class="st-col-money text-end">Disc %</th>
+                    <th scope="col" class="st-col-amount text-end">Amount</th>
+                    <th scope="col" class="st-col-x"><span class="visually-hidden">Remove</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in lines %}{% include "distribution/_line_row.html" with line=line with_discount=True lock_rate=allow_price_override|yesno:",1" lock_discount=allow_line_discount|yesno:",1" %}{% endfor %}
+            </tbody>
+            <tfoot>
+                <tr><td colspan="4">Total <span class="st-sum-unit" data-dist-count></span></td><td class="k-num text-end" data-dist-total>0.00</td><td></td></tr>
+            </tfoot>
+        </table>
+        <template id="distLineTemplate">{% include "distribution/_line_row.html" with line=None with_discount=True lock_rate=allow_price_override|yesno:",1" lock_discount=allow_line_discount|yesno:",1" %}</template>
+        <div class="st-lines-tools">
+            <button type="button" class="btn btn-outline-secondary" id="distAddLine" data-k-key="F4" data-k-key-label="Add a line"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add line</button>
+        </div>
+    </section>
+
+    <div class="st-actionbar">
+        <span class="st-actionbar-note">Order total <strong data-dist-total>0.00</strong></span>
+        <a href="{{ back_url }}" class="btn btn-outline-secondary">Cancel</a>
+        {% if not order %}<button type="submit" name="then" value="new" class="btn btn-outline-secondary" data-tip="Save and start the next order">Save and new</button>{% endif %}
+        <button type="submit" class="btn btn-primary" data-k-key="Ctrl+S" data-k-key-label="Save order">{% if order %}Save order{% else %}Book order{% endif %}</button>
+    </div>
+</form>
+{% include "pos/partials/_quick_add_panel.html" %}
+{{ product_data|json_script:"distProducts" }}
+{% endblock %}
+
+{% block dist_js %}<script src="{% static 'distribution/js/lines.js' %}"></script>{% endblock %}

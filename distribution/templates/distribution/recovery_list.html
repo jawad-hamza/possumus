@@ -1,0 +1,42 @@
+{% extends "distribution/_base.html" %}
+{% load currency_tags %}
+{% block title %}Recovered{% endblock %}
+{% block page_title %}Recovered{% endblock %}
+{% block page_help %}Every recovery with who brought it in, the route and the load it came back with. The Recovery report totals them by route, person or day.{% endblock %}
+{% block page_actions %}<a href="{% url 'distribution_recovery' %}" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Enter recovery</a><a href="{% url 'report_recovery' %}?start={{ start|date:'Y-m-d' }}&end={{ end|date:'Y-m-d' }}" class="btn btn-outline-secondary">Recovery report</a>{% endblock %}
+
+{% block dist_content %}
+<section class="k-section" aria-label="Recoveries">
+    <form method="get" class="dist-filters">
+        <div><label class="form-label" for="f-start">From</label><input type="date" id="f-start" name="start" class="form-control form-control-sm" value="{{ start|date:'Y-m-d' }}"></div>
+        <div><label class="form-label" for="f-end">To</label><input type="date" id="f-end" name="end" class="form-control form-control-sm" value="{{ end|date:'Y-m-d' }}"></div>
+        {% if routes %}<div><label class="form-label" for="f-route">Route</label>
+            <select id="f-route" name="route" class="form-select form-select-sm"><option value="">All routes</option>{% for route in routes %}<option value="{{ route.id }}"{% if route.id == route_id %} selected{% endif %}>{{ route.label }}</option>{% endfor %}</select></div>{% endif %}
+        {% if collectors %}<div><label class="form-label" for="f-who">Collected by</label>
+            <select id="f-who" name="collector" class="form-select form-select-sm"><option value="">Anyone</option>{% for name in collectors %}<option value="{{ name }}"{% if name == collector %} selected{% endif %}>{{ name }}</option>{% endfor %}</select></div>{% endif %}
+        <button type="submit" class="btn btn-outline-secondary btn-sm">Show</button>
+    </form>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack">
+            <thead><tr><th scope="col">Date</th><th scope="col">Shop</th><th scope="col">Route</th><th scope="col">Collected by</th><th scope="col">Paid by</th><th scope="col">Load / invoice</th><th scope="col" class="k-num">Amount</th></tr></thead>
+            <tbody>
+                {% for recovery in recoveries %}
+                <tr>
+                    <td>{{ recovery.collected_on|date:"d M Y" }}</td>
+                    <td data-label="Shop"><a href="{% url 'customer_detail' recovery.customer.id %}">{{ recovery.customer.name }}</a></td>
+                    <td data-label="Route">{{ recovery.route.name|default:"-" }}</td>
+                    <td data-label="Collected by">{{ recovery.collector_label }}</td>
+                    <td data-label="Paid by">{{ recovery.get_payment_method_display }}</td>
+                    <td data-label="Load / invoice">{% if recovery.load_form %}<a href="{% url 'distribution_load_settle' recovery.load_form.id %}">{{ recovery.load_form.display_number }}</a>{% endif %}{% if recovery.sale %} {{ recovery.sale.display_number }}{% endif %}{% if not recovery.load_form and not recovery.sale %}-{% endif %}</td>
+                    <td class="k-num" data-label="Amount">{{ recovery.amount|money }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="7" class="k-empty"><p class="k-empty-title">No recoveries in these dates.</p></td></tr>
+                {% endfor %}
+            </tbody>
+            {% if recoveries %}<tfoot><tr class="k-total"><td colspan="6">Total</td><td class="k-num">{{ total|money }}</td></tr></tfoot>{% endif %}
+        </table>
+    </div>
+    {% include "pos/reports/_pagination.html" %}
+</section>
+{% endblock %}

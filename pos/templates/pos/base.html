@@ -13,6 +13,7 @@
     <link href="{% static 'zehnms/css/components.css' %}" rel="stylesheet">
     <link href="{% static 'zehnms/css/shell.css' %}" rel="stylesheet">
     {% block extra_css %}{% endblock %}
+    {% if review_tool %}<link href="{% static 'review/review.css' %}" rel="stylesheet">{% endif %}
 </head>
 <body class="k-app {% block body_class %}{% endblock %}" data-time-zone-sync-url="{% url 'set_client_time_zone' %}" data-session-time-zone="{{ session_time_zone }}" data-effective-time-zone="{{ effective_time_zone }}" data-preferred-time-zone="{{ preferred_time_zone }}">
 <a class="k-skip" href="#content">Skip to the page</a>
@@ -31,7 +32,7 @@
 
     {% with p=request.path u=request.resolver_match.url_name %}
     <nav class="k-rail-nav" aria-label="Modules">
-        {% if nav_access.dashboard or nav_access.pos %}<p class="k-rail-group">Counter</p>{% endif %}
+        {% if nav_access.dashboard or nav_access.pos or nav_access.distribution and feature_modules.parties %}<p class="k-rail-group">Counter</p>{% endif %}
         {% if nav_access.dashboard %}
         <a href="{% url 'dashboard' %}" data-goto="Dashboard" data-k-module class="k-rail-link{% if u == 'dashboard' %} active" aria-current="page{% endif %}">
             <i class="bi bi-speedometer2" aria-hidden="true"></i>
@@ -44,12 +45,30 @@
             <span class="k-rail-label nav-copy">Till</span>
         </a>
         {% endif %}
+        {% if nav_access.distribution and feature_modules.parties %}
+        <a href="{% url 'distribution_home' %}" data-goto="Distribution" data-goto-keys="orders order booking load form delivery settlement recovery market return" data-k-module class="k-rail-link{% if '/distribution/' in p %} active" aria-current="page{% endif %}">
+            <i class="bi bi-truck-front" aria-hidden="true"></i>
+            <span class="k-rail-label nav-copy">Distribution</span>
+        </a>
+        {% endif %}
         {% if nav_access.products or nav_access.stock_control or nav_access.purchases %}<p class="k-rail-group">Stock</p>{% endif %}
         {% if nav_access.products %}
         <a href="{% url 'product_list' %}" data-goto="Products" data-goto-keys="items catalogue inventory" data-k-module class="k-rail-link{% if '/products/' in p or '/categories/' in p or '/brands/' in p %} active" aria-current="page{% endif %}">
             <i class="bi bi-box-seam" aria-hidden="true"></i>
             <span class="k-rail-label nav-copy">Products</span>
         </a>
+        {% if feature_modules.price_lists %}
+        <a href="{% url 'pricing_price_list_list' %}" data-goto="Price lists" data-goto-keys="trade price tp rates wholesale party rate" data-k-module class="k-rail-link{% if '/trade/price-lists/' in p %} active" aria-current="page{% endif %}">
+            <i class="bi bi-card-checklist" aria-hidden="true"></i>
+            <span class="k-rail-label nav-copy">Price lists</span>
+        </a>
+        {% endif %}
+        {% if feature_modules.schemes %}
+        <a href="{% url 'pricing_scheme_list' %}" data-goto="Schemes" data-goto-keys="trade offer bonus free goods discount slab" data-k-module class="k-rail-link{% if '/trade/schemes/' in p %} active" aria-current="page{% endif %}">
+            <i class="bi bi-gift" aria-hidden="true"></i>
+            <span class="k-rail-label nav-copy">Schemes</span>
+        </a>
+        {% endif %}
         {% endif %}
         {% if nav_access.stock_control %}
         <a href="{% url 'stock_adjustments' %}" data-goto="Stock control" data-goto-keys="adjustment stock take opening" data-k-module class="k-rail-link{% if '/inventory/' in p %} active" aria-current="page{% endif %}">
@@ -219,9 +238,16 @@
     {% if manage_access.products %}<a href="{% url 'product_add' %}" data-goto="New product" data-goto-group="Products" data-goto-keys="add item create"></a>{% endif %}
     {% if manage_access.products and feature_modules.catalog_io %}<a href="{% url 'product_import' %}" data-goto="Import products" data-goto-group="Products" data-goto-keys="csv excel upload"></a>{% endif %}
     {% if manage_access.purchases %}<a href="{% url 'purchase_add' %}" data-goto="New purchase" data-goto-group="Purchases" data-goto-keys="add buy supplier bill"></a>{% endif %}
+    {% if nav_access.purchases and feature_modules.builty %}<a href="{% url 'builty_list' %}" data-goto="Builty" data-goto-group="Purchases" data-goto-keys="bilty freight transport cartage"></a>{% endif %}
     {% if nav_access.parties %}
     <a href="{% url 'customer_list' %}" data-goto="Customers" data-goto-group="Parties" data-goto-keys="receivable credit"></a>
     <a href="{% url 'supplier_list' %}" data-goto="Suppliers" data-goto-group="Parties" data-goto-keys="payable vendor"></a>
+    {% endif %}
+    {% if nav_access.distribution and feature_modules.parties %}
+    {% if manage_access.distribution %}<a href="{% url 'distribution_order_add' %}" data-goto="New sales order" data-goto-group="Distribution" data-goto-keys="book order booker"></a>{% endif %}
+    <a href="{% url 'distribution_load_list' %}" data-goto="Load forms" data-goto-group="Distribution" data-goto-keys="load sheet van delivery settle"></a>
+    <a href="{% url 'distribution_recovery' %}" data-goto="Recovery" data-goto-group="Distribution" data-goto-keys="collect old balance route"></a>
+    <a href="{% url 'distribution_return_list' %}" data-goto="Stock returns" data-goto-group="Distribution" data-goto-keys="market return damaged claim company"></a>
     {% endif %}
     {% if nav_access.expenses %}<a href="{% url 'money_desk' %}" data-goto="Money desk" data-goto-group="Expenses" data-goto-keys="cash bank transfer payment"></a>{% endif %}
     {% if nav_access.accounts %}
@@ -243,5 +269,6 @@
 <script src="{% static 'zehnms/js/shell.js' %}"></script>
 {% block vendor_js %}{% if request.resolver_match.url_name == 'dashboard' or request.resolver_match.url_name == 'accounts_home' %}<script src="{% static 'vendor/chartjs/chart.umd.min.js' %}"></script><script src="{% static 'zehnms/js/chart-theme.js' %}"></script>{% endif %}{% endblock %}
 {% block extra_js %}{% endblock %}
+{% with review_config=review_tool %}{% if review_config %}{% include "review/_tool.html" %}{% endif %}{% endwith %}
 </body>
 </html>

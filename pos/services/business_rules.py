@@ -58,8 +58,11 @@ def line_tax_rate_for_item(item, payment_method):
 
 
 def sale_discount_amount(subtotal, discount_rate):
+    # The rate keeps its ten decimals here: that is what lets a discount typed as cash come back exactly.
+    from pos.services.discounts import normalized_discount_rate
+
     subtotal = safe_decimal(subtotal)
-    return quantize_money(subtotal * (normalized_rate(discount_rate) / Decimal("100")))
+    return quantize_money(subtotal * (normalized_discount_rate(discount_rate) / Decimal("100")))
 
 
 def sale_tax_label(sale, fallback="GST"):

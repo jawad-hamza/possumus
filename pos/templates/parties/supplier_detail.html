@@ -4,7 +4,7 @@
 {% block page_title %}{{ supplier.name }}{% endblock %}
 {% block page_help %}Supplier ledger: balance, every entry and payments made.{% endblock %}
 {% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
-{% block page_actions %}<a href="#settle" class="btn btn-primary k-only-phone" onclick="openSettlement(); return false;" data-tip="Pay supplier (F2)"><i class="bi bi-cash-coin" aria-hidden="true"></i> Pay supplier</a><a href="{% url 'supplier_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Suppliers</a>{% endblock %}
+{% block page_actions %}<a href="#settle" class="btn btn-primary k-only-phone" onclick="openSettlement(); return false;" data-tip="Pay supplier (F2)"><i class="bi bi-cash-coin" aria-hidden="true"></i> Pay supplier</a>{% if manage_access.parties or manage_access.purchases %}<a href="{% url 'supplier_edit' supplier.id %}" class="btn btn-outline-secondary" data-tip="Change details and city"><i class="bi bi-pencil" aria-hidden="true"></i> Edit</a>{% endif %}<a href="{% url 'supplier_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Suppliers</a>{% endblock %}
 
 {% block content %}
 {% include "parties/_party_leaf.html" with party=supplier role="supplier" turnover=total_purchases turnover_label="Total purchases" settle_title="Pay supplier" settle_button="Record payment made" bank_help="Select which bank ledger this supplier payment left from." %}

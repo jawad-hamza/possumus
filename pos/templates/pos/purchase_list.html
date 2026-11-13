@@ -8,7 +8,7 @@
 
 {% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/return-flow.css' %}" rel="stylesheet">{% endblock %}
 
-{% block page_actions %}<a href="{% url 'purchase_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary" data-k-key="F2" data-k-key-label="New purchase"><i class="bi bi-plus-lg" aria-hidden="true"></i> New purchase</a>{% endblock %}
+{% block page_actions %}<a href="{% url 'purchase_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary" data-k-key="F2" data-k-key-label="New purchase"><i class="bi bi-plus-lg" aria-hidden="true"></i> New purchase</a>{% if feature_modules.builty %}<a href="{% url 'builty_list' %}" class="btn btn-outline-secondary" data-tip="Transport (freight) bills added to the cost of purchased goods"><i class="bi bi-truck-flatbed" aria-hidden="true"></i> Builty</a>{% endif %}{% endblock %}
 
 {% block content %}
 <section class="k-section" aria-label="Summary">
@@ -35,9 +35,9 @@
             <tr>
                 <th scope="col" data-k="meta">Purchase</th>
                 <th scope="col" data-k="what">Supplier</th>
-                <th scope="col" class="text-end" data-k="amount">Total</th>
-                <th scope="col" class="text-end" data-k="more">Paid</th>
-                <th scope="col" class="text-end" data-k="balance">Due</th>
+                <th scope="col" class="text-end" data-k="more">Debit <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Debit" aria-describedby="tipPurchaseDebit" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipPurchaseDebit" role="tooltip" hidden>Paid against the bill: at the time of purchase and by later supplier payments.</span></span></th>
+                <th scope="col" class="text-end" data-k="amount">Credit <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Credit" aria-describedby="tipPurchaseCredit" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipPurchaseCredit" role="tooltip" hidden>The bill amount the supplier is owed.</span></span></th>
+                <th scope="col" class="text-end" data-k="balance">Balance <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Balance" aria-describedby="tipPurchaseBalance" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipPurchaseBalance" role="tooltip" hidden>Running total owed to suppliers, counted from the oldest bill up to this one. The newest bill's balance is what you owe today.</span></span></th>
                 <th scope="col" data-k="flag">Status</th>
                 <th scope="col" class="text-end" data-k="more"><span class="visually-hidden">Actions</span></th>
             </tr>
@@ -45,12 +45,12 @@
         <tbody>
             {% for p in purchases %}
             <tr data-rf-row="{{ p.id }}">
-                <td data-k="meta"><a href="{% url 'purchase_detail' p.id %}" class="st-name">#{{ p.id }}</a><span class="st-sub">{{ p.created_at|date:"d M Y" }}</span></td>
+                <td data-k="meta"><a href="{% url 'purchase_detail' p.id %}" class="st-name">#{{ p.id }}</a><span class="st-sub">{{ p.created_at|date:"d M Y" }}</span>{% if p.freight_total %}<span class="st-sub" data-tip="Freight from a builty, added to the cost of these goods">Builty {{ p.freight_total|money }}</span>{% endif %}</td>
                 <td data-k="what" class="st-wrap">{{ p.supplier|default:"Cash purchase" }}{% if p.supplier_invoice_number %}<span class="st-sub">Bill {{ p.supplier_invoice_number }}</span>{% endif %}</td>
-                <td class="k-num text-end" data-k="amount" data-label="Total">{{ p.total_amount|money }}</td>
-                <td class="k-num text-end" data-k="more" data-label="Paid">{{ p.report_paid_amount|money }}{% if p.report_settlement_paid > 0 %}<span class="st-sub">Later settlement {{ p.report_settlement_paid|money }}</span>{% endif %}</td>
-                <td class="k-num text-end" data-k="balance" data-label="Due"><span class="{% if p.report_balance_due > 0 %}k-due{% else %}st-dim{% endif %}">{{ p.report_balance_due|money }}</span></td>
-                <td data-k="flag">{% if p.report_payment_status == 'paid' %}<span class="k-badge k-badge--green">Paid</span>{% elif p.report_payment_status == 'partial' %}<span class="k-badge k-badge--amber">Part paid</span>{% elif p.report_payment_status == 'credit' %}<span class="k-badge k-badge--amber">Credit</span>{% else %}<span class="k-badge">{{ p.report_payment_status|title }}</span>{% endif %}</td>
+                <td class="k-num text-end" data-k="more" data-label="Debit">{{ p.report_paid_amount|money }}{% if p.report_settlement_paid > 0 %}<span class="st-sub">Later settlement {{ p.report_settlement_paid|money }}</span>{% endif %}</td>
+                <td class="k-num text-end" data-k="amount" data-label="Credit">{{ p.total_amount|money }}</td>
+                <td class="k-num text-end" data-k="balance" data-label="Balance"><span class="{% if p.running_balance > 0 %}k-due{% else %}st-dim{% endif %}">{{ p.running_balance|money }}</span></td>
+                <td data-k="flag">{% if p.report_payment_status == 'paid' %}<span class="k-badge k-badge--green">Paid</span>{% elif p.report_payment_status == 'partial' %}<span class="k-badge k-badge--amber">Part paid</span>{% elif p.report_payment_status == 'credit' %}<span class="k-badge k-badge--amber">Credit</span>{% else %}<span class="k-badge">{{ p.report_payment_status|title }}</span>{% endif %}{% if p.report_balance_due > 0 %}<span class="st-sub k-due">{{ p.report_balance_due|money }} due</span>{% endif %}</td>
                 <td class="text-end" data-k="more">
                     <span class="k-row-actions">
                         <a href="{% url 'purchase_detail' p.id %}" class="k-icon-btn" data-tip="Open" aria-label="Open purchase #{{ p.id }}"><i class="bi bi-eye" aria-hidden="true"></i></a>

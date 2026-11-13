@@ -52,6 +52,21 @@ def outstanding_purchase_total():
     return quantize_money(outstanding)
 
 
+def running_purchase_balances():
+    """{purchase id: what is owed on all purchases up to and including this one, oldest first}.
+
+    Each bill adds what is still due on it once supplier payments have gone to the oldest bills
+    (see annotate_purchase_balances), so the newest bill's figure is the total owed today.
+    """
+    rows = annotate_purchase_balances(Purchase.objects.order_by("created_at", "id"))
+    running = ZERO
+    balances = {}
+    for purchase in rows:
+        running += purchase.report_balance_due
+        balances[purchase.id] = quantize_money(running)
+    return balances
+
+
 def annotate_purchase_balances(purchases):
     rows = list(purchases)
     if not rows:

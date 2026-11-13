@@ -13,8 +13,15 @@
                 <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=quick_product_form.name %}</div>
                 <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.sku %}</div>
                 <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.barcode %}</div>
+                {% if quick_product_form.pieces_per_box %}
+                <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=quick_product_form.unit %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.boxes_per_carton %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.pieces_per_box %}</div>
+                <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=quick_product_form.price %}</div>
+                {% else %}
                 <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.unit %}</div>
                 <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.price %}</div>
+                {% endif %}
                 {% if quick_product_form.markup_percent %}<div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.markup_percent %}</div>{% endif %}
                 {% if quick_product_form.markup_amount %}<div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.markup_amount %}</div>{% endif %}
                 <div>{% include "pos/partials/_entry_field.html" with field=quick_product_form.minimum_margin_percent %}</div>

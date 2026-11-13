@@ -1,0 +1,53 @@
+/* Price lists and schemes. Built on the shared tokens and components; only what they lack is here. */
+.pr-tabs { margin: 0 0 var(--k-4); }
+.pr-tabs .b-filter-tabs { overflow-x: auto; flex-wrap: nowrap; max-width: 100%; }
+.pr-tabs .btn { white-space: nowrap; }
+
+.pr-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--k-4);
+}
+
+@media (min-width: 992px) {
+    .pr-grid--two { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+.pr-inline-form {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--k-3);
+}
+
+.pr-inline-form > div { flex: 1 1 200px; min-width: 0; }
+.pr-inline-form > .pr-inline-actions { flex: 0 0 auto; }
+
+.pr-dim { color: var(--k-ink-soft); }
+.pr-low { color: var(--k-out-ink); font-weight: 600; }
+.pr-up { color: var(--k-in-ink); }
+
+.pr-offer {
+    font-weight: 600;
+    color: var(--k-ink);
+}
+
+.pr-party-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.pr-party-list li {
+    padding: 2px 10px;
+    border-radius: 999px;
+    background: var(--k-sunk, #eef0f3);
+    font-size: var(--k-text-sm);
+}
+
+.pr-form-section[hidden] { display: none !important; }
+
+.pr-multi select[multiple] { min-height: 12rem; }

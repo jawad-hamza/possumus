@@ -5,6 +5,7 @@ from django.utils import timezone
 
 from accounts.models import Account, CapitalEntry, Expense, ExpenseCategory, ExpensePayment, MoneyTransfer, Voucher, VoucherLine
 from accounts.services.expense_posting import post_expense
+from pos.models import SystemSettings
 from pos.test_support import AuthenticatedAdminTestCase
 
 
@@ -109,6 +110,8 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
         self.assertEqual(expense_type.account.title, "Electricity Expense")
 
     def test_partial_expense_posts_liability_and_cash_movement(self):
+        # The bank receipt rule has its own tests (pos/test_bank_receipts.py); this one is about the posting.
+        SystemSettings.objects.update_or_create(pk=1, defaults={"require_bank_receipt": False})
         expense_type = ExpenseCategory.objects.create(name="Shop Rent")
 
         response = self.client.post(
@@ -176,6 +179,8 @@ class AccountsViewTests(AuthenticatedAdminTestCase):
 
 
     def test_expense_page_prefills_and_posts_payment(self):
+        # The bank receipt rule has its own tests (pos/test_bank_receipts.py); this one is about the posting.
+        SystemSettings.objects.update_or_create(pk=1, defaults={"require_bank_receipt": False})
         expense_type = ExpenseCategory.objects.create(name="Internet")
         expense = Expense.objects.create(
             category=expense_type,

@@ -1,0 +1,110 @@
+/* The till's discounts: the bill discount's unit switch (percent or cash), the note shown while a cash
+   discount does not fit the bill, and the amount a line discount comes to under its percentage. */
+
+/* a two-way switch in the style of the Cash / Bank / Credit one, sized to sit beside the discount box */
+.t-unit-switch {
+    display: inline-flex;
+    gap: 2px;
+    margin-left: var(--k-1);
+    padding: 2px;
+    border-radius: var(--k-radius-sm);
+    background: var(--k-sunk);
+    vertical-align: middle;
+}
+
+.t-unit-opt {
+    position: relative;
+    margin: 0;
+    cursor: pointer;
+}
+
+.t-unit-opt > input {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    margin: 0;
+    opacity: 0;
+    cursor: pointer;
+}
+
+.t-unit-opt > span {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 22px;
+    height: 26px;
+    padding: 0 4px;
+    border-radius: var(--k-radius-xs);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 600;
+    line-height: 1;
+    transition: background-color var(--k-dur) var(--k-ease-out), color var(--k-dur) var(--k-ease-out);
+}
+
+.t-unit-opt:hover > span {
+    color: var(--k-ink-title);
+}
+
+.t-unit-opt > input:checked + span {
+    background: var(--k-panel);
+    box-shadow: inset 0 0 0 1px var(--k-accent);
+    color: var(--k-accent-ink);
+}
+
+.t-unit-opt > input:focus-visible + span {
+    outline: var(--k-focus-ring);
+    outline-offset: 1px;
+}
+
+/* a finger needs more to aim at than a mouse does */
+@media (pointer: coarse) {
+    .t-unit-opt > span {
+        min-width: 34px;
+        height: 34px;
+    }
+}
+
+/* the label, the box and the switch stay together; the other figure keeps to the right, and drops
+   under them only when the column is too narrow to hold both (a long figure beside the open product list) */
+.t-sum--field:has(.t-unit-switch) {
+    flex-wrap: wrap;
+    row-gap: 2px;
+}
+
+.t-sum--field:has(.t-unit-switch) > dt {
+    white-space: nowrap;
+}
+
+.t-sum--field:has(.t-unit-switch) > dd {
+    margin-left: auto;
+    white-space: nowrap;
+}
+
+/* a discount that cannot stand: the box is marked and the reason stays on the page */
+.t-rate-input[aria-invalid="true"] {
+    border-color: var(--k-out);
+}
+
+.t-discount-note {
+    margin: 0;
+    color: var(--k-out-ink);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+.t-discount-note[hidden] {
+    display: none;
+}
+
+/* what a line discount comes to, under its percentage; a long figure runs left, clear of the amount */
+.t-disc-amt {
+    display: flex;
+    justify-content: flex-end;
+    color: var(--k-ink-soft);
+    font-size: 0.6875rem;
+    font-weight: 400;
+    line-height: 12px;
+    white-space: nowrap;
+}

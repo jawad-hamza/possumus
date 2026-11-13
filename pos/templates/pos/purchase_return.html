@@ -38,22 +38,7 @@
                 </thead>
                 <tbody>
                     {% for row in item_rows %}
-                    <tr>
-                        <td class="st-wrap" data-k="what">
-                            <span class="st-name">{{ row.item.product.display_name }}</span>
-                            <span class="st-sub">Cost {{ row.item.cost_price|money }} &middot; In stock {{ row.item.product.stock_display }}</span>
-                        </td>
-                        <td class="k-num text-end" data-k="more" data-label="Received">{{ row.item.quantity|qty_short:row.item.product.unit }}</td>
-                        <td class="k-num text-end" data-k="more" data-label="Already returned">{% if row.returned_qty %}{{ row.returned_qty|qty }}{% else %}<span class="st-dim">{{ row.returned_qty|qty }}</span>{% endif %}</td>
-                        <td class="k-num text-end" data-k="flag" data-label="Available">{% if row.returnable_qty > 0 %}{{ row.returnable_qty|qty_short:row.item.product.unit }}{% else %}<span class="k-badge">Returned</span>{% endif %}</td>
-                        <td class="text-end" data-k="field" data-label="Return now">
-                            <div class="input-group st-return-input">
-                                <input class="form-control text-end" type="number" min="0" max="{{ row.returnable_qty|qty }}" step="{{ row.item.product|qty_step }}" inputmode="decimal" name="qty_{{ row.item.id }}" value="0" form="purchase-return-form" data-returnable="{{ row.returnable_qty|qty_short:row.item.product.unit }}" aria-label="Quantity of {{ row.item.product.display_name }} to return"{% if row.returnable_qty <= 0 %} readonly{% endif %}>
-                                <span class="input-group-text">{{ row.item.product.unit }}</span>
-                            </div>
-                            <div class="st-over-note" data-over-note hidden></div>
-                        </td>
-                    </tr>
+                    {% include "pos/partials/_return_line_row.html" with row=row kind="purchase" form_id="purchase-return-form" taken_label="Received" %}
                     {% endfor %}
                 </tbody>
             </table>
@@ -65,12 +50,13 @@
             <div class="k-section-head">
                 <h2 class="k-section-title" id="return-post-title">Settlement {% include "pos/partials/_help_tip.html" with tip_id="tipReturnPost" tip_name="settlement" tip_text="Reduce supplier payable if the bill is still open, or record a cash/bank refund received from the supplier. Returned stock is removed from inventory. The accounting entry either reduces supplier payable or increases cash/bank if the supplier refunded money." %}</h2>
             </div>
-            <form method="post" id="purchase-return-form" data-st-entry data-back-url="{% url 'purchase_detail' purchase.id %}">
+            <form method="post" enctype="multipart/form-data" id="purchase-return-form" data-st-entry data-back-url="{% url 'purchase_detail' purchase.id %}">
                 {% csrf_token %}
                 {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors|join:', ' }}</div>{% endif %}
                 <div class="k-form-grid">
                     <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.settlement_method %}</div>
                     <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.bank_account %}</div>
+                    <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.bank_receipt %}</div>
                     <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.reason %}</div>
                     <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.notes %}</div>
                 </div>
@@ -84,9 +70,10 @@
         <section class="k-section" aria-labelledby="past-returns-title">
             <div class="k-section-head"><h2 class="k-section-title" id="past-returns-title">Earlier returns</h2></div>
             <ul class="st-past">
+                {% load bank_receipt_tags %}{% mark_bank_receipts existing_returns %}
                 {% for entry in existing_returns %}
                 <li>
-                    <span><span class="st-name">Return #{{ entry.id }}</span><span class="st-sub">{{ entry.created_at|date:"d M Y H:i" }} &middot; {{ entry.reason }}</span></span>
+                    <span><span class="st-name">Return #{{ entry.id }}</span><span class="st-sub">{{ entry.created_at|date:"d M Y H:i" }} &middot; {{ entry.reason }}</span>{% for line in entry.items.all %}<span class="st-sub">{{ line.product.display_name }} &times; {{ line.quantity_display }}</span>{% endfor %}{% bank_receipt_link entry.bank_receipt_mark %}</span>
                     <span>{{ entry.total_amount|money }}</span>
                 </li>
                 {% empty %}

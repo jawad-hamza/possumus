@@ -1,0 +1,22 @@
+{% comment %}
+One field of the till's new-customer panel. Needs: field (a bound field of till_customer_form).
+Route and order booker are choices; a "New ..." link beside them opens a box to type one that
+is not on the list yet, so nobody leaves the bill to add a route.
+{% endcomment %}
+{% if field.name == "new_route" or field.name == "new_order_booker" %}
+<div class="t-field" data-fs-new-row hidden>
+    <label class="visually-hidden" for="till_{{ field.id_for_label }}">{{ field.label }}</label>
+    <input type="text" name="{{ field.name }}" id="till_{{ field.id_for_label }}" class="form-control" maxlength="{{ field.field.max_length }}" placeholder="{% if field.name == 'new_route' %}Name of the new route{% else %}Name of the new order booker{% endif %}" autocomplete="off">
+    <div class="k-error" data-error-for="{{ field.name }}" hidden></div>
+</div>
+{% else %}
+<div class="t-field">
+    <div class="t-field-head">
+        <label class="form-label" for="till_{{ field.id_for_label }}">{{ field.label }}{% if not field.field.required %} <span class="t-optional">optional</span>{% endif %}</label>
+        {% if field.name == "route" and till_customer_form.new_route %}<button type="button" class="t-link" data-fs-new="new_route" aria-controls="till_{{ till_customer_form.new_route.id_for_label }}">New route</button>{% endif %}
+        {% if field.name == "order_booker" and till_customer_form.new_order_booker %}<button type="button" class="t-link" data-fs-new="new_order_booker" aria-controls="till_{{ till_customer_form.new_order_booker.id_for_label }}">New order booker</button>{% endif %}
+    </div>
+    {% if field.name == "address" %}<textarea name="address" id="till_{{ field.id_for_label }}" class="form-control" rows="2"></textarea>{% elif field.name == "route" or field.name == "order_booker" %}<select name="{{ field.name }}" id="till_{{ field.id_for_label }}" class="form-select">{% for value, label in field.field.choices %}<option value="{{ value }}">{{ label }}</option>{% endfor %}</select>{% else %}<input type="{% if field.name == 'email' %}email{% elif field.name == 'phone' %}tel{% else %}text{% endif %}" name="{{ field.name }}" id="till_{{ field.id_for_label }}" class="form-control"{% if field.field.max_length %} maxlength="{{ field.field.max_length }}"{% endif %}{% if field.field.required %} required{% endif %}{% if field.name == 'credit_limit' %} inputmode="decimal" placeholder="No limit"{% elif field.name == 'city' %} list="party-city-options"{% endif %} autocomplete="off">{% endif %}
+    <div class="k-error" data-error-for="{{ field.name }}" hidden></div>
+</div>
+{% endif %}

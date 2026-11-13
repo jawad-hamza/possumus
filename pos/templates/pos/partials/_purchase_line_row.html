@@ -1,24 +1,35 @@
-<tr class="purchase-line-row{% if form.errors %} has-error{% endif %}">
+<tr class="purchase-line-row{% if form.errors %} has-error{% endif %}"{% if form.saved_line %} data-saved-product="{{ form.saved_line.product_id }}" data-saved-level="{{ form.saved_line.level }}" data-saved-label="{{ form.saved_line.label }}" data-saved-factor="{{ form.saved_line.factor }}" data-saved-per-box="{{ form.saved_line.pieces_per_box }}" data-saved-per-carton="{{ form.saved_line.boxes_per_carton }}"{% endif %}>
     <td class="st-line-product" data-label="Product">
         {{ form.id }}
         <div class="d-none">{{ form.DELETE }}</div>
         {{ form.product }}
         {% if form.product.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.product.errors|join:', ' }}</div>{% endif %}
+        {% if form.pieces_per_box %}
+        <div class="st-pack" data-line-packing{% if not form.product.value %} hidden{% endif %}>
+            <label class="st-pack-part">1 Ctn = {{ form.boxes_per_carton }} <span data-pack-carton-holds>Box</span></label>
+            <label class="st-pack-part">1 Box = {{ form.pieces_per_box }} <span data-pack-box-holds>{{ form.instance.product.unit|default:"pcs" }}</span></label>
+        </div>
+        {% if form.boxes_per_carton.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.boxes_per_carton.label }}: {{ form.boxes_per_carton.errors|join:', ' }}</div>{% endif %}
+        {% if form.pieces_per_box.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.pieces_per_box.label }}: {{ form.pieces_per_box.errors|join:', ' }}</div>{% endif %}
+        {% endif %}
     </td>
     <td data-label="Qty / weight">
         <div class="input-group">
             {{ form.quantity }}
-            <span class="input-group-text" data-line-unit>{{ form.instance.product.unit|default:"qty" }}</span>
+            {% if form.unit_level %}{{ form.unit_level }}{% else %}<span class="input-group-text" data-line-unit>{{ form.saved_line.label|default:"qty" }}</span>{% endif %}
         </div>
+        {% if form.unit_level %}<div class="form-text d-none" data-line-base></div>{% endif %}
         {% if form.quantity.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.quantity.errors|join:', ' }}</div>{% endif %}
     </td>
     <td data-label="Unit cost">
         {{ form.cost_price }}
+        {% if form.unit_level %}<div class="form-text d-none" data-line-cost-hint></div>{% endif %}
         {% if form.cost_price.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.cost_price.errors|join:', ' }}</div>{% endif %}
     </td>
     <td data-label="Sale price">
         {{ form.sale_price }}
         <div class="form-text d-none" data-line-price-hint></div>
+        {% if form.unit_level %}<div class="form-text d-none" data-line-sale-hint></div>{% endif %}
         {% if form.sale_price.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.sale_price.errors|join:', ' }}</div>{% endif %}
     </td>
     <td class="k-num text-end st-line-amount" data-label="Amount" data-line-amount></td>

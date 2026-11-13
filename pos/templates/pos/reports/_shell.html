@@ -65,6 +65,27 @@ Blocks: report_header_actions, report_extra_filters, report_body, report_css, re
                 <label for="report-end" class="form-label">As of</label>
                 <input id="report-end" type="date" name="end" value="{{ end|date:'Y-m-d' }}" class="form-control">
             </div>
+            {% elif range_mode == "period" %}
+            <div class="rp-field">
+                <label for="report-period" class="form-label">Period</label>
+                <select id="report-period" name="period" class="form-select rp-period-select" data-auto-submit>
+                    {% for value, label in period_options %}
+                    <option value="{{ value }}"{% if value == period %} selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="rp-field">
+                {% if period == "day" %}
+                <label for="report-day" class="form-label">Date</label>
+                <input id="report-day" type="date" name="day" value="{{ start|date:'Y-m-d' }}" class="form-control">
+                {% elif period == "month" %}
+                <label for="report-month" class="form-label">Month</label>
+                <input id="report-month" type="month" name="month" value="{{ start|date:'Y-m' }}" class="form-control" placeholder="yyyy-mm">
+                {% else %}
+                <label for="report-year" class="form-label">Year</label>
+                <input id="report-year" type="number" name="year" value="{{ start|date:'Y' }}" min="1900" max="9999" step="1" inputmode="numeric" class="form-control">
+                {% endif %}
+            </div>
             {% endif %}
             {% for filter in report.filters %}
             <div class="rp-field rp-field--wide">

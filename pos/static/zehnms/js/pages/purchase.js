@@ -12,6 +12,11 @@
     var ids = config.ids || {};
     var fractionalUnits = config.fractionalUnits || [];
     var pieceUnit = config.pieceUnit || '';
+    // Cartons and boxes. A line is typed in one unit (carton, box, or the product's own unit); its
+    // cost and sale price are for one of that unit. Stock is always counted in the product's own unit.
+    var packaging = config.packaging || {};
+    var packOn = Boolean(packaging.enabled);
+    var UNIT_ORDER = ['carton', 'box', 'piece'];
 
     var totalFormsInput = doc.getElementById('id_items-TOTAL_FORMS');
     var lineTemplate = doc.getElementById('purchaseLineTemplate');
@@ -74,7 +79,7 @@
         totalFormsInput.value = String(formIndex + 1);
         bindRemoveButton(row);
         buildCombo(row);
-        refreshLineRules(row);
+        refreshLine(row, false);
         refreshTotals();
         return row;
     }
@@ -88,31 +93,148 @@
             cost: row.querySelector('input[name$="-cost_price"]'),
             sale: row.querySelector('input[name$="-sale_price"]'),
             unit: row.querySelector('[data-line-unit]'),
+            unitSelect: row.querySelector('select[name$="-unit_level"]'),
+            packing: row.querySelector('[data-line-packing]'),
+            perCarton: row.querySelector('input[name$="-boxes_per_carton"]'),
+            perBox: row.querySelector('input[name$="-pieces_per_box"]'),
+            base: row.querySelector('[data-line-base]'),
             hint: row.querySelector('[data-line-price-hint]'),
+            costHint: row.querySelector('[data-line-cost-hint]'),
+            saleHint: row.querySelector('[data-line-sale-hint]'),
             amount: row.querySelector('[data-line-amount]')
         };
     }
 
-    // Step, unit label and price lock follow the chosen product; typed values are left alone.
+    /* ---- the unit of a line: carton, box, or the product's own ---- */
+
+    function wholeNumber(field, fallback) {
+        var value = field ? parseInt(field.value, 10) : NaN;
+        return Number.isFinite(value) && value >= 1 ? value : fallback;
+    }
+
+    function packLevel(code, factor) {
+        var words = (packaging.levels || []).filter(function (level) { return level.code === code; })[0] || {};
+        return { code: code, name: words.name || code, label: words.label || code, factor: factor };
+    }
+
+    // A line saved earlier keeps the unit and the size it was written with until its product, unit
+    // or packing is changed here. The server follows the same rule.
+    function savedUnit(row, parts) {
+        var saved = row.dataset;
+        if (!saved.savedLevel || !parts.select || parts.select.value !== saved.savedProduct) { return null; }
+        if (parts.perBox && String(wholeNumber(parts.perBox, 1)) !== saved.savedPerBox) { return null; }
+        if (parts.perCarton && String(wholeNumber(parts.perCarton, 1)) !== saved.savedPerCarton) { return null; }
+        var factor = parseFloat(saved.savedFactor);
+        return { code: saved.savedLevel, factor: factor > 0 ? factor : 1 };
+    }
+
+    // The units a line can be in, largest first: [{code, name, label, factor}]. factor is how many
+    // of the product's own unit one of them holds, taken from the packing on the row.
+    function lineLevels(row, parts) {
+        var own = (parts.option && parts.option.dataset.unit) || 'qty';
+        var levels = [];
+        if (packOn && parts.unitSelect && !parts.option) {
+            // No product yet: every unit is on offer, as the server draws a blank line.
+            return [packLevel('carton', 1), packLevel('box', 1), { code: 'piece', name: 'Piece', label: own, factor: 1 }];
+        }
+        if (packOn && parts.option) {
+            var perBox = wholeNumber(parts.perBox, 1);
+            var perCarton = wholeNumber(parts.perCarton, 1);
+            if (perCarton > 1) { levels.push(packLevel('carton', perBox * perCarton)); }
+            if (perBox > 1) { levels.push(packLevel('box', perBox)); }
+        }
+        levels.push({ code: 'piece', name: own, label: own, factor: 1 });
+        var saved = savedUnit(row, parts);
+        if (saved && saved.code !== 'piece') {
+            var held = levels.filter(function (level) { return level.code === saved.code; })[0];
+            if (held) {
+                held.factor = saved.factor;
+            } else {
+                levels.push(packLevel(saved.code, saved.factor));
+                levels.sort(function (a, b) { return UNIT_ORDER.indexOf(a.code) - UNIT_ORDER.indexOf(b.code); });
+            }
+        }
+        return levels;
+    }
+
+    // The wanted unit when the line has it, otherwise the next smaller one it does have.
+    function pickLevel(levels, wanted) {
+        var start = UNIT_ORDER.indexOf(wanted);
+        if (start === -1) { start = UNIT_ORDER.length - 1; }
+        for (var i = start; i < UNIT_ORDER.length; i += 1) {
+            for (var j = 0; j < levels.length; j += 1) {
+                if (levels[j].code === UNIT_ORDER[i]) { return levels[j]; }
+            }
+        }
+        return levels[levels.length - 1];
+    }
+
+    // The unit the line is in. row.dataset.unit is a unit picked by hand, saved or posted; without it
+    // the line starts in the shop's stock unit, as far as the product's packing goes.
+    function lineUnit(row, parts, levels) {
+        if (parts.unitSelect) {
+            return pickLevel(levels, row.dataset.unit || packaging.defaultUnit || 'carton');
+        }
+        var saved = savedUnit(row, parts);
+        return pickLevel(levels, saved ? saved.code : 'piece');
+    }
+
+    function showUnitChoices(parts, levels, unit) {
+        var select = parts.unitSelect;
+        if (!select) { return; }
+        var shown = levels.map(function (level) { return level.code + ':' + level.name; }).join('|');
+        if (select.dataset.shown !== shown) {
+            select.textContent = '';
+            levels.forEach(function (level) {
+                var option = doc.createElement('option');
+                option.value = level.code;
+                option.textContent = level.name;
+                select.appendChild(option);
+            });
+            select.dataset.shown = shown;
+        }
+        select.value = unit.code;
+    }
+
+    // Step, unit choices, packing words and price lock follow the chosen product; typed values are left alone.
     function refreshLineRules(row) {
         var parts = lineParts(row);
         var data = parts.option ? parts.option.dataset : {};
         var hasMarkup = Boolean(data.markup || data.markupAmount);
+        var levels = lineLevels(row, parts);
+        var unit = lineUnit(row, parts, levels);
+        showUnitChoices(parts, levels, unit);
         if (parts.quantity) {
-            parts.quantity.step = data.step || '0.001';
+            // Cartons and boxes are counted whole; the product's own unit keeps its step (weights stay fractional).
+            parts.quantity.step = unit.code === 'piece' ? (data.step || '0.001') : '1';
         }
         if (parts.unit) {
-            parts.unit.textContent = data.unit || 'qty';
+            parts.unit.textContent = unit.label;
+        }
+        if (parts.packing) {
+            // "1 Ctn = 12 Box" for a carton of boxes, "1 Ctn = 24 pcs" when the product has no boxes.
+            var own = data.unit || pieceUnit || 'pcs';
+            var cartonHolds = parts.packing.querySelector('[data-pack-carton-holds]');
+            var boxHolds = parts.packing.querySelector('[data-pack-box-holds]');
+            parts.packing.hidden = !parts.option;
+            if (cartonHolds) { cartonHolds.textContent = wholeNumber(parts.perBox, 1) > 1 ? packLevel('box', 1).label : own; }
+            if (boxHolds) { boxHolds.textContent = own; }
         }
         if (parts.sale) {
             parts.sale.readOnly = hasMarkup;
             parts.sale.classList.toggle('bg-light', hasMarkup);
         }
         if (parts.hint) {
-            parts.hint.textContent = !hasMarkup ? '' : (data.markup
-                ? 'Cost + ' + parseFloat(data.markup) + '% (set on the product)'
-                : 'Cost + ' + formatMoney(parseFloat(data.markupAmount)) + ' (set on the product)');
-            parts.hint.classList.toggle('d-none', !hasMarkup);
+            var note = '';
+            if (data.markup) {
+                note = 'Cost + ' + parseFloat(data.markup) + '% (set on the product)';
+            } else if (data.markupAmount) {
+                // The amount is set for one piece; the note says what it adds to one of the line's unit.
+                note = 'Cost + ' + formatMoney(parseFloat(data.markupAmount) * unit.factor)
+                    + (unit.factor > 1 ? ' / ' + unit.label : '') + ' (set on the product)';
+            }
+            parts.hint.textContent = note;
+            parts.hint.classList.toggle('d-none', !note);
         }
     }
 
@@ -122,15 +244,127 @@
             return;
         }
         var data = parts.option.dataset;
+        var unit = lineUnit(row, parts, lineLevels(row, parts));
         var cost = parseFloat(parts.cost ? parts.cost.value : '');
         if (data.markup) {
             parts.sale.value = cost > 0 ? roundMoney(cost * (1 + parseFloat(data.markup) / 100)).toFixed(2) : '';
         } else if (data.markupAmount) {
-            // A fixed amount on cost: cost + 20.
-            parts.sale.value = cost > 0 ? roundMoney(cost + parseFloat(data.markupAmount)).toFixed(2) : '';
-        } else if (!parts.sale.value && parseFloat(data.price) > 0) {
-            parts.sale.value = data.price;
+            // A fixed amount on cost is set for one piece: a carton of 144 adds it 144 times.
+            parts.sale.value = cost > 0 ? roundMoney(cost + parseFloat(data.markupAmount) * unit.factor).toFixed(2) : '';
+        } else if (!parts.sale.value || parts.sale.dataset.filled === '1') {
+            // Priced by hand: start from the product's price for this unit. A price typed over it stays.
+            var price = parseFloat(data.price);
+            parts.sale.value = price > 0 ? roundMoney(price * unit.factor).toFixed(2) : '';
+            if (price > 0) { parts.sale.dataset.filled = '1'; } else { delete parts.sale.dataset.filled; }
         }
+    }
+
+    function formatQuantity(value) {
+        return (Math.round(value * 1000) / 1000).toLocaleString('en-US', { maximumFractionDigits: 3 });
+    }
+
+    function writeHint(node, bits) {
+        if (!node) { return; }
+        node.textContent = '';
+        bits.forEach(function (text, index) {
+            if (index) { node.appendChild(doc.createTextNode(' · ')); }
+            var bit = doc.createElement('span');
+            bit.className = 'text-nowrap';
+            bit.textContent = text;
+            node.appendChild(bit);
+        });
+        node.classList.toggle('d-none', !bits.length);
+    }
+
+    // Under the cost and the sale price: what the figure comes to for the product's other units
+    // ("83.33 / Box · 6.94 / pcs"). Under the quantity: the same goods in the product's own unit.
+    function refreshLineHints(row) {
+        var parts = lineParts(row);
+        if (!parts.costHint && !parts.saleHint && !parts.base) { return; }
+        var levels = lineLevels(row, parts);
+        var unit = lineUnit(row, parts, levels);
+        var others = function (field) {
+            var value = parseFloat(field ? field.value : '');
+            if (!parts.option || !(value > 0)) { return []; }
+            return levels.filter(function (level) { return level.code !== unit.code; }).map(function (level) {
+                return formatMoney(value * level.factor / unit.factor) + ' / ' + level.label;
+            });
+        };
+        var quantity = parseFloat(parts.quantity ? parts.quantity.value : '');
+        writeHint(parts.costHint, others(parts.cost));
+        writeHint(parts.saleHint, others(parts.sale));
+        // The same goods in every smaller unit: 5 cartons "= 410 Box = 9,840 pcs".
+        var smaller = levels.filter(function (level) { return level.factor < unit.factor; });
+        if (parts.base) {
+            writeHint(parts.base, parts.option && smaller.length && quantity > 0
+                ? ['= ' + smaller.map(function (level) {
+                    return formatQuantity(quantity * unit.factor / level.factor) + ' ' + level.label;
+                }).join(' = ')]
+                : []);
+        }
+    }
+
+    function refreshLine(row, reprice) {
+        refreshLineRules(row);
+        if (reprice) { applyLinePricing(row); }
+        refreshLineHints(row);
+    }
+
+    // A product was chosen (or cleared) on the row: its packing fills in and the unit starts over.
+    function onProductChosen(row) {
+        var parts = lineParts(row);
+        var data = parts.option ? parts.option.dataset : {};
+        delete row.dataset.unit;
+        if (parts.perBox) { parts.perBox.value = parts.option ? (data.piecesPerBox || '1') : ''; }
+        if (parts.perCarton) { parts.perCarton.value = parts.option ? (data.boxesPerCarton || '1') : ''; }
+        refreshLine(row, true);
+        refreshTotals();
+    }
+
+    // Rows the server sent with a product on them keep the unit and packing they came with.
+    function primeRow(row) {
+        var parts = lineParts(row);
+        if (!parts.option) { return; }
+        var data = parts.option.dataset;
+        if (parts.unitSelect) { row.dataset.unit = parts.unitSelect.value; }
+        if (parts.perBox && parts.perBox.value === '') { parts.perBox.value = data.piecesPerBox || '1'; }
+        if (parts.perCarton && parts.perCarton.value === '') { parts.perCarton.value = data.boxesPerCarton || '1'; }
+    }
+
+    // Packing belongs to the product: typed on one line, it shows on every line of that product and
+    // on the product's option, so a line added later starts from it.
+    function sharePacking(row) {
+        var parts = lineParts(row);
+        if (!parts.option || !parts.perBox || !parts.perCarton) { return; }
+        var productId = parts.select.value;
+        var perBox = String(wholeNumber(parts.perBox, 1));
+        var perCarton = String(wholeNumber(parts.perCarton, 1));
+        var selects = $all('select[name$="-product"]');
+        if (lineTemplate && lineTemplate.content) {
+            selects = selects.concat($all('select[name$="-product"]', lineTemplate.content));
+        }
+        selects.forEach(function (select) {
+            Array.prototype.forEach.call(select.options, function (option) {
+                if (option.value === productId) {
+                    option.dataset.piecesPerBox = perBox;
+                    option.dataset.boxesPerCarton = perCarton;
+                }
+            });
+        });
+        visibleRows().forEach(function (other) {
+            var otherParts = lineParts(other);
+            if (other === row || !otherParts.select || otherParts.select.value !== productId) { return; }
+            if (otherParts.perBox) { otherParts.perBox.value = perBox; }
+            if (otherParts.perCarton) { otherParts.perCarton.value = perCarton; }
+            refreshLine(other, true);
+        });
+    }
+
+    // An emptied packing box means the product has no such level.
+    function settlePacking(field) {
+        if (!field || parseInt(field.value, 10) >= 1) { return false; }
+        field.value = '1';
+        return true;
     }
 
     function visibleRows() {
@@ -367,17 +601,19 @@
 
     /* ---- Enter walks the line, and the last box starts the next line ---- */
 
+    // Choosing a product lands on the quantity, so the packing boxes are only walked when someone
+    // steps back into them.
     function lineStops(row) {
         var parts = lineParts(row);
-        return [parts.quantity, parts.cost, parts.sale].filter(function (field) {
-            return field && !field.readOnly && !field.disabled;
+        return [parts.perCarton, parts.perBox, parts.quantity, parts.cost, parts.sale].filter(function (field) {
+            return field && !field.readOnly && !field.disabled && !field.closest('[hidden]');
         });
     }
 
     function onLineEnter(event) {
         if (event.key !== 'Enter' || event.ctrlKey || event.altKey || event.metaKey) { return; }
         var field = event.target;
-        if (!field.matches || !field.matches('input[name$="-quantity"], input[name$="-cost_price"], input[name$="-sale_price"]')) { return; }
+        if (!field.matches || !field.matches('input[name$="-quantity"], input[name$="-cost_price"], input[name$="-sale_price"], input[name$="-boxes_per_carton"], input[name$="-pieces_per_box"]')) { return; }
         var row = field.closest('.purchase-line-row');
         if (!row) { return; }
         event.preventDefault();
@@ -393,9 +629,27 @@
         if (following) { focusProduct(following); }
     }
 
+    // In the quantity box C, B and P switch the unit, as they do on the till.
+    function onUnitKey(event) {
+        if (event.ctrlKey || event.altKey || event.metaKey || !event.key || event.key.length !== 1) { return; }
+        var field = event.target;
+        if (!field.matches || !field.matches('input[name$="-quantity"]')) { return; }
+        var row = field.closest('.purchase-line-row');
+        var select = row ? row.querySelector('select[name$="-unit_level"]') : null;
+        if (!select) { return; }
+        var letter = event.key.toLowerCase();
+        var option = Array.prototype.slice.call(select.options).filter(function (item) { return item.value.charAt(0) === letter; })[0];
+        if (!option) { return; }
+        event.preventDefault();
+        if (select.value !== option.value) {
+            select.value = option.value;
+            select.dispatchEvent(new Event('change', { bubbles: true }));
+        }
+    }
+
     /* ---- quick setup ---- */
 
-    function appendOption(select, value, label, selected, dataset) {
+    function appendOption(select, value, label, selected, attrs) {
         if (!select) {
             return;
         }
@@ -410,8 +664,8 @@
         } else {
             option.textContent = label;
         }
-        Object.keys(dataset || {}).forEach(function (key) {
-            option.dataset[key] = dataset[key];
+        Object.keys(attrs || {}).forEach(function (name) {
+            option.setAttribute(name, attrs[name]);
         });
 
         if (selected) {
@@ -426,15 +680,18 @@
         });
     }
 
-    function productOptionData(product) {
+    // The data-* attributes of a product's option. The reply to quick setup brings the same ones a
+    // server-rendered option carries (price and markup amount for one piece, and the packing).
+    function productOptionAttrs(product) {
+        if (product.option_attrs) { return product.option_attrs; }
         var unit = product.unit || pieceUnit;
         return {
-            unit: unit,
-            step: fractionalUnits.indexOf(unit) !== -1 ? '0.001' : '1',
-            markup: product.markup_percent || '',
-            markupAmount: product.markup_amount || '',
-            minMargin: product.minimum_margin_percent || '0',
-            price: product.price || ''
+            'data-unit': unit,
+            'data-step': fractionalUnits.indexOf(unit) !== -1 ? '0.001' : '1',
+            'data-markup': product.markup_percent || '',
+            'data-markup-amount': product.markup_amount || '',
+            'data-min-margin': product.minimum_margin_percent || '0',
+            'data-price': product.price || ''
         };
     }
 
@@ -448,13 +705,11 @@
             return;
         }
 
-        appendOption(targetSelect, product.id, product.name + ' (' + product.sku + ')', true, productOptionData(product));
+        appendOption(targetSelect, product.id, product.name + ' (' + product.sku + ')', true, productOptionAttrs(product));
         syncCombo(targetSelect);
         var row = targetSelect.closest('tr');
         if (row) {
-            refreshLineRules(row);
-            applyLinePricing(row);
-            refreshTotals();
+            onProductChosen(row);
         }
     }
 
@@ -539,12 +794,12 @@
 
                 if (kind === 'product') {
                     $all('select[name$="-product"]').forEach(function (select) {
-                        appendOption(select, payload.product.id, payload.product.name + ' (' + payload.product.sku + ')', false, productOptionData(payload.product));
+                        appendOption(select, payload.product.id, payload.product.name + ' (' + payload.product.sku + ')', false, productOptionAttrs(payload.product));
                     });
                     // The blank row kept for new lines must offer it too.
                     if (lineTemplate && lineTemplate.content) {
                         $all('select[name$="-product"]', lineTemplate.content).forEach(function (select) {
-                            appendOption(select, payload.product.id, payload.product.name + ' (' + payload.product.sku + ')', false, productOptionData(payload.product));
+                            appendOption(select, payload.product.id, payload.product.name + ' (' + payload.product.sku + ')', false, productOptionAttrs(payload.product));
                         });
                     }
                     assignProductToPurchaseLine(payload.product);
@@ -607,23 +862,46 @@
     if (lineBody) {
         $all('.purchase-line-row', lineBody).forEach(function (row) {
             buildCombo(row);
-            refreshLineRules(row);
+            primeRow(row);
+            refreshLine(row, false);
         });
         lineBody.addEventListener('change', function (event) {
-            var row = event.target.closest('.purchase-line-row');
-            if (row && event.target.matches('select[name$="-product"]')) {
-                refreshLineRules(row);
-                applyLinePricing(row);
+            var target = event.target;
+            var row = target.closest('.purchase-line-row');
+            if (!row) { return; }
+            if (target.matches('select[name$="-product"]')) {
+                onProductChosen(row);
+            } else if (target.matches('select[name$="-unit_level"]')) {
+                // Picked by hand: the line stays in this unit while its packing is edited.
+                row.dataset.unit = target.value;
+                refreshLine(row, true);
+                refreshTotals();
+            } else if (target.matches('input[name$="-boxes_per_carton"], input[name$="-pieces_per_box"]')) {
+                settlePacking(target);
+                refreshLine(row, true);
+                sharePacking(row);
                 refreshTotals();
             }
         });
         lineBody.addEventListener('input', function (event) {
-            var row = event.target.closest('.purchase-line-row');
-            if (row && event.target.matches('input[name$="-cost_price"]')) {
-                applyLinePricing(row);
+            var target = event.target;
+            var row = target.closest('.purchase-line-row');
+            if (row) {
+                if (target.matches('input[name$="-cost_price"]')) {
+                    applyLinePricing(row);
+                } else if (target.matches('input[name$="-sale_price"]')) {
+                    // Typed over: no longer the product's price brought forward.
+                    delete target.dataset.filled;
+                } else if (target.matches('input[name$="-boxes_per_carton"], input[name$="-pieces_per_box"]')) {
+                    // The unit choices and the hints follow the packing as it is typed.
+                    refreshLine(row, true);
+                    sharePacking(row);
+                }
+                refreshLineHints(row);
             }
             refreshTotals();
         });
+        lineBody.addEventListener('keydown', onUnitKey);
         lineBody.addEventListener('keydown', onLineEnter);
     }
     if (addLineButton) {

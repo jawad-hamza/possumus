@@ -1,0 +1,51 @@
+{% extends "pos/base.html" %}
+{% load static %}
+{% block title %}Routes{% endblock %}
+{% block page_title %}Routes{% endblock %}
+{% block page_help %}The rounds your order bookers make. Put each customer on a route to list, filter and total customers by route.{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/return-flow.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/pages/field-sales.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}{% if manage_access.parties %}<a href="{% url 'route_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add route</a>{% endif %}<a href="{% url 'order_booker_list' %}" class="btn btn-outline-secondary">Order bookers</a><a href="{% url 'customer_list' %}" class="btn btn-outline-secondary">Customers</a>{% endblock %}
+
+{% block content %}
+<section class="k-section" aria-labelledby="route-list-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="route-list-title">All routes</h2>
+        <span class="k-section-note">{{ active_count }} in use{% if routes|length != active_count %}, {{ routes|length }} in all{% endif %}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack b-index">
+            <thead>
+                <tr>
+                    <th scope="col" data-k="what">Route</th>
+                    <th scope="col" data-k="meta">Order bookers</th>
+                    <th scope="col" class="k-num" data-k="amount">Customers</th>
+                    <th scope="col" data-k="flag">Status</th>
+                    <th scope="col" data-k="hide"><span class="visually-hidden">Edit</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for route in routes %}
+                <tr data-rf-row="{{ route.id }}">
+                    <td class="b-stack-title" data-k="what">{% if manage_access.parties %}<a href="{% url 'route_edit' route.id %}?next={{ request.get_full_path|urlencode }}" class="b-index-name">{{ route.name }}</a>{% else %}<span class="b-index-name">{{ route.name }}</span>{% endif %}<span class="b-sub">{{ route.city|default:"No city" }}</span></td>
+                    <td data-label="Order bookers" data-k="meta">{{ route.booker_names|default:"Nobody yet" }}</td>
+                    <td class="k-num" data-label="Customers" data-k="amount">{% if route.customer_count %}<a href="{% url 'customer_list' %}?route={{ route.id }}" data-tip="Open these customers">{{ route.customer_count }}</a>{% else %}0{% endif %}</td>
+                    <td data-label="Status" data-k="flag">{% if route.is_active %}<span class="k-badge k-badge--green">In use</span>{% else %}<span class="k-badge">Not in use</span>{% endif %}</td>
+                    <td class="text-end" data-k="hide">{% if manage_access.parties %}<span class="k-row-actions"><a href="{% url 'route_edit' route.id %}?next={{ request.get_full_path|urlencode }}" class="k-icon-btn" aria-label="Edit route {{ route.name }}" data-tip="Edit"><i class="bi bi-pencil" aria-hidden="true"></i></a></span>{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="k-empty" data-k="note">
+                        <i class="bi bi-signpost-split" aria-hidden="true"></i>
+                        <p class="k-empty-title">No routes yet.</p>
+                        <p>Add the rounds your order bookers make, then put each customer on one.</p>
+                        {% if manage_access.parties %}<a class="btn btn-primary" href="{% url 'route_add' %}?next={{ request.get_full_path|urlencode }}">Add route</a>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'zehnms/js/return-flow.js' %}"></script>{% endblock %}

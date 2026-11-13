@@ -55,3 +55,5 @@ Thumbs.db
 .impeccable/review/
 .impeccable/questions/
 .impeccable/build/
+.vercel
+.env*

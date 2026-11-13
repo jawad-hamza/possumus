@@ -4,6 +4,7 @@ from django.contrib import admin
 from .models import (
     Account,
     AccountingSettings,
+    BankReceipt,
     LoanTransactions,
     Loans,
     PartyLedgerEntry,
@@ -156,3 +157,13 @@ class SettlementAdmin(admin.ModelAdmin):
         super().save_model(request, obj, form, change)
         if not obj.voucher_id:
             post_settlement(obj, actor=request.user)
+
+
+@admin.register(BankReceipt)
+class BankReceiptAdmin(ReadOnlyAdminMixin, admin.ModelAdmin):
+    """Every bank receipt ever attached. A replaced or removed one stays listed with removed_at set."""
+
+    list_display = ("id", "payment", "original_name", "mime_type", "size_bytes", "uploaded_by", "uploaded_at", "removed_by", "removed_at")
+    list_filter = ("content_type", "mime_type", "uploaded_at")
+    search_fields = ("=object_id", "original_name", "=sha256")
+    list_select_related = ("content_type", "uploaded_by", "removed_by")

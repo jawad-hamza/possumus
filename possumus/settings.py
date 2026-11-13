@@ -286,9 +286,12 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "pos",
     "accounts.apps.AccountsConfig",
+    "distribution.apps.DistributionConfig",
+    "pricing.apps.PricingConfig",
     "django.contrib.humanize",
     "rest_framework",
     "api",
+    "review.apps.ReviewConfig",
 ]
 
 WHITENOISE_AVAILABLE = importlib.util.find_spec("whitenoise") is not None
@@ -331,6 +334,7 @@ TEMPLATES = [
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
                 "pos.context_processors.app_shell",
+                "review.context_processors.review_tool",
             ],
         },
     },
@@ -456,6 +460,8 @@ FILE_UPLOAD_MAX_MEMORY_SIZE = env_int("DJANGO_FILE_UPLOAD_MAX_MEMORY_SIZE", 5 * 
 # Long purchase bills and carts post several inputs per line.
 DATA_UPLOAD_MAX_NUMBER_FIELDS = env_int("DJANGO_DATA_UPLOAD_MAX_NUMBER_FIELDS", 5000)
 MAX_LOGO_UPLOAD_BYTES = env_int("MAX_LOGO_UPLOAD_BYTES", 2 * 1024 * 1024)
+# The proof of a bank payment: a photo, a screenshot or the bank's PDF slip.
+MAX_RECEIPT_UPLOAD_BYTES = env_int("MAX_RECEIPT_UPLOAD_BYTES", 5 * 1024 * 1024)
 MAX_BACKUP_UPLOAD_BYTES = env_int("MAX_BACKUP_UPLOAD_BYTES", 200 * 1024 * 1024)
 
 # pg_dump/mysqldump and a persistent backups folder do not exist on serverless hosts.
@@ -463,6 +469,11 @@ BACKUP_DIR = Path(env("ZEHNMS_BACKUP_DIR") or DATA_DIR / "backups")
 BACKUPS_AVAILABLE = env_bool("BACKUPS_AVAILABLE", not ON_VERCEL)
 # Restoring an uploaded .sql/.dump file runs arbitrary SQL as the database user.
 ALLOW_SQL_RESTORE = env_bool("ALLOW_SQL_RESTORE", False)
+
+# The "Comment" review tool (pin a note on any part of any screen). Off unless asked for:
+# test deployments and local development set ZEHNMS_REVIEW_NOTES=1. The owner can also
+# switch it on or off from /review/notes/, which overrides this default.
+REVIEW_NOTES_ENABLED = env_bool("ZEHNMS_REVIEW_NOTES", False)
 
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"

@@ -35,6 +35,7 @@ from accounts.models import (
 from accounts.report_views import report_links
 from accounts.services.audit import record_audit
 from accounts.services.balance_sheet import get_balance_sheet
+from accounts.services.bank_receipts import UPLOAD_FIELD as RECEIPT_FIELD, attach_receipt
 from accounts.services.books_lock import get_books_locked_until
 from accounts.services.cash_bank import total_bank_balance
 from accounts.services.cash_flow import money_accounts
@@ -323,12 +324,13 @@ def expense_list(request):
                 return redirect(f"{reverse('expense_list')}?category={existing_category.id}&type={existing_category.id}")
             messages.error(request, "Please review the expense type details.")
         elif action == "pay_expense":
-            expense_payment_form = ExpensePaymentForm(request.POST, prefix="payment")
+            expense_payment_form = ExpensePaymentForm(request.POST, request.FILES, prefix="payment")
             if expense_payment_form.is_valid():
                 try:
                     with transaction.atomic():
                         payment = expense_payment_form.save()
                         post_expense_payment(payment.id, actor=request.user)
+                        attach_receipt(payment, expense_payment_form.cleaned_data.get(RECEIPT_FIELD), actor=request.user, audit=False)
                         record_audit(
                             action="expense_paid",
                             description=f"Expense '{payment.expense.display_title}' paid from {payment.from_account_title}.",
@@ -342,12 +344,13 @@ def expense_list(request):
                     expense_payment_form.add_error(None, str(exc))
             messages.error(request, "Please review the expense payment details.")
         else:
-            expense_form = ExpenseForm(request.POST, prefix="expense")
+            expense_form = ExpenseForm(request.POST, request.FILES, prefix="expense")
             if expense_form.is_valid():
                 try:
                     with transaction.atomic():
                         expense = expense_form.save()
                         post_expense(expense.id, actor=request.user)
+                        attach_receipt(expense, expense_form.cleaned_data.get(RECEIPT_FIELD), actor=request.user, audit=False)
                         record_audit(
                             action="expense_created",
                             description=f"Expense '{expense.display_title}' recorded for {expense.amount}.",
@@ -427,12 +430,13 @@ def money_desk(request):
         expense_payment_form = ExpensePaymentForm(prefix="payment", initial=expense_initial)
 
         if action == "capital":
-            capital_form = CapitalEntryForm(request.POST, prefix="capital")
+            capital_form = CapitalEntryForm(request.POST, request.FILES, prefix="capital")
             if capital_form.is_valid():
                 try:
                     with transaction.atomic():
                         entry = capital_form.save()
                         post_capital_entry(entry.id, actor=request.user)
+                        attach_receipt(entry, capital_form.cleaned_data.get(RECEIPT_FIELD), actor=request.user, audit=False)
                         record_audit(
                             action="capital_recorded",
                             description=f"Funds introduced into {entry.to_account_title}.",
@@ -446,12 +450,13 @@ def money_desk(request):
                     capital_form.add_error(None, str(exc))
             messages.error(request, "Please review the owner capital form.")
         elif action == "transfer":
-            transfer_form = MoneyTransferForm(request.POST, prefix="transfer")
+            transfer_form = MoneyTransferForm(request.POST, request.FILES, prefix="transfer")
             if transfer_form.is_valid():
                 try:
                     with transaction.atomic():
                         transfer = transfer_form.save()
                         post_money_transfer(transfer.id, actor=request.user)
+                        attach_receipt(transfer, transfer_form.cleaned_data.get(RECEIPT_FIELD), actor=request.user, audit=False)
                         record_audit(
                             action="money_transfer_recorded",
                             description=f"Money moved from {transfer.from_account_title} to {transfer.to_account_title}.",
@@ -465,12 +470,13 @@ def money_desk(request):
                     transfer_form.add_error(None, str(exc))
             messages.error(request, "Please review the transfer details.")
         elif action == "pay_expense":
-            expense_payment_form = ExpensePaymentForm(request.POST, prefix="payment")
+            expense_payment_form = ExpensePaymentForm(request.POST, request.FILES, prefix="payment")
             if expense_payment_form.is_valid():
                 try:
                     with transaction.atomic():
                         payment = expense_payment_form.save()
                         post_expense_payment(payment.id, actor=request.user)
+                        attach_receipt(payment, expense_payment_form.cleaned_data.get(RECEIPT_FIELD), actor=request.user, audit=False)
                         record_audit(
                             action="expense_paid",
                             description=f"Expense '{payment.expense.display_title}' paid from {payment.from_account_title} via Money Desk.",

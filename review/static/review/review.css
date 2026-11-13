@@ -1,0 +1,214 @@
+/* Comment tool (review notes). Everything is prefixed rv- so it cannot touch the app's own styles.
+   Calm ZehnMS look: one blue accent, the Pop shadow for floating parts, nothing loops. */
+#rv-root {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 0;
+    height: 0;
+    z-index: 1040;
+    font: 400 var(--k-text-md, 0.875rem) / 1.45 var(--k-font, system-ui, "Segoe UI", sans-serif);
+    color: var(--k-ink, #1f2937);
+}
+#rv-root * { box-sizing: border-box; }
+#rv-root [hidden] { display: none !important; }
+html.rv-placing, html.rv-placing * { cursor: crosshair !important; }
+
+/* ---------- the button ---------- */
+#rv-tool {
+    position: fixed;
+    right: 16px;
+    bottom: 16px;
+    z-index: 1045;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: var(--k-control-h-sm, 32px);
+    padding: 6px 14px;
+    border: 1px solid var(--k-accent, #2563eb);
+    border-radius: var(--k-radius-pill, 999px);
+    background: var(--k-accent, #2563eb);
+    color: var(--k-on-accent, #fff);
+    font: 600 var(--k-text-sm, 0.8125rem) / 1 var(--k-font, system-ui, sans-serif);
+    cursor: pointer;
+    box-shadow: var(--k-shadow-pop, 0 10px 28px rgba(16, 24, 40, 0.14));
+    transition: background-color var(--k-dur, 140ms) var(--k-ease-out, ease-out), color var(--k-dur, 140ms) var(--k-ease-out, ease-out);
+}
+#rv-tool:hover { background: var(--k-accent-hover, #1d4ed8); border-color: var(--k-accent-hover, #1d4ed8); }
+#rv-tool[aria-pressed="true"] {
+    background: var(--k-panel, #fff);
+    color: var(--k-accent-ink, #1d4ed8);
+}
+/* the first visit: a still halo instead of the prototype's pulsing ring */
+#rv-tool.rv-intro { box-shadow: 0 0 0 4px var(--k-accent-ring, rgba(37, 99, 235, 0.28)), var(--k-shadow-pop, 0 10px 28px rgba(16, 24, 40, 0.14)); }
+#rv-tool:focus-visible,
+#rv-root button:focus-visible,
+#rv-root .rv-dot:focus-visible {
+    outline: var(--k-focus-ring, 2px solid #2563eb);
+    outline-offset: var(--k-focus-offset, 2px);
+}
+
+#rv-tip {
+    position: fixed;
+    right: 16px;
+    bottom: 60px;
+    z-index: 1045;
+    width: 250px;
+    padding: 10px 12px;
+    border-radius: var(--k-radius, 8px);
+    background: var(--k-ink-title, #111827);
+    color: var(--k-on-ink, #f9fafb);
+    font-size: var(--k-text-sm, 0.8125rem);
+    box-shadow: var(--k-shadow-pop, 0 10px 28px rgba(16, 24, 40, 0.14));
+}
+
+#rv-banner {
+    position: fixed;
+    left: 50%;
+    top: calc(var(--k-head-h, 60px) + 8px);
+    transform: translateX(-50%);
+    z-index: 1100;
+    max-width: calc(100vw - 32px);
+    padding: 7px 14px;
+    border-radius: var(--k-radius-pill, 999px);
+    background: var(--k-ink-title, #111827);
+    color: var(--k-on-ink, #f9fafb);
+    font-size: var(--k-text-sm, 0.8125rem);
+    text-align: center;
+    box-shadow: var(--k-shadow-pop, 0 10px 28px rgba(16, 24, 40, 0.14));
+}
+
+#rv-outline {
+    position: fixed;
+    z-index: 1039;
+    pointer-events: none;
+    border-radius: var(--k-radius-xs, 4px);
+    outline: 2px solid var(--k-accent, #2563eb);
+    outline-offset: 1px;
+    background: rgba(37, 99, 235, 0.06);
+}
+
+/* ---------- dots ---------- */
+#rv-layer { position: fixed; top: 0; left: 0; width: 0; height: 0; z-index: 1038; }
+html.rv-placing #rv-layer,
+html.rv-placing .rv-dot { pointer-events: none; }
+.rv-dot {
+    position: fixed;
+    width: 16px;
+    height: 16px;
+    margin: -8px 0 0 -8px;
+    padding: 0;
+    border: 2px solid var(--k-panel, #fff);
+    border-radius: 50%;
+    background: var(--k-accent, #2563eb);
+    cursor: pointer;
+    box-shadow: 0 0 0 3px var(--k-accent-ring, rgba(37, 99, 235, 0.28)), 0 1px 3px rgba(16, 24, 40, 0.3);
+    transition: box-shadow var(--k-dur, 140ms) var(--k-ease-out, ease-out);
+}
+.rv-dot:hover { box-shadow: 0 0 0 5px var(--k-accent-ring, rgba(37, 99, 235, 0.28)), 0 1px 3px rgba(16, 24, 40, 0.3); }
+.rv-dot.is-resolved { background: var(--k-ink-faint, #667085); box-shadow: 0 0 0 3px rgba(102, 112, 133, 0.25); }
+/* the note opened from the review page */
+.rv-dot.is-focus {
+    width: 20px;
+    height: 20px;
+    margin: -10px 0 0 -10px;
+    box-shadow: 0 0 0 6px var(--k-accent-ring, rgba(37, 99, 235, 0.28)), 0 0 0 9px rgba(37, 99, 235, 0.12), 0 1px 3px rgba(16, 24, 40, 0.3);
+}
+
+/* ---------- the note popover ---------- */
+#rv-note {
+    position: fixed;
+    z-index: 1100;
+    width: 290px;
+    max-width: calc(100vw - 16px);
+    max-height: 280px;
+    overflow-y: auto;
+    padding: 10px 12px;
+    border: 1px solid var(--k-border, #e2e5e9);
+    border-radius: var(--k-radius, 8px);
+    background: var(--k-panel, #fff);
+    color: var(--k-ink, #1f2937);
+    font-size: var(--k-text-md, 0.875rem);
+    box-shadow: var(--k-shadow-pop, 0 10px 28px rgba(16, 24, 40, 0.14));
+}
+#rv-note .rv-meta { margin-bottom: 4px; font-size: var(--k-text-xs, 0.75rem); color: var(--k-ink-soft, #5b6472); }
+#rv-note .rv-body { white-space: pre-wrap; overflow-wrap: anywhere; }
+#rv-note .rv-pop-actions { display: flex; align-items: center; gap: 8px; margin-top: 8px; }
+#rv-note .rv-pop-actions:has(.rv-link[hidden]):has(.rv-error:empty) { display: none; }
+#rv-root .rv-link {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--k-accent-ink, #1d4ed8);
+    font: 600 var(--k-text-sm, 0.8125rem) var(--k-font, system-ui, sans-serif);
+    cursor: pointer;
+}
+#rv-root .rv-link:hover { text-decoration: underline; }
+#rv-root .rv-link:disabled { opacity: 0.6; cursor: default; }
+
+/* ---------- the composer ---------- */
+#rv-composer {
+    position: fixed;
+    z-index: 1110;
+    width: 310px;
+    max-width: calc(100vw - 16px);
+    padding: 12px;
+    border: 1px solid var(--k-border, #e2e5e9);
+    border-radius: var(--k-radius, 8px);
+    background: var(--k-panel, #fff);
+    box-shadow: var(--k-shadow-pop, 0 10px 28px rgba(16, 24, 40, 0.14));
+}
+#rv-composer label { display: block; margin-bottom: 8px; font-size: var(--k-text-xs, 0.75rem); font-weight: 600; color: var(--k-ink-soft, #5b6472); }
+#rv-composer input,
+#rv-composer textarea {
+    display: block;
+    width: 100%;
+    margin-top: 4px;
+    padding: 7px 9px;
+    border: 1px solid var(--k-border-field, #aeb5c0);
+    border-radius: var(--k-radius-sm, 6px);
+    background: var(--k-panel, #fff);
+    color: var(--k-ink, #1f2937);
+    font: 400 var(--k-text-md, 0.875rem) var(--k-font, system-ui, sans-serif);
+}
+#rv-composer input:focus,
+#rv-composer textarea:focus {
+    border-color: var(--k-accent, #2563eb);
+    outline: 0;
+    box-shadow: var(--k-focus-halo, 0 0 0 3px rgba(37, 99, 235, 0.28));
+}
+#rv-composer textarea { height: 88px; resize: vertical; }
+#rv-root .rv-hint { font-size: var(--k-text-xs, 0.75rem); color: var(--k-ink-faint, #667085); }
+#rv-root .rv-error { margin-top: 2px; font-size: var(--k-text-sm, 0.8125rem); color: var(--k-out-ink, #991b1b); }
+#rv-root .rv-error:empty { display: none; }
+#rv-root .rv-actions { display: flex; justify-content: flex-end; gap: 6px; margin-top: 10px; }
+#rv-root .rv-actions button {
+    min-height: var(--k-control-h-sm, 32px);
+    padding: 6px 12px;
+    border: 1px solid var(--k-border-strong, #cdd2d9);
+    border-radius: var(--k-radius-sm, 6px);
+    background: var(--k-panel, #fff);
+    color: var(--k-ink, #1f2937);
+    font: 600 var(--k-text-sm, 0.8125rem) var(--k-font, system-ui, sans-serif);
+    cursor: pointer;
+}
+#rv-root .rv-actions button:hover { background: var(--k-hover, #f5f6f8); }
+#rv-root .rv-actions .rv-save { border-color: var(--k-accent, #2563eb); background: var(--k-accent, #2563eb); color: var(--k-on-accent, #fff); }
+#rv-root .rv-actions .rv-save:hover { background: var(--k-accent-hover, #1d4ed8); }
+#rv-root .rv-actions .rv-save:disabled { opacity: 0.6; cursor: default; }
+
+/* phones: keep clear of the bottom tab bar */
+@media (max-width: 991.98px) {
+    #rv-tool { bottom: calc(var(--k-tabbar-h, 60px) + 12px + env(safe-area-inset-bottom, 0px)); }
+    #rv-tip { bottom: calc(var(--k-tabbar-h, 60px) + 56px + env(safe-area-inset-bottom, 0px)); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    #rv-tool, .rv-dot { transition: none; }
+}
+
+/* never on paper: invoices, receipts and printed reports */
+@media print {
+    #rv-root, #rv-root * { display: none !important; }
+    html.rv-placing, html.rv-placing * { cursor: auto !important; }
+}

@@ -1,5 +1,6 @@
 from django.contrib import admin
 
+from . import models_field_sales
 from .models import (
     Brand,
     Category,
@@ -103,16 +104,31 @@ class SaleItemAdmin(ReadOnlyAdmin):
 
 @admin.register(Customer)
 class CustomerAdmin(admin.ModelAdmin):
-    list_display = ("name", "phone", "email", "is_active")
-    search_fields = ("name", "phone")
-    list_filter = ("is_active",)
+    list_display = ("name", "phone", "city", "route", "order_booker", "credit_limit", "is_active")
+    search_fields = ("name", "phone", "city")
+    list_filter = ("is_active", "city")
 
 
 @admin.register(Supplier)
 class SupplierAdmin(admin.ModelAdmin):
-    list_display = ("name", "phone", "email", "address", "is_active")
+    list_display = ("name", "phone", "email", "address", "city", "is_active")
+    search_fields = ("name", "phone", "city")
+    list_filter = ("is_active",)
+
+
+@admin.register(models_field_sales.Route)
+class RouteAdmin(admin.ModelAdmin):
+    list_display = ("name", "city", "is_active")
+    search_fields = ("name", "city")
+    list_filter = ("is_active", "city")
+
+
+@admin.register(models_field_sales.OrderBooker)
+class OrderBookerAdmin(admin.ModelAdmin):
+    list_display = ("name", "phone", "is_active")
     search_fields = ("name", "phone")
     list_filter = ("is_active",)
+    filter_horizontal = ("routes",)
 
 
 @admin.register(Purchase)

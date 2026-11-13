@@ -1,0 +1,93 @@
+{% extends "pos/base.html" %}
+{% load static currency_tags %}
+{% block title %}Load sheet {{ load.display_number }}{% endblock %}
+{% block page_title %}Load sheet {{ load.display_number }}{% endblock %}
+{% block page_help %}The sheet the storekeeper loads from and the delivery man signs. Print it on A4.{% endblock %}
+{% block extra_css %}<link href="{% static 'distribution/css/distribution.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<button type="button" class="btn btn-primary" onclick="window.print()" data-k-key="Ctrl+P" data-k-key-label="Print"><i class="bi bi-printer" aria-hidden="true"></i> Print</button><a href="{% url 'distribution_load_detail' load.id %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to load</a>{% endblock %}
+
+{% block content %}
+<article class="dist-sheet" aria-label="Load sheet">
+    <header class="dist-sheet-head">
+        <div>
+            <h2>Load sheet</h2>
+            <p>{{ company.name|default:brand_name|default:"" }}{% if company.address %} &middot; {{ company.address }}{% endif %}{% if company.phone %} &middot; {{ company.phone }}{% endif %}</p>
+        </div>
+        <div class="text-end">
+            <h2>{{ load.display_number }}</h2>
+            <p>{{ load.get_status_display }}</p>
+        </div>
+    </header>
+
+    <dl class="dist-sheet-meta">
+        <div><dt>Date</dt><dd>{{ load.load_date|date:"d M Y" }}</dd></div>
+        <div><dt>Route</dt><dd>{{ load.route.label|default:"-" }}</dd></div>
+        <div><dt>Delivery man</dt><dd>{{ load.delivery_man.name|default:"-" }}{% if load.delivery_man.phone %} ({{ load.delivery_man.phone }}){% endif %}</dd></div>
+        <div><dt>Vehicle</dt><dd>{{ load.vehicle|default:"-" }}</dd></div>
+        <div><dt>Invoices</dt><dd>{{ sheet.invoice_count }}</dd></div>
+        <div><dt>Bill value</dt><dd>{{ sheet.bill_value|money }}</dd></div>
+    </dl>
+
+    <h3>Products</h3>
+    <table>
+        <thead>
+            <tr>
+                <th scope="col">#</th>
+                <th scope="col">Product</th>
+                <th scope="col">Packing</th>
+                <th scope="col" class="num">CTN</th>
+                {% if sheet.show_boxes %}<th scope="col" class="num">BOX</th>{% endif %}
+                <th scope="col" class="num">PCS</th>
+                <th scope="col" class="num">Free</th>
+                {% if sheet.show_mrp %}<th scope="col" class="num">MRP</th>{% endif %}
+                <th scope="col" class="num">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for line in sheet.lines %}
+            <tr>
+                <td>{{ forloop.counter }}</td>
+                <td>{{ line.product.display_name }}{% if line.product.sku %} <small>({{ line.product.sku }})</small>{% endif %}</td>
+                <td>{{ line.packing }}</td>
+                <td class="num">{% if line.cartons %}{{ line.cartons|qty }}{% endif %}</td>
+                {% if sheet.show_boxes %}<td class="num">{% if line.boxes %}{{ line.boxes|qty }}{% endif %}</td>{% endif %}
+                <td class="num">{% if line.pieces %}{{ line.pieces|qty }}{% endif %}</td>
+                <td class="num">{{ line.free }}</td>
+                {% if sheet.show_mrp %}<td class="num">{% if line.retail_price is not None %}{{ line.retail_price|money }}{% endif %}</td>{% endif %}
+                <td class="num">{{ line.amount|money }}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="9">No goods on this load.</td></tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="3">Total</td>
+                <td class="num">{{ sheet.total_cartons|qty }}</td>
+                {% if sheet.show_boxes %}<td class="num">{{ sheet.total_boxes|qty }}</td>{% endif %}
+                <td class="num">{{ sheet.total_pieces|qty }}</td>
+                <td class="num"></td>
+                {% if sheet.show_mrp %}<td class="num"></td>{% endif %}
+                <td class="num">{{ sheet.total_amount|money }}</td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <h3>Invoices</h3>
+    <table>
+        <thead><tr><th scope="col">#</th><th scope="col">Invoice</th><th scope="col">Shop</th><th scope="col">Route</th><th scope="col">Type</th><th scope="col" class="num">Amount</th><th scope="col">Received / remarks</th></tr></thead>
+        <tbody>
+            {% for row in sheet.invoices %}
+            <tr><td>{{ forloop.counter }}</td><td>{{ row.sale.display_number }}</td><td>{{ row.customer.name }}{% if row.customer.address %} <small>{{ row.customer.address|truncatechars:40 }}</small>{% endif %}</td><td>{{ row.route.name|default:"" }}</td><td>{{ row.kind }}</td><td class="num">{{ row.amount|money }}</td><td></td></tr>
+            {% endfor %}
+        </tbody>
+        <tfoot><tr><td colspan="5">Total bill value</td><td class="num">{{ sheet.bill_value|money }}</td><td></td></tr></tfoot>
+    </table>
+
+    <div class="dist-sign">
+        <div>Storekeeper</div>
+        <div>Delivery man</div>
+        <div>Checked by</div>
+    </div>
+</article>
+{% endblock %}

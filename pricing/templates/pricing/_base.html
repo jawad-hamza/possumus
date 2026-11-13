@@ -1,0 +1,14 @@
+{% extends "pos/base.html" %}
+{% load static %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet"><link href="{% static 'pricing/css/pricing.css' %}" rel="stylesheet">{% endblock %}
+{% block content %}
+{% if pricing_tabs|length > 1 %}
+<nav class="pr-tabs" aria-label="Pricing">
+    <div class="b-filter-tabs">
+        {% for tab in pricing_tabs %}<a href="{{ tab.url }}" class="btn btn-sm"{% if tab.active %} aria-pressed="true" aria-current="page"{% else %} aria-pressed="false"{% endif %}>{{ tab.label }}</a>{% endfor %}
+    </div>
+</nav>
+{% endif %}
+{% block pricing_content %}{% endblock %}
+{% endblock %}
+{% block extra_js %}{% block pricing_js %}{% endblock %}{% endblock %}

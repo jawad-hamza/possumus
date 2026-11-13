@@ -32,6 +32,8 @@ def get_party_statement(*, party, from_date=None, to_date=None):
 
     entries = list(entries.order_by("voucher__date", "id"))
     documents = _document_labels([entry.voucher for entry in entries])
+    # Goods on each entry of a customer's ledger: an invoice's quantity, a return's as a minus.
+    quantities = _entry_quantities([entry.voucher for entry in entries]) if role == CUSTOMER else {}
 
     rows = []
     running = opening_balance
@@ -44,6 +46,7 @@ def get_party_statement(*, party, from_date=None, to_date=None):
                 "voucher_type": entry.voucher.voucher_type,
                 "ref": f"{entry.voucher.ref_model}#{entry.voucher.ref_id}",
                 "document": documents.get(entry.voucher.id, ""),
+                "quantity": quantities.get(entry.voucher.id),
                 "debit": entry.debit,
                 "credit": entry.credit,
                 "running_balance": running,
@@ -54,11 +57,21 @@ def get_party_statement(*, party, from_date=None, to_date=None):
 
     return {
         "party": str(party),
+        "from_date": from_date,
+        "to_date": to_date,
         "opening_balance": opening_balance,
         "closing_balance": running,
+        "total_quantity": sum(quantities.values(), Decimal("0")),
         "balance_type": _balance_type(running, role),
         "rows": rows,
     }
+
+
+def _entry_quantities(vouchers) -> dict:
+    """voucher id -> quantity of goods, from the one function that adds up an invoice's lines."""
+    from pos.services.invoice_quantity import voucher_quantities
+
+    return voucher_quantities(vouchers)
 
 
 
@@ -102,8 +115,11 @@ def get_unified_party_statement(*, customer=None, supplier=None, from_date=None,
 
     return {
         "party": " / ".join(party_labels),
+        "from_date": from_date,
+        "to_date": to_date,
         "opening_balance": opening_balance,
         "closing_balance": running,
+        "total_quantity": sum((row["quantity"] for row in final_rows if row.get("quantity") is not None), Decimal("0")),
         "balance_type": _balance_type(running, UNIFIED),
         "rows": final_rows,
     }
@@ -112,14 +128,19 @@ def get_unified_party_statement(*, customer=None, supplier=None, from_date=None,
 
 def _document_labels(vouchers) -> dict:
     """voucher id -> the paper the shop recognises: "Invoice INV-00024", "Receipt 7", "Opening balance"."""
-    from pos.models import Purchase, Sale
+    from pos.models import Builty, Purchase, Sale
 
     sale_ids = {v.ref_id for v in vouchers if v.ref_model == "Sale" and v.ref_id}
     purchase_ids = {v.ref_id for v in vouchers if v.ref_model == "Purchase" and v.ref_id}
+    builty_ids = {v.ref_id for v in vouchers if v.ref_model in ("Builty", "BuiltyReversal") and v.ref_id}
     invoices = {pk: number for pk, number in Sale.objects.filter(pk__in=sale_ids).values_list("pk", "invoice_number")}
     bills = {
         pk: number
         for pk, number in Purchase.objects.filter(pk__in=purchase_ids).values_list("pk", "supplier_invoice_number")
+    }
+    builties = {
+        pk: number
+        for pk, number in Builty.objects.filter(pk__in=builty_ids).values_list("pk", "builty_number")
     }
 
     labels = {}
@@ -129,6 +150,11 @@ def _document_labels(vouchers) -> dict:
             label = f"Invoice {invoices.get(ref) or f'#{ref}'}"
         elif model == "Purchase":
             label = f"Purchase #{ref}" + (f" (bill {bills[ref]})" if bills.get(ref) else "")
+        elif model in ("Builty", "BuiltyReversal"):
+            # The transporter's freight bill, by its own number when it has one.
+            label = f"Builty #{ref}" + (f" (no. {builties[ref]})" if builties.get(ref) else "")
+            if model == "BuiltyReversal":
+                label += " reversed"
         elif model == "SaleReturn":
             label = f"Sale return #{ref}"
         elif model == "PurchaseReturn":

@@ -18,6 +18,8 @@ SESSION_KEY = "held_carts"
 MAX_HELD_CARTS = 20
 LABEL_MAX_LENGTH = 40
 CONTEXT_KEYS = ("customer_id", "credit", "payment_method", "bank_account_id", "discount_rate", "tax_rate")
+# A discount typed as cash is held as its amount, so it is still that amount when the sale comes back.
+CONTEXT_KEYS += ("discount_type", "discount_value")
 
 
 def _stored(session):

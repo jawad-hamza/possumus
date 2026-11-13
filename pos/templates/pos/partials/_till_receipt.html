@@ -1,0 +1,10 @@
+{% comment %}
+The proof of a bank payment, taken with the payment. It sits inside the bank ledger field of the
+till, so it is on screen only while Bank is how the sale is paid. Script: zehnms/js/till-receipt.js.
+{% endcomment %}
+{% load bank_receipt_tags %}{% bank_receipt_upload_rules as receipt_rules %}
+<div class="t-field mt-2" id="till-receipt" data-required="{{ receipt_rules.required|yesno:'1,0' }}" data-max-bytes="{{ receipt_rules.max_bytes }}" data-max-label="{{ receipt_rules.max_label }}">
+    <label for="till-bank-receipt" class="form-label">Bank receipt{% if not receipt_rules.required %} <span class="t-optional">optional</span>{% endif %} {% include "pos/partials/_help_tip.html" with tip_id="tipTillReceipt" tip_name="the bank receipt" tip_text=receipt_rules.help|add:" With Bank chosen, Ctrl+V attaches a copied screenshot." %}</label>
+    <input type="file" name="{{ receipt_rules.field }}" id="till-bank-receipt" class="form-control" accept="{{ receipt_rules.accept }}" aria-describedby="till-receipt-error">
+    <div class="k-error" id="till-receipt-error" role="alert" hidden></div>
+</div>

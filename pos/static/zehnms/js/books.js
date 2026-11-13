@@ -12,6 +12,14 @@
         return number.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
     }
 
+    /* a customer statement reads like the printed one: 12,500 rather than 12,500.00; paisa still show */
+    function statementAmount(value) {
+        var number = Number(value);
+        if (!isFinite(number)) return amount(value);
+        var whole = Math.round(number * 100) % 100 === 0;
+        return number.toLocaleString('en-US', { minimumFractionDigits: whole ? 0 : 2, maximumFractionDigits: whole ? 0 : 2 });
+    }
+
     function shortDate(iso) {
         var parts = String(iso || '').split('-');
         if (parts.length !== 3) return String(iso || '');
@@ -39,18 +47,40 @@
         return td;
     }
 
-    function figureCell(row, value, label, suffix, always) {
+    function figureCell(row, value, label, suffix, always, format) {
         var shown = Number(value) || always;
-        var td = cell(row, 'k-num', label, shown ? amount(value) : '', 'amount');
+        var td = cell(row, 'k-num', label, shown ? (format || amount)(value) : '', 'amount');
         if (shown) td.setAttribute('data-k-suffix', suffix);
         return td;
     }
 
-    function balanceCell(row, value, label) {
+    function balanceCell(row, value, label, signed) {
         var number = Number(value) || 0;
+        /* a statement shows the signed balance: a minus means the party has paid in advance */
+        if (signed) return cell(row, 'k-num b-bal', label || 'Balance', statementAmount(number), 'balance');
         var td = cell(row, 'k-num b-bal', label || 'Balance', amount(Math.abs(number)), 'balance');
         td.appendChild(make('span', 'b-drcr', number > 0 ? 'Dr' : number < 0 ? 'Cr' : ''));
         return td;
+    }
+
+    /* goods on an entry: 20, 4.5, -1 for a return; nothing for a payment */
+    function quantityCell(row, value, label) {
+        var number = Number(value);
+        var known = value !== null && value !== undefined && value !== '' && isFinite(number);
+        var td = cell(row, 'k-num', label, known ? number.toLocaleString('en-US', { maximumFractionDigits: 3 }) : '', 'meta');
+        if (known) td.setAttribute('data-k-suffix', String(label).toLowerCase());
+        return td;
+    }
+
+    /* the bank receipt behind an entry: from the ledger to the proof (or to adding it) and back to this page */
+    function receiptLink(receipt) {
+        var link = make('a', 'k-receipt-link');
+        link.href = receipt.url + '?next=' + encodeURIComponent(window.location.pathname + window.location.search);
+        var icon = make('i', 'bi bi-paperclip');
+        icon.setAttribute('aria-hidden', 'true');
+        link.appendChild(icon);
+        link.appendChild(document.createTextNode(receipt.attached ? 'Bank receipt' : 'Attach bank receipt'));
+        return link;
     }
 
     /* what a balance means in the shop's words: they owe you = amber, you owe = red, settled = neutral */
@@ -96,19 +126,27 @@
         var show = { debit: true, credit: true };
         var table = body.closest ? body.closest('table') : null;
         var heads = table && table.tHead && table.tHead.rows[0] ? table.tHead.rows[0].cells : [];
+        /* statement: the customer ledger as a statement. A page reads top to bottom in date order under an
+           opening balance row, carries a quantity column (options.quantityLabel) and shows the signed balance. */
+        var statement = !!options.statement;
+        var quantityLabel = options.quantityLabel || 'Qty';
+        var extra = statement ? 1 : 0;
+        var totalQuantity = null;
+        var periodStart = '';
 
         function paintHeads() {
-            if (heads[2]) heads[2].hidden = !show.debit;
-            if (heads[3]) heads[3].hidden = !show.credit;
+            if (heads[2 + extra]) heads[2 + extra].hidden = !show.debit;
+            if (heads[3 + extra]) heads[3 + extra].hidden = !show.credit;
         }
 
         function moneyCells(tr, debit, credit, always) {
-            if (show.debit) figureCell(tr, debit, 'Debit', 'Dr', always);
-            if (show.credit) figureCell(tr, credit, 'Credit', 'Cr', always);
+            var format = statement ? statementAmount : null;
+            if (show.debit) figureCell(tr, debit, 'Debit', 'Dr', always, format);
+            if (show.credit) figureCell(tr, credit, 'Credit', 'Cr', always, format);
         }
 
         function span() {
-            return 3 + (show.debit ? 1 : 0) + (show.credit ? 1 : 0);
+            return 3 + extra + (show.debit ? 1 : 0) + (show.credit ? 1 : 0);
         }
 
         function message(text, className) {
@@ -136,8 +174,9 @@
             var tr = make('tr');
             var label = cell(tr, 'b-stack-title', '', 'Total for ' + rows.length + (rows.length === 1 ? ' entry' : ' entries'), 'what');
             label.colSpan = 2;
+            if (statement) quantityCell(tr, totalQuantity, quantityLabel);
             moneyCells(tr, debit, credit, true);
-            balanceCell(tr, closing, 'Closing');
+            balanceCell(tr, closing, 'Closing', statement);
             foot.appendChild(tr);
         }
 
@@ -149,7 +188,9 @@
             pager.textContent = '';
             var first = page * PAGE_SIZE + 1;
             var last = Math.min(rows.length, first + PAGE_SIZE - 1);
-            pager.appendChild(make('span', '', 'Entries ' + first + ' to ' + last + ' of ' + rows.length + ', newest first'));
+            pager.appendChild(make('span', '', statement
+                ? 'Entries ' + (rows.length - last + 1) + ' to ' + (rows.length - first + 1) + ' of ' + rows.length + ', in date order'
+                : 'Entries ' + first + ' to ' + last + ' of ' + rows.length + ', newest first'));
             var buttons = make('span', 'b-pager-buttons');
             var newer = make('button', 'btn btn-sm btn-outline-secondary', 'Newer');
             var older = make('button', 'btn btn-sm btn-outline-secondary', 'Older');
@@ -169,6 +210,15 @@
             var pages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
             var slice = rows.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
             var fragment = document.createDocumentFragment();
+            /* rows are kept newest first so the first page is the latest; a statement page reads oldest first */
+            if (statement) slice.reverse();
+            if (statement && page === pages - 1 && (opening !== 0 || periodStart)) {
+                var openRow = make('tr', 'b-bf');
+                var openLabel = cell(openRow, 'b-stack-title', '', 'Opening balance' + (periodStart ? ' on ' + shortDate(periodStart) : ''), 'what');
+                openLabel.colSpan = span() - 1;
+                balanceCell(openRow, opening, 'Balance', true);
+                fragment.appendChild(openRow);
+            }
             slice.forEach(function (entry) {
                 var tr = make('tr');
                 cell(tr, '', 'Date', shortDate(entry.date), 'meta');
@@ -177,11 +227,13 @@
                 var what = make('span', '', entry.document || (words(entry.voucher_type) + ' #' + entry.voucher_id));
                 what.setAttribute('data-k', 'what');
                 particulars.appendChild(what);
+                if (entry.receipt) particulars.appendChild(receiptLink(entry.receipt));
+                if (statement) quantityCell(tr, entry.quantity, quantityLabel);
                 moneyCells(tr, entry.debit, entry.credit);
-                balanceCell(tr, entry.running_balance);
+                balanceCell(tr, entry.running_balance, 'Balance', statement);
                 fragment.appendChild(tr);
             });
-            if (page === pages - 1 && opening !== 0) {
+            if (!statement && page === pages - 1 && opening !== 0) {
                 var forward = make('tr', 'b-bf');
                 var label = cell(forward, 'b-stack-title', '', 'Brought forward', 'what');
                 label.colSpan = span() - 1;
@@ -212,8 +264,11 @@
                     return copy;
                 }).reverse();
                 page = 0;
-                show.debit = !rows.length || rows.some(function (row) { return Number(row.debit); });
-                show.credit = !rows.length || rows.some(function (row) { return Number(row.credit); });
+                totalQuantity = data.total_quantity === undefined ? null : data.total_quantity;
+                periodStart = data.from_date || '';
+                /* a statement keeps all its columns, so every customer's ledger has the same shape */
+                show.debit = statement || !rows.length || rows.some(function (row) { return Number(row.debit); });
+                show.credit = statement || !rows.length || rows.some(function (row) { return Number(row.credit); });
                 paintHeads();
                 if (!rows.length && opening === 0) {
                     message(options.empty || 'Nothing is written on this leaf yet.');
@@ -263,6 +318,23 @@
         return '';
     }
 
+    /* a bank settlement carries its receipt: the file field marked data-settle-receipt beside the bank ledger */
+    function receiptFile(payload) {
+        if (payload.payment_method !== 'bank') return null;
+        var input = document.querySelector('[data-settle-receipt]');
+        return input && input.files && input.files.length ? input.files[0] : null;
+    }
+
+    /* a file cannot travel as JSON, so the same fields go as a multipart form */
+    function withReceipt(payload, file) {
+        var form = new FormData();
+        Object.keys(payload).forEach(function (key) {
+            if (payload[key] != null && payload[key] !== '') form.append(key, payload[key]);
+        });
+        form.append('bank_receipt', file);
+        return form;
+    }
+
     function settle(options) {
         var errorBox = options.error;
         var button = options.button;
@@ -286,11 +358,12 @@
             button.disabled = true;
             button.setAttribute('aria-busy', 'true');
         }
+        var receipt = receiptFile(options.payload);
         fetch('/api/settlements/', {
             method: 'POST',
             credentials: 'same-origin',
-            headers: { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
-            body: JSON.stringify(options.payload)
+            headers: receipt ? { 'X-CSRFToken': csrf() } : { 'Content-Type': 'application/json', 'X-CSRFToken': csrf() },
+            body: receipt ? withReceipt(options.payload, receipt) : JSON.stringify(options.payload)
         })
             .then(function (response) {
                 if (response.ok) {

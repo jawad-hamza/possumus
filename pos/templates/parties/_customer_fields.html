@@ -1,0 +1,33 @@
+{% comment %}
+The fields of a customer, shared by the add and the edit page.
+Needs: form (CustomerForm) and fs_quick ({% field_sales_quick_add as fs_quick %}).
+Route and order booker are in the form only while the field-sales module is on.
+{% endcomment %}
+<section class="k-section" aria-labelledby="party-details-title">
+    <div class="k-section-head"><h2 class="k-section-title" id="party-details-title">Customer details</h2></div>
+    <div class="k-form-grid">
+        {% include "pos/partials/_field.html" with field=form.name %}
+        {% include "pos/partials/_field.html" with field=form.phone %}
+        {% include "pos/partials/_field.html" with field=form.email %}
+        {% include "pos/partials/_field.html" with field=form.city %}
+        <div class="k-span-2">{% include "pos/partials/_field.html" with field=form.address %}</div>
+    </div>
+</section>
+
+<section class="k-section" aria-labelledby="party-terms-title">
+    <div class="k-section-head"><h2 class="k-section-title" id="party-terms-title">{% if form.route %}Route and credit{% else %}Credit{% endif %}</h2></div>
+    <div class="k-form-grid">
+        {% if form.route %}
+        <div>
+            {% include "pos/partials/_field.html" with field=form.route %}
+            {% if fs_quick.quick_add_kinds.route %}<div class="rf-add-row"><a class="rf-add" href="{% url 'route_add' %}?next={{ request.get_full_path|urlencode }}" data-rf-quick="route" data-rf-target="{{ form.route.id_for_label }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add route</a></div>{% endif %}
+        </div>
+        <div>
+            {% include "pos/partials/_field.html" with field=form.order_booker %}
+            {% if fs_quick.quick_add_kinds.order_booker %}<div class="rf-add-row"><a class="rf-add" href="{% url 'order_booker_add' %}?next={{ request.get_full_path|urlencode }}" data-rf-quick="order_booker" data-rf-target="{{ form.order_booker.id_for_label }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add order booker</a></div>{% endif %}
+        </div>
+        {% endif %}
+        {% include "pos/partials/_field.html" with field=form.credit_limit %}
+    </div>
+</section>
+{% include "parties/_city_options.html" with cities=form.city_options %}

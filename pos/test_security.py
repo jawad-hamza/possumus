@@ -15,7 +15,7 @@ from django.utils.http import urlsafe_base64_encode
 
 from accounts.models import Account, AuditLog, BankAccount, Settlement
 from pos.forms import TeamUserForm
-from pos.models import Customer, OwnerOnboarding
+from pos.models import Customer, OwnerOnboarding, SystemSettings
 from pos.services import throttling
 from pos.services.access import ADMIN_ROLE, CASHIER_ROLE, assign_role, ensure_role_groups
 from pos.services.account_tokens import password_reset_token_generator
@@ -559,6 +559,8 @@ class ApiSecurityTests(AuthenticatedAdminTestCase):
         self.assertFalse(Settlement.objects.exists())
 
     def test_bank_settlement_uses_the_chosen_ledger(self):
+        # The bank receipt rule has its own tests (pos/test_bank_receipts.py); this one is about the posting.
+        SystemSettings.objects.update_or_create(pk=1, defaults={"require_bank_receipt": False})
         bank_ledger = BankAccount.objects.create(name="Main Bank", account_number="001")
 
         response = self._post_settlement(payment_method="bank", bank_account_id=bank_ledger.id)

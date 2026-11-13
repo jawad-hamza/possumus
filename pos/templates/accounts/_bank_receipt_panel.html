@@ -1,0 +1,6 @@
+{% comment %}
+The bank receipt of one payment, on the page of that payment. Drawn by {% bank_receipt_panel record layout %}.
+layout "fact": a row of a k-paper-facts list (the invoice). "note": a line under a balance figure (the purchase).
+"attached": beside an upload field of an edit form; only says so when a receipt is already there.
+{% endcomment %}
+{% if shown %}{% if layout == "attached" %}{% if receipt %}<a class="k-receipt-link" href="{{ url }}?next={{ next|urlencode }}" data-tip="Choosing a file replaces this receipt"><i class="bi bi-paperclip" aria-hidden="true"></i>Receipt attached</a>{% endif %}{% else %}{% if layout == "fact" %}<div class="k-receipt-fact"><dt>Bank receipt</dt><dd>{% endif %}{% if layout == "note" %}<div class="k-balance-note">{% endif %}{% if receipt %}<a class="k-receipt-link" href="{{ url }}?next={{ next|urlencode }}"><i class="bi bi-paperclip" aria-hidden="true"></i>{% if layout == "fact" %}View{% else %}Bank receipt{% endif %}</a>{% elif may_attach %}<a class="k-receipt-link" href="{{ url }}?next={{ next|urlencode }}"><i class="bi bi-paperclip" aria-hidden="true"></i>{% if layout == "fact" %}Attach{% else %}Attach bank receipt{% endif %}</a>{% else %}<span class="k-receipt-none">Not attached</span>{% endif %}{% if layout == "note" %}</div>{% endif %}{% if layout == "fact" %}</dd></div>{% endif %}{% endif %}{% endif %}

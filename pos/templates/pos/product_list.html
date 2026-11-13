@@ -8,7 +8,7 @@
 
 {% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/return-flow.css' %}" rel="stylesheet">{% endblock %}
 
-{% block page_actions %}{% if manage_access.products %}<a href="{% url 'product_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary" data-k-key="F2" data-k-key-label="Add a product"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add product</a>{% if feature_modules.catalog_io %}<a href="{% url 'product_import' %}" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i> Import</a><a href="{% url 'product_export' %}{% if filter_querystring %}?{{ filter_querystring }}{% endif %}" class="btn btn-outline-secondary" data-tip="Download the products shown below as a spreadsheet"><i class="bi bi-download" aria-hidden="true"></i> Export</a>{% endif %}{% endif %}<a href="{% url 'brand_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline-secondary"><i class="bi bi-tag" aria-hidden="true"></i> Add brand</a><a href="{% url 'category_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline-secondary"><i class="bi bi-grid" aria-hidden="true"></i> Add category</a>{% endblock %}
+{% block page_actions %}{% if manage_access.products %}<a href="{% url 'product_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary" data-k-key="F2" data-k-key-label="Add a product"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add product</a>{% if feature_modules.catalog_io %}<a href="{% url 'product_import' %}" class="btn btn-outline-secondary"><i class="bi bi-file-earmark-arrow-up" aria-hidden="true"></i> Import</a><a href="{% url 'product_export' %}{% if filter_querystring %}?{{ filter_querystring }}{% endif %}" class="btn btn-outline-secondary" data-tip="Download the products shown below as a spreadsheet"><i class="bi bi-download" aria-hidden="true"></i> Export</a>{% endif %}{% endif %}<a href="{% url 'brand_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline-secondary"><i class="bi bi-tag" aria-hidden="true"></i> Add brand</a><a href="{% url 'category_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline-secondary"><i class="bi bi-grid" aria-hidden="true"></i> Add category</a>{% if nav_access.reports %}<a href="{% url 'report_opening_closing_stock' %}" class="btn btn-outline-secondary" data-tip="Each product's stock at the start and end of a day or a month, and what moved in between"><i class="bi bi-box-seam" aria-hidden="true"></i> Opening and closing stock</a>{% endif %}{% endblock %}
 
 {% block content %}
 <section class="k-section" aria-label="Find products">
@@ -83,6 +83,16 @@
         <h2 class="k-section-title" id="product-list-title">All products</h2>
         {% if products.paginator.count %}<span class="k-section-note">{% if products.paginator.count == summary_total %}{{ summary_total }} product{{ summary_total|pluralize }}{% else %}{{ summary_total }} product{{ summary_total|pluralize }} in {{ products.paginator.count }} row{{ products.paginator.count|pluralize }}, sizes grouped{% endif %}</span>{% endif %}
         <div class="k-actions st-cols">
+            {% if feature_modules.packaging %}
+            <div class="st-stock-in">
+                <label class="form-label" for="stock_unit">Stock in</label>
+                <select id="stock_unit" name="stock_unit" form="product-filter-form" class="form-select form-select-sm" data-tip="Count stock from the carton, the box or the piece">
+                    {% for value, label in stock_unit_options %}
+                    <option value="{{ value }}" {% if value == stock_unit %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            {% endif %}
             <div class="dropdown">
                 <button type="button" class="btn btn-outline-secondary btn-sm dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside" aria-expanded="false" data-tip="Show or hide columns"><i class="bi bi-layout-three-columns" aria-hidden="true"></i> Columns</button>
                 <div class="dropdown-menu dropdown-menu-end st-cols-menu" data-columns-menu>
@@ -91,6 +101,7 @@
                     <div class="form-check"><input class="form-check-input" type="checkbox" id="col-location" value="location"><label class="form-check-label" for="col-location">Location</label></div>
                     <div class="form-check"><input class="form-check-input" type="checkbox" id="col-cost" value="cost"><label class="form-check-label" for="col-cost">Cost</label></div>
                     <div class="form-check"><input class="form-check-input" type="checkbox" id="col-margin" value="margin"><label class="form-check-label" for="col-margin">Margin</label></div>
+                    {% if show_purchases %}<div class="form-check"><input class="form-check-input" type="checkbox" id="col-lastbuy" value="lastbuy"><label class="form-check-label" for="col-lastbuy">Last purchase</label></div>{% endif %}
                 </div>
             </div>
         </div>
@@ -107,6 +118,7 @@
                 <th scope="col" data-k="more" class="text-end st-opt st-opt-cost">Cost</th>
                 <th scope="col" class="text-end" data-k="amount"><button type="submit" form="product-filter-form" name="sort" value="{% if selected_sort == 'price_low' %}price_high{% else %}price_low{% endif %}" class="st-sort" data-sort aria-pressed="{% if selected_sort == 'price_low' or selected_sort == 'price_high' %}true{% else %}false{% endif %}">Sale price <i class="bi {% if selected_sort == 'price_high' %}bi-arrow-up{% else %}bi-arrow-down{% endif %}" aria-hidden="true"></i></button></th>
                 <th scope="col" data-k="more" class="text-end st-opt st-opt-margin">Margin</th>
+                {% if show_purchases %}<th scope="col" data-k="more" class="st-opt st-opt-lastbuy">Last purchase</th>{% endif %}
                 <th scope="col" class="text-end" data-k="balance"><button type="submit" form="product-filter-form" name="sort" value="{% if selected_sort == 'stock_low' %}stock_high{% else %}stock_low{% endif %}" class="st-sort" data-sort aria-pressed="{% if selected_sort == 'stock_low' or selected_sort == 'stock_high' %}true{% else %}false{% endif %}">Stock <i class="bi {% if selected_sort == 'stock_high' %}bi-arrow-up{% else %}bi-arrow-down{% endif %}" aria-hidden="true"></i></button></th>
                 <th scope="col" class="text-end" data-k="more"><span class="visually-hidden">Actions</span></th>
             </tr>
@@ -125,9 +137,10 @@
                 <td data-k="more" class="st-opt st-opt-location"></td>
                 {% if expiry_tracking_enabled %}<td data-k="more"></td>{% endif %}
                 <td data-k="more" class="st-opt st-opt-cost"></td>
-                <td class="k-num text-end" data-k="amount" data-label="Sale price">{{ row.price_low|money }}{% if row.price_high != row.price_low %} &ndash; {{ row.price_high|money }}{% endif %}</td>
+                <td class="k-num text-end" data-k="amount" data-label="Sale price">{{ row.price_low|money }}{% if row.price_high != row.price_low %} &ndash; {{ row.price_high|money }}{% endif %}{% if row.price_unit %}<span class="st-sub">per {{ row.price_unit }}</span>{% endif %}</td>
                 <td data-k="more" class="st-opt st-opt-margin"></td>
-                <td class="k-num text-end" data-k="balance" data-label="Stock"><span class="st-stock-line">{% if row.low_count %}<span class="k-badge k-badge--amber">{{ row.low_count }} low</span>{% elif not row.active_count %}<span class="k-badge">Inactive</span>{% endif %}{% if row.stock_total is not None %}<span>{{ row.stock_total|qty }} {{ row.stock_unit }}</span>{% endif %}</span>{% if row.stock_total is not None %}<span class="st-sub">all sizes</span>{% endif %}</td>
+                {% if show_purchases %}<td data-k="more" class="st-opt st-opt-lastbuy"></td>{% endif %}
+                <td class="k-num text-end" data-k="balance" data-label="Stock"><span class="st-stock-line">{% if row.low_count %}<span class="k-badge k-badge--amber">{{ row.low_count }} low</span>{% elif not row.active_count %}<span class="k-badge">Inactive</span>{% endif %}{% if row.stock_total is not None %}<span>{{ row.stock_total_display }}</span>{% endif %}</span>{% if row.stock_total is not None %}<span class="st-sub">all sizes</span>{% endif %}</td>
                 <td class="text-end st-cell-actions" data-k="hide">
                     {% if manage_access.products %}<span class="k-row-actions"><a href="{% url 'product_add' %}?copy={{ row.variants.0.id }}&amp;next={{ request.get_full_path|urlencode }}" class="k-icon-btn" data-tip="Add a size of {{ row.name }}" aria-label="Add a size of {{ row.name }}"><i class="bi bi-plus-lg" aria-hidden="true"></i></a></span>{% endif %}
                 </td>
@@ -138,7 +151,7 @@
             {% endif %}
             {% empty %}
             <tr>
-                <td colspan="{% if expiry_tracking_enabled %}11{% else %}10{% endif %}" class="k-empty" data-k="note">
+                <td colspan="{{ column_count }}" class="k-empty" data-k="note">
                     <i class="bi bi-box-seam" aria-hidden="true"></i>
                     <p class="k-empty-title">No products found for the selected filters.</p>
                     <p>Clear the search or a filter to see the rest of the catalog{% if manage_access.products %}, or add the product now{% endif %}.</p>
@@ -183,6 +196,34 @@
     </div>
     {% endif %}
 </section>
+
+{% if show_purchases %}
+<section class="k-section" aria-labelledby="recent-purchases-title" id="recent-purchases">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="recent-purchases-title">Recent purchases {% include "pos/partials/_help_tip.html" with tip_id="tipRecentPurchases" tip_name="Recent purchases" tip_text="The latest lines bought, across all products, each in the unit it was bought in." %}</h2>
+        {% if nav_access.purchases %}<a href="{% url 'purchase_list' %}" class="section-link">View all</a>{% endif %}
+    </div>
+    <table class="k-ledger k-ledger--stack">
+        <thead>
+            <tr><th scope="col" data-k="what">Product</th><th scope="col" data-k="meta">Date</th><th scope="col" data-k="more">Supplier</th><th scope="col" class="text-end" data-k="balance">Qty</th><th scope="col" class="text-end" data-k="amount">Cost</th><th scope="col" class="text-end" data-k="more">Purchase</th></tr>
+        </thead>
+        <tbody>
+            {% for line in recent_purchase_lines %}
+            <tr>
+                <td class="st-wrap" data-k="what"><a href="{% url 'product_view' line.product_id %}?next={{ request.get_full_path|urlencode }}" class="st-name">{{ line.product.display_name }}</a></td>
+                <td data-k="meta">{{ line.purchase.created_at|date:"d M Y" }}</td>
+                <td data-k="more" data-label="Supplier">{% if line.purchase.supplier %}{{ line.purchase.supplier }}{% else %}<span class="st-dim">&ndash;</span>{% endif %}</td>
+                <td class="k-num text-end" data-k="balance">{{ line|line_qty }}</td>
+                <td class="k-num text-end" data-k="amount">{{ line.cost_price|money }}{% if line|line_unit %}<span class="st-sub">per {{ line|line_unit }}</span>{% endif %}</td>
+                <td class="k-num text-end" data-k="more" data-label="Purchase">{% if nav_access.purchases %}<a href="{% url 'purchase_detail' line.purchase_id %}">#{{ line.purchase_id }}</a>{% else %}#{{ line.purchase_id }}{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr><td colspan="6" class="k-empty" data-k="note">No purchases yet.</td></tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
 {% endblock %}
 
 {% block extra_js %}<script src="{% static 'zehnms/js/pages/stock.js' %}"></script><script src="{% static 'zehnms/js/return-flow.js' %}"></script>{% endblock %}

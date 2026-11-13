@@ -10,6 +10,8 @@ from accounts.services.cash_bank import bank_account_queryset
 from accounts.services.party_badges import get_customer_badge, get_supplier_badge
 from ..models import Customer, Supplier
 from ..services.access import module_access_required
+from ..services.field_sales import apply_customer_area_filters, customer_area_filters
+from ..services.invoice_quantity import QTY_LABEL
 from ..services.reporting import (
     apply_party_badges,
     filter_parties_by_balance,
@@ -42,6 +44,10 @@ def _party_list_context(request, model, party_kind):
     search = request.GET.get("search", "").strip()
     balance_filter = request.GET.get("balance", "").strip()
     queryset = with_ledger_balance(model.objects.all())
+    # Customers can also be narrowed by city, route and order booker.
+    area_filters = customer_area_filters(request) if party_kind == "customer" else {}
+    if area_filters:
+        queryset = apply_customer_area_filters(queryset.select_related("route", "order_booker"), area_filters)
 
     if search:
         queryset = queryset.filter(
@@ -49,6 +55,7 @@ def _party_list_context(request, model, party_kind):
             | Q(phone__icontains=search)
             | Q(email__icontains=search)
             | Q(address__icontains=search)
+            | Q(city__icontains=search)
         )
     queryset = filter_parties_by_balance(queryset, party_kind, balance_filter)
     if balance_filter in ("receivable", "payable", "advance"):
@@ -70,6 +77,8 @@ def _party_list_context(request, model, party_kind):
         "balance_filter": balance_filter,
         "balance_summary": party_balance_summary(model, active_only=False),
         "total_count": page.paginator.count,
+        "area_filters": list(area_filters.values()),
+        "area_filter_active": any(entry["active"] for entry in area_filters.values()),
     }
 
 
@@ -111,7 +120,7 @@ def supplier_list(request):
 
 @module_access_required("parties")
 def customer_detail(request, id):
-    customer = get_object_or_404(Customer, id=id)
+    customer = get_object_or_404(Customer.objects.select_related("route", "order_booker"), id=id)
     sales = customer.sales.order_by("-created_at")
     # Net of what the customer returned, tax included, like the invoice totals.
     customer_totals = sales_totals(customer=customer)
@@ -129,6 +138,8 @@ def customer_detail(request, id):
             "total_returns": customer_totals["returns_total"],
             "badge": badge,
             "bank_accounts": bank_account_queryset(),
+            # Heading of the ledger's quantity column; it changes in one place with the quantity rule.
+            "quantity_label": QTY_LABEL,
         },
     )
 

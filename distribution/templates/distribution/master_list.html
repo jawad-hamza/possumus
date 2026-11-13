@@ -1,0 +1,46 @@
+{% extends "distribution/_base.html" %}
+{% block title %}{{ spec.plural }}{% endblock %}
+{% block page_title %}{{ spec.plural }}{% endblock %}
+{% block page_help %}{{ spec.help }}{% endblock %}
+{% block page_actions %}{% if manage_access.distribution %}<a href="{% url spec.add %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add {{ spec.singular }}</a>{% endif %}{% endblock %}
+
+{% block dist_content %}
+<section class="k-section" aria-labelledby="master-list-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="master-list-title">All {{ spec.plural|lower }}</h2>
+        <span class="k-section-note">{{ active_count }} in use{% if rows|length != active_count %}, {{ rows|length }} in all{% endif %}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack b-index">
+            <thead>
+                <tr>
+                    <th scope="col" data-k="what">Name</th>
+                    <th scope="col" data-k="meta">{% if kind == "vehicle" %}Registration{% else %}Phone{% endif %}</th>
+                    <th scope="col" class="k-num" data-k="amount">Loads</th>
+                    <th scope="col" data-k="flag">Status</th>
+                    <th scope="col" data-k="hide"><span class="visually-hidden">Edit</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr data-rf-row="{{ row.id }}">
+                    <td class="b-stack-title" data-k="what">{% if manage_access.distribution %}<a href="{% url spec.edit row.id %}?next={{ request.get_full_path|urlencode }}" class="b-index-name">{{ row.name }}</a>{% else %}<span class="b-index-name">{{ row.name }}</span>{% endif %}</td>
+                    <td data-label="{% if kind == 'vehicle' %}Registration{% else %}Phone{% endif %}" data-k="meta">{% if kind == "vehicle" %}{{ row.number|default:"-" }}{% else %}{{ row.phone|default:"-" }}{% endif %}</td>
+                    <td class="k-num" data-label="Loads" data-k="amount">{{ row.load_count }}</td>
+                    <td data-label="Status" data-k="flag">{% if row.is_active %}<span class="k-badge k-badge--green">In use</span>{% else %}<span class="k-badge">Not in use</span>{% endif %}</td>
+                    <td class="text-end" data-k="hide">{% if manage_access.distribution %}<span class="k-row-actions"><a href="{% url spec.edit row.id %}?next={{ request.get_full_path|urlencode }}" class="k-icon-btn" aria-label="Edit {{ row.name }}" data-tip="Edit"><i class="bi bi-pencil" aria-hidden="true"></i></a></span>{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="k-empty" data-k="note">
+                        <i class="bi {{ spec.icon }}" aria-hidden="true"></i>
+                        <p class="k-empty-title">No {{ spec.plural|lower }} yet.</p>
+                        {% if manage_access.distribution %}<a class="btn btn-primary" href="{% url spec.add %}?next={{ request.get_full_path|urlencode }}">Add {{ spec.singular }}</a>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

@@ -30,11 +30,16 @@
             </thead>
             <tbody>
                 {% for row in table_rows %}
-                <tr>
+                {% if row.kind == "group" %}
+                {# A heading line that names the group of the rows under it: "City : Mirpur A.K". #}
+                <tr class="rp-group-row k-row-plain"><th scope="colgroup" colspan="{{ columns|length }}">{{ row.0.value }}</th></tr>
+                {% else %}
+                <tr{% if row.kind == "subtotal" %} class="rp-subtotal-row k-total"{% endif %}>
                     {% for cell in row %}
-                    <td class="{% if cell.numeric %}k-num num{% endif %}{% if forloop.first %} rp-lead{% endif %}">{% include "pos/reports/_cell.html" %}</td>
+                    <td class="{% if cell.numeric %}k-num num{% endif %}{% if forloop.first %} rp-lead{% endif %}">{% if row.kind and cell.value is None %}{% else %}{% include "pos/reports/_cell.html" %}{% endif %}</td>
                     {% endfor %}
                 </tr>
+                {% endif %}
                 {% empty %}
                 <tr>
                     <td colspan="{{ columns|length }}" class="k-empty">

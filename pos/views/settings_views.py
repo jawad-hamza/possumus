@@ -418,6 +418,7 @@ def settings_page(request):
                         "gst_enabled": settings_obj.gst_enabled,
                         "tax_mode": settings_obj.tax_mode,
                         "tax_label": settings_obj.tax_label,
+                        "require_bank_receipt": settings_obj.require_bank_receipt,
                     },
                 )
                 messages.success(request, "Tax and POS rules updated.")

@@ -17,6 +17,20 @@ balance_filters, balance_filter, search_term, page_obj, page_querystring.
     </div>
     {# Typing in the search box submits without a button, so the chosen filter rides along here. #}
     <input type="hidden" name="balance" value="{{ balance_filter }}" id="party-balance-current">
+    {% if area_filters %}
+    {# Customers only: narrow the list to a city, a route or an order booker. #}
+    <div class="fs-filters" role="group" aria-label="Show by city, route and order booker">
+        {% for filter in area_filters %}{% if filter.options %}
+        <select name="{{ filter.name }}" class="form-select form-select-sm" aria-label="{{ filter.label }}" data-party-filter>
+            <option value="">{{ filter.all_label }}</option>
+            {% for option in filter.options %}
+            <option value="{{ option.value }}"{% if option.value == filter.value %} selected{% endif %}>{{ option.label }}</option>
+            {% endfor %}
+        </select>
+        {% endif %}{% endfor %}
+        {% if area_filter_active %}<a href="?{% if search_term %}search={{ search_term|urlencode }}&{% endif %}balance={{ balance_filter|urlencode }}" class="fs-filters-clear">Clear filters</a>{% endif %}
+    </div>
+    {% endif %}
 </form>
 
 <div class="table-responsive">
@@ -24,6 +38,10 @@ balance_filters, balance_filter, search_term, page_obj, page_querystring.
         <thead>
             <tr>
                 <th scope="col" data-k="what">Name</th>
+                {% if area_filters %}
+                <th scope="col" data-k="meta">City</th>
+                {% if feature_modules.field_sales %}<th scope="col" data-k="meta">Route</th><th scope="col" data-k="more">Order booker</th>{% endif %}
+                {% endif %}
                 <th scope="col" data-k="flag">Standing</th>
                 <th scope="col" class="k-num" data-k="amount">Balance</th>
                 <th scope="col" data-k="hide"><span class="visually-hidden">Open</span></th>
@@ -32,13 +50,17 @@ balance_filters, balance_filter, search_term, page_obj, page_querystring.
         <tbody>
         {% for party in parties %}
             <tr>
-                <td class="b-stack-title" data-k="what"><a href="{% url detail_url_name party.id %}" class="b-index-name">{{ party.name }}</a>{% if not party.is_active %} <span class="k-badge">Inactive</span>{% endif %}<span class="b-sub">{{ party.phone|default:"No phone" }}{% if party.email %}<span class="d-none d-md-inline"> &middot; {{ party.email }}</span>{% endif %}</span></td>
+                <td class="b-stack-title" data-k="what"><a href="{% url detail_url_name party.id %}" class="b-index-name">{{ party.name }}</a>{% if not party.is_active %} <span class="k-badge">Inactive</span>{% endif %}<span class="b-sub">{{ party.phone|default:"No phone" }}{% if party.email %}<span class="d-none d-md-inline"> &middot; {{ party.email }}</span>{% endif %}{% if party.city and not area_filters %} &middot; {{ party.city }}{% endif %}</span></td>
+                {% if area_filters %}
+                <td data-label="City" data-k="meta">{{ party.city }}</td>
+                {% if feature_modules.field_sales %}<td data-label="Route" data-k="meta">{{ party.route.name }}</td><td data-label="Order booker" data-k="more">{{ party.order_booker.name }}</td>{% endif %}
+                {% endif %}
                 <td data-label="Standing" data-k="flag">{% if party.balance_type == "clear" %}<span class="k-badge">Settled</span>{% elif party.balance_type == "receivable" %}<span class="k-badge k-badge--amber">Owes you</span>{% elif party.balance_type == "payable" %}<span class="k-badge k-badge--red">You owe</span>{% elif detail_url_name == "customer_detail" %}<span class="k-badge k-badge--red">Paid in advance</span>{% else %}<span class="k-badge k-badge--amber">Advance with them</span>{% endif %}</td>
                 <td class="k-num {% if party.balance_type == 'clear' %}b-state--none{% elif party.balance_type == 'payable' %}b-state--out{% elif party.balance_type == 'advance' and detail_url_name == 'customer_detail' %}b-state--out{% else %}b-state--due{% endif %}" data-label="Balance" data-k="amount">{{ party.balance_amount|money }}</td>
                 <td class="text-end" data-k="hide"><span class="k-row-actions"><a href="{% url detail_url_name party.id %}" class="k-icon-btn" aria-label="Open ledger of {{ party.name }}" data-tip="Open ledger"><i class="bi bi-chevron-right" aria-hidden="true"></i></a></span></td>
             </tr>
         {% empty %}
-            <tr><td class="k-empty" colspan="4"><p class="k-empty-title">{{ empty_message }}</p><p>{% if search_term or balance_filter %}Nothing matches this search and filter. Clear the search box or choose All.{% else %}Add the first one and its ledger leaf opens here, ready for credit and payments.{% endif %}</p></td></tr>
+            <tr><td class="k-empty" colspan="{% if not area_filters %}4{% elif feature_modules.field_sales %}7{% else %}5{% endif %}"><p class="k-empty-title">{{ empty_message }}</p><p>{% if search_term or balance_filter or area_filter_active %}Nothing matches this search and filter. Clear the search box or choose All.{% else %}Add the first one and its ledger leaf opens here, ready for credit and payments.{% endif %}</p></td></tr>
         {% endfor %}
         </tbody>
     </table>
@@ -69,5 +91,11 @@ balance_filters, balance_filter, search_term, page_obj, page_querystring.
         input.focus();
         input.setSelectionRange(input.value.length, input.value.length);
     }
+    // City, route and order booker apply as soon as one is chosen.
+    form.querySelectorAll("[data-party-filter]").forEach(function (select) {
+        select.addEventListener("change", function () {
+            form.requestSubmit ? form.requestSubmit() : form.submit();
+        });
+    });
 })();
 </script>

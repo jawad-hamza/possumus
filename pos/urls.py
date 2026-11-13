@@ -2,6 +2,7 @@ from django.urls import include, path
 
 from . import views
 from .views import billing as billing_views
+from .views import builty as builty_views
 from .views import pos_views as till_views
 from .views import products as product_views
 from .views import public as public_views
@@ -47,6 +48,7 @@ urlpatterns = [
     path("invoice/<int:sale_id>/", views.invoice, name="invoice"),
     path("invoice/<int:sale_id>/pdf/", views.invoice_pdf, name="invoice_pdf"),
     path("invoice/<int:sale_id>/return/", views.sale_return_view, name="sale_return"),
+    path("invoice/<int:sale_id>/credit/", till_views.sale_change_to_credit, name="sale_change_to_credit"),
     path("reports/", views.reports_home, name="reports_home"),
     path("reports/daily-sales/", views.daily_sales_report, name="daily_sales_report"),
     path("reports/low-stock/", views.low_stock_list, name="low_stock_list"),
@@ -71,12 +73,17 @@ urlpatterns = [
     path("purchases/<int:pk>/", views.purchase_detail, name="purchase_detail"),
     path("purchases/<int:pk>/return/", views.purchase_return_view, name="purchase_return"),
     path("purchases/<int:pk>/edit/", views.purchase_edit, name="purchase_edit"),
+    path("purchases/builty/", builty_views.builty_list, name="builty_list"),
+    path("purchases/builty/new/", builty_views.builty_add, name="builty_add"),
+    path("purchases/builty/<int:pk>/", builty_views.builty_detail, name="builty_detail"),
+    path("purchases/builty/<int:pk>/reverse/", builty_views.builty_reverse, name="builty_reverse"),
     path("pos/add-customer/", views.add_customer_from_pos, name="add_customer_from_pos"),
     path("pos/add-supplier/", views.add_supplier_from_pos, name="add_supplier_from_pos"),
     path("parties/", views.parties_home, name="parties_home"),
     path("parties/customers/", views.customer_list, name="customer_list"),
     path("parties/customers/add/", views.add_customer_from_pos, name="customer_add"),
     path("parties/customer/<int:id>/", views.customer_detail, name="customer_detail"),
+    path("", include("pos.field_sales_urls")),
     path("parties/suppliers/", views.supplier_list, name="supplier_list"),
     path("parties/suppliers/add/", views.add_supplier_from_pos, name="supplier_add"),
     path("parties/supplier/<int:id>/", views.supplier_detail, name="supplier_detail"),

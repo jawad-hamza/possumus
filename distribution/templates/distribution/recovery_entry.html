@@ -1,0 +1,120 @@
+{% extends "distribution/_base.html" %}
+{% load currency_tags %}
+{% block title %}Recovery{% endblock %}
+{% block page_title %}Recovery{% endblock %}
+{% block page_help %}Old balances collected from shops. Pick a route, type what each shop paid and who brought it in, and save: each amount is a customer receipt that lowers what the shop owes.{% endblock %}
+{% block page_actions %}<a href="{% url 'distribution_recovery_list' %}" class="btn btn-outline-secondary"><i class="bi bi-list-ul" aria-hidden="true"></i> Recovered so far</a>{% endblock %}
+
+{% block dist_content %}
+<section class="k-section" aria-label="Customers who owe">
+    <form method="get" class="dist-filters">
+        {% if routes %}
+        <div><label class="form-label" for="f-route">Route</label>
+            <select id="f-route" name="route" class="form-select form-select-sm"><option value="">All routes</option>{% for route in routes %}<option value="{{ route.id }}"{% if route.id == route_id %} selected{% endif %}>{{ route.label }}</option>{% endfor %}</select></div>
+        <div><label class="form-label" for="f-booker">Order booker</label>
+            <select id="f-booker" name="order_booker" class="form-select form-select-sm"><option value="">All order bookers</option>{% for booker in bookers %}<option value="{{ booker.id }}"{% if booker.id == booker_id %} selected{% endif %}>{{ booker.name }}</option>{% endfor %}</select></div>
+        {% endif %}
+        <div><label class="form-label" for="f-q">Shop</label><input type="search" id="f-q" name="q" class="form-control form-control-sm" value="{{ search }}" placeholder="Name"></div>
+        <button type="submit" class="btn btn-outline-secondary btn-sm">Show</button>
+    </form>
+
+    <form method="post" enctype="multipart/form-data">
+        {% csrf_token %}
+        {% if route_id %}<input type="hidden" name="route" value="{{ route_id }}">{% endif %}
+        {% if booker_id %}<input type="hidden" name="order_booker" value="{{ booker_id }}">{% endif %}
+        {% if search %}<input type="hidden" name="q" value="{{ search }}">{% endif %}
+        {% if can_manage %}
+        <div class="k-form-grid mb-3">
+            <div class="k-form-field">
+                <label class="form-label" for="r-date">Collected on</label>
+                <input type="date" id="r-date" name="collected_on" class="form-control" value="{% if posted.collected_on %}{{ posted.collected_on }}{% else %}{{ today|date:'Y-m-d' }}{% endif %}">
+            </div>
+            <div class="k-form-field">
+                <label class="form-label" for="r-by">Collected by</label>
+                <select id="r-by" name="collected_by" class="form-select" data-collector>
+                    {% for value, label in collector_choices %}<option value="{{ value }}"{% if posted.collected_by == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+                </select>
+            </div>
+            {% if bookers %}<div class="k-form-field" data-collector-for="order_booker">
+                <label class="form-label" for="r-booker">Order booker</label>
+                <select id="r-booker" name="collector_booker" class="form-select"><option value="">Choose</option>{% for booker in bookers %}<option value="{{ booker.id }}"{% if posted.collector_booker == booker.id|stringformat:'s' %} selected{% endif %}>{{ booker.name }}</option>{% endfor %}</select>
+            </div>{% endif %}
+            <div class="k-form-field" data-collector-for="delivery_man">
+                <label class="form-label" for="r-dm">Delivery man</label>
+                <select id="r-dm" name="delivery_man" class="form-select"><option value="">Choose</option>{% for man in delivery_men %}<option value="{{ man.id }}"{% if posted.delivery_man == man.id|stringformat:'s' %} selected{% endif %}>{{ man.name }}</option>{% endfor %}</select>
+            </div>
+            <div class="k-form-field" data-collector-for="office">
+                <label class="form-label" for="r-name">Name</label>
+                <input type="text" id="r-name" name="collector_name" class="form-control" maxlength="100" value="{{ posted.collector_name|default:'' }}" placeholder="Recovery man or office">
+            </div>
+            {% if bank_accounts %}<div class="k-form-field">
+                <label class="form-label" for="r-bank">Bank account {% include "pos/partials/_help_tip.html" with tip_id="tipRecBank" tip_name="Bank account" tip_text="Where amounts marked Bank were paid in." %}</label>
+                <select id="r-bank" name="bank_account" class="form-select">{% for account in bank_accounts %}<option value="{{ account.id }}">{{ account.display_name }}</option>{% endfor %}</select>
+            </div>{% endif %}
+        </div>
+        {% endif %}
+        <div class="table-responsive">
+            <table class="k-table k-ledger--stack">
+                <thead>
+                    <tr>
+                        <th scope="col">Shop</th>
+                        {% if routes %}<th scope="col">Route</th>{% endif %}
+                        <th scope="col" class="k-num">Owes</th>
+                        {% if can_manage %}<th scope="col" class="text-end">Collected</th><th scope="col">Paid by</th>{% if bank_accounts %}<th scope="col">Bank receipt{% if receipt_required %}<span class="st-req" title="Required for bank payments">*</span>{% endif %}</th>{% endif %}{% endif %}
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for customer in customers %}
+                    <tr>
+                        <td><a href="{% url 'customer_detail' customer.id %}">{{ customer.name }}</a>{% if customer.credit_limit %}<span class="b-sub">Limit {{ customer.credit_limit|money }}</span>{% endif %}</td>
+                        {% if routes %}<td data-label="Route">{{ customer.route.name|default:"-" }}<span class="b-sub">{{ customer.order_booker.name|default:"" }}</span></td>{% endif %}
+                        <td class="k-num" data-label="Owes">{{ customer.ledger_balance|money }}</td>
+                        {% if can_manage %}
+                        <td class="text-end" data-label="Collected"><input type="number" name="amount_{{ customer.id }}" class="form-control form-control-sm dist-recovery-amount ms-auto" min="0" step="0.01" inputmode="decimal" value="{{ customer.typed_amount }}" aria-label="Amount collected from {{ customer.name }}" data-recovery-amount></td>
+                        <td data-label="Paid by"><select name="method_{{ customer.id }}" class="form-select form-select-sm dist-recovery-method" aria-label="Paid by"><option value="cash">Cash</option>{% if bank_accounts %}<option value="bank"{% if customer.typed_method == "bank" %} selected{% endif %}>Bank</option>{% endif %}</select></td>
+                        {% if bank_accounts %}<td data-label="Bank receipt"><input type="file" name="receipt_{{ customer.id }}" class="form-control form-control-sm" accept="{{ receipt_accept }}" aria-label="Bank receipt of {{ customer.name }}"></td>{% endif %}
+                        {% endif %}
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="k-empty"><i class="bi bi-cash-coin" aria-hidden="true"></i><p class="k-empty-title">Nobody here owes anything.</p></td></tr>
+                    {% endfor %}
+                </tbody>
+                {% if customers %}<tfoot><tr class="k-total"><td{% if routes %} colspan="2"{% endif %}>{{ customers|length }} shop{{ customers|length|pluralize }}</td><td class="k-num">{{ owed_total|money }}</td>{% if can_manage %}<td class="k-num" data-recovery-total>0.00</td><td></td>{% if bank_accounts %}<td></td>{% endif %}{% endif %}</tr></tfoot>{% endif %}
+            </table>
+        </div>
+        {% if can_manage and customers %}
+        <div class="st-actionbar">
+            <span class="st-actionbar-note">Collected <strong data-recovery-total>0.00</strong></span>
+            <button type="submit" class="btn btn-primary" data-k-key="Ctrl+S" data-k-key-label="Save recovery">Save recovery</button>
+        </div>
+        {% endif %}
+    </form>
+</section>
+{% endblock %}
+
+{% block dist_js %}
+<script>
+(function () {
+    var by = document.querySelector('[data-collector]');
+    function syncCollector() {
+        if (!by) { return; }
+        Array.prototype.forEach.call(document.querySelectorAll('[data-collector-for]'), function (box) {
+            box.hidden = box.getAttribute('data-collector-for') !== by.value;
+        });
+    }
+    if (by) { by.addEventListener('change', syncCollector); syncCollector(); }
+    function total() {
+        var sum = 0;
+        Array.prototype.forEach.call(document.querySelectorAll('[data-recovery-amount]'), function (input) {
+            var value = parseFloat(input.value);
+            if (isFinite(value) && value > 0) { sum += value; }
+        });
+        Array.prototype.forEach.call(document.querySelectorAll('[data-recovery-total]'), function (node) {
+            node.textContent = sum.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        });
+    }
+    document.addEventListener('input', function (event) { if (event.target.hasAttribute('data-recovery-amount')) { total(); } });
+    total();
+})();
+</script>
+{% endblock %}

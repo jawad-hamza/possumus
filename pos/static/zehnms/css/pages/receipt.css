@@ -1,0 +1,75 @@
+/* The bank receipt page: the proof on the left, the payment it belongs to on the right. Tokens only. */
+
+.rc-image {
+    display: block;
+    /* a phone screenshot is tall: keep it at a width where the figures stay readable */
+    max-width: min(100%, 560px);
+    height: auto;
+    margin: 0 auto;
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-sunk);
+}
+
+.rc-pdf {
+    display: block;
+    width: 100%;
+    height: min(78vh, 900px);
+    min-height: 420px;
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-sunk);
+}
+
+.rc-facts {
+    margin: 0;
+}
+
+.rc-facts > div {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: var(--k-3);
+    padding: var(--k-2) 0;
+}
+
+.rc-facts > div + div {
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+
+.rc-facts dt {
+    flex: none;
+    color: var(--k-ink-soft);
+    font-weight: 400;
+}
+
+.rc-facts dd {
+    min-width: 0;
+    margin: 0;
+    color: var(--k-ink-title);
+    font-weight: 500;
+    text-align: right;
+    overflow-wrap: anywhere;
+}
+
+.k-side > .rc-facts + form,
+.k-side > .rc-remove {
+    margin-top: var(--k-5);
+}
+
+.rc-remove > .k-note {
+    margin: 0 0 var(--k-3);
+}
+
+.rc-remove-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--k-2);
+}
+
+@media print {
+    .k-side form,
+    .rc-remove {
+        display: none;
+    }
+}

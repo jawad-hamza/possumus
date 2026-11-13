@@ -129,8 +129,19 @@
                         {% if feature_modules.markup %}
                         {% include "pos/partials/_settings_row.html" with field=system_form.default_markup_percent %}
                         {% endif %}
+                        {% include "pos/partials/_settings_switch.html" with field=system_form.require_bank_receipt copy="When on, a sale, purchase, customer or supplier payment, or expense paid by bank is refused until its bank receipt (a photo, a screenshot or the PDF slip) is attached. When off, attaching one is optional." %}
                     </div>
                 </section>
+
+                {% if feature_modules.packaging %}
+                <section class="k-section">
+                    <div class="k-section-head"><h3 class="k-section-title">Cartons and boxes</h3></div>
+                    <div class="k-form-grid">
+                        {% include "pos/partials/_settings_row.html" with field=system_form.till_default_unit %}
+                        {% include "pos/partials/_settings_row.html" with field=system_form.stock_default_unit %}
+                    </div>
+                </section>
+                {% endif %}
 
                 <section class="k-section">
                     <div class="k-section-head"><h3 class="k-section-title">At the till</h3></div>
@@ -139,7 +150,13 @@
                         {% include "pos/partials/_settings_switch.html" with field=system_form.allow_price_override copy="Lets the operator change the unit price at the cart for a negotiated price." %}
                         {% include "pos/partials/_settings_switch.html" with field=system_form.allow_line_discount copy="Lets the operator discount one line. The minimum margin still applies." %}
                         {% include "pos/partials/_settings_switch.html" with field=system_form.allow_zero_total_sales copy="Lets a sale close at a total of zero, such as a full discount or a giveaway. The stock still leaves and its cost is recorded." %}
+                        {% if feature_modules.schemes %}{% include "pos/partials/_settings_switch.html" with field=system_form.allow_remove_free_goods copy="Lets the cashier take the free goods of a scheme off a bill, for a customer who does not want them. Off, free goods always go with the line that earned them." %}{% endif %}
                     </div>
+                    {% if feature_modules.parties %}
+                    <div class="k-form-grid set-credit-limit">
+                        {% include "pos/partials/_settings_row.html" with field=system_form.credit_limit_action %}
+                    </div>
+                    {% endif %}
                 </section>
 
                 <section class="k-section">
@@ -225,6 +242,21 @@
                         <span class="set-save-note" data-set-dirty>Changes not saved yet.</span>
                     </div>
                 </form>
+                {% with review_state=review_tool_state %}
+                <section class="k-section" id="review-notes-switch">
+                    <div class="k-section-head"><h3 class="k-section-title">Review notes</h3></div>
+                    <div class="set-toggles">
+                        <div class="set-toggle">
+                            <i class="bi bi-chat-square-text set-toggle-icon" aria-hidden="true"></i>
+                            <div class="set-toggle-text">
+                                <span class="set-toggle-name">Comment tool</span>{% if review_state.enabled %}<span class="k-badge k-badge--green">On</span>{% else %}<span class="k-badge">Off</span>{% endif %}
+                                <p class="set-toggle-note">Lets testers pin a note on any part of any screen. Switch it on or off and read the notes on the review page.</p>
+                            </div>
+                            <a href="{% url 'review_notes' %}" class="btn btn-sm btn-outline-secondary">Review notes</a>
+                        </div>
+                    </div>
+                </section>
+                {% endwith %}
             </div>
         </div>
 

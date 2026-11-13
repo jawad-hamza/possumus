@@ -1,0 +1,47 @@
+{% extends "pricing/_base.html" %}
+{% block title %}Price lists{% endblock %}
+{% block page_title %}Price lists{% endblock %}
+{% block page_help %}Trade prices for some customers, or for every customer on a route. A customer buys at their own list first, then their route's list, then the product's sale price. The minimum margin still applies.{% endblock %}
+{% block page_actions %}{% if can_manage %}<a href="{% url 'pricing_price_list_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary" data-k-key="F2" data-k-key-label="Add a price list"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add price list</a>{% endif %}{% if nav_access.reports %}<a href="{% url 'report_price_lists' %}" class="btn btn-outline-secondary" data-tip="Every list price beside the product price, with CSV export"><i class="bi bi-table" aria-hidden="true"></i> Price list report</a>{% endif %}{% endblock %}
+
+{% block pricing_content %}
+<section class="k-section" aria-labelledby="price-lists-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="price-lists-title">All price lists</h2>
+    </div>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack b-index">
+            <thead>
+                <tr>
+                    <th scope="col" data-k="what">Name</th>
+                    <th scope="col" class="k-num" data-k="amount">Products</th>
+                    <th scope="col" class="k-num" data-k="meta">Customers</th>
+                    <th scope="col" class="k-num" data-k="more">Routes</th>
+                    <th scope="col" data-k="flag">Status</th>
+                    <th scope="col" data-k="hide"><span class="visually-hidden">Edit</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in lists %}
+                <tr data-rf-row="{{ row.id }}" id="touched-{{ row.id }}">
+                    <td class="b-stack-title" data-k="what"><a href="{% url 'pricing_price_list_detail' row.id %}" class="b-index-name">{{ row.name }}</a>{% if row.notes %}<span class="st-sub">{{ row.notes }}</span>{% endif %}</td>
+                    <td class="k-num" data-label="Products" data-k="amount">{{ row.item_count }}</td>
+                    <td class="k-num" data-label="Customers" data-k="meta">{{ row.customer_count }}</td>
+                    <td class="k-num" data-label="Routes" data-k="more">{{ row.route_count }}</td>
+                    <td data-label="Status" data-k="flag">{% if row.is_active %}<span class="k-badge k-badge--green">In use</span>{% else %}<span class="k-badge">Switched off</span>{% endif %}</td>
+                    <td class="text-end" data-k="hide">{% if can_manage %}<span class="k-row-actions"><a href="{% url 'pricing_price_list_edit' row.id %}?next={{ request.get_full_path|urlencode }}" class="k-icon-btn" aria-label="Rename {{ row.name }}" data-tip="Rename or switch off"><i class="bi bi-pencil" aria-hidden="true"></i></a></span>{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="6" class="k-empty" data-k="note">
+                        <i class="bi bi-card-checklist" aria-hidden="true"></i>
+                        <p class="k-empty-title">No price lists yet.</p>
+                        {% if can_manage %}<a class="btn btn-primary" href="{% url 'pricing_price_list_add' %}">Add price list</a>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}

@@ -1,12 +1,18 @@
 from django.conf import settings
 from django.contrib import admin
 from django.urls import include, path, re_path
-from django.views.static import serve as serve_media_file
+
+from accounts.receipt_views import serve_public_media
 
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    # Review notes: the Comment tool's API and the owner's private list of notes.
+    path("review/", include("review.urls")),
     path("", include("pos.urls")),
+    path("distribution/", include("distribution.urls")),
+    # Not "pricing/": the public plan checkout pages already live there.
+    path("trade/", include("pricing.urls")),
     path("api/", include("api.urls")),
 ]
 
@@ -18,7 +24,8 @@ if settings.SERVE_MEDIA_FILES:
         0,
         re_path(
             rf"^{media_prefix}/(?P<path>.*)$",
-            serve_media_file,
+            # Everything under MEDIA_ROOT except bank receipts, which need a sign-in and an access check.
+            serve_public_media,
             {"document_root": settings.MEDIA_ROOT},
         ),
     )

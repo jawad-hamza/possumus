@@ -15,6 +15,8 @@ REF_MODEL_LABELS = {
     "MoneyTransfer": "Transfers between cash and bank",
     "SaleReturn": "Sale returns",
     "PurchaseReturn": "Purchase returns",
+    "Builty": "Freight (builty)",
+    "BuiltyReversal": "Freight (builty)",
     "StockAdjustment": "Stock adjustments",
     "ExpensePayment": "Expense bill payments",
     "Settlement": None,  # receipt/payment voucher types already say it

@@ -993,6 +993,36 @@ textarea.form-control[rows="10"] {
     font-size: var(--k-text-sm);
 }
 
+/* the proof of a bank payment: a quiet link on its own line beside the entry it belongs to */
+.k-receipt-link {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    width: fit-content;
+    margin-top: 2px;
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+dd > .k-receipt-link,
+.text-end > .k-receipt-link,
+.k-num > .k-receipt-link {
+    margin-left: auto;
+}
+
+.k-receipt-none {
+    color: var(--k-ink-soft);
+    font-weight: 400;
+}
+
+@media print {
+    .k-receipt-link,
+    .k-receipt-fact {
+        display: none;
+    }
+}
+
 fieldset {
     min-width: 0;
     margin: 0;

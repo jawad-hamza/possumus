@@ -5,8 +5,9 @@ from rest_framework.permissions import BasePermission, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 
-from accounts.models import BankAccount
+from accounts.models import BankAccount, Settlement
 from accounts.services.audit import record_audit
+from accounts.services.bank_receipts import UPLOAD_FIELD, attach_receipt, mark_statement_rows, request_upload
 from accounts.services.party_statement import get_party_statement, get_unified_party_statement
 from accounts.services.settlements import create_payment, create_receipt
 from api.serializers import PartyStatementQuerySerializer, PartyStatementSerializer, SettlementCreateSerializer
@@ -88,6 +89,8 @@ class PartyStatementAPIView(APIView):
             payload["limit"] = limit
             payload["offset"] = offset
             payload["rows"] = rows[offset : offset + limit]
+        # Each row says whether its bank payment carries a receipt, and where that receipt is shown.
+        mark_statement_rows(payload["rows"], request.user)
         return Response(payload)
 
 
@@ -112,6 +115,11 @@ class SettlementAPIView(APIView):
             if bank_account is None:
                 return Response({"error": "Bank ledger not found"}, status=status.HTTP_404_NOT_FOUND)
 
+        # A bank settlement carries its receipt (sent as multipart); a cash one carries none.
+        bank_receipt, receipt_problem = request_upload(request, bank_payment=payment_method == Settlement.BANK)
+        if receipt_problem:
+            return Response({UPLOAD_FIELD: [receipt_problem]}, status=status.HTTP_400_BAD_REQUEST)
+
         # The money posting and its audit trail succeed or fail together.
         try:
             with transaction.atomic():
@@ -128,6 +136,8 @@ class SettlementAPIView(APIView):
                     voucher = create_payment(party=party, amount=amount, payment_method=payment_method, bank_account=bank_account)
                     action, verb = "settlement_payment_created", "Payment to"
 
+                if bank_receipt:
+                    attach_receipt(Settlement.objects.get(pk=voucher.ref_id), bank_receipt, actor=request.user, audit=False)
                 record_audit(
                     action=action,
                     description=f"{verb} {party} recorded through the API.",

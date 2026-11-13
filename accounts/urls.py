@@ -1,6 +1,6 @@
 from django.urls import path
 
-from . import report_views, views
+from . import receipt_views, report_views, views
 
 
 urlpatterns = [
@@ -10,6 +10,8 @@ urlpatterns = [
     path("expenses/", views.expense_list, name="expense_list"),
     path("ajax/quick/expense-types/", views.quick_create_expense_type, name="quick_create_expense_type"),
     path("ajax/quick/bank-accounts/", views.quick_create_bank_account, name="quick_create_bank_account"),
+    path("receipts/<slug:kind>/<int:pk>/", receipt_views.bank_receipt, name="bank_receipt"),
+    path("receipts/<slug:kind>/<int:pk>/file/", receipt_views.bank_receipt_file, name="bank_receipt_file"),
     path("books-lock/", report_views.books_lock_update, name="books_lock_update"),
     path("trial-balance/", report_views.trial_balance_view, name="trial_balance"),
     path("profit-loss/", report_views.profit_loss_view, name="profit_loss"),

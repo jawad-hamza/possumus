@@ -23,6 +23,44 @@ def quantize_qty(value):
     return Decimal(str(value if value not in (None, "") else 0)).quantize(QTY_PLACES, rounding=ROUND_HALF_UP)
 
 
+# Cost and price of ONE base unit (a piece) keep six places, so a carton price divided
+# over its pieces multiplies back to the same carton price. Line money stays two places.
+PRICE_PLACES = Decimal("0.000001")
+
+
+def quantize_price(value):
+    return Decimal(value).quantize(PRICE_PLACES, rounding=ROUND_HALF_UP)
+
+
+# Packaging: a carton holds boxes, a box holds pieces. Stock is always counted in the
+# base unit (the piece); the larger levels are ways of buying, selling and showing it.
+PACK_CARTON = "carton"
+PACK_BOX = "box"
+PACK_PIECE = "piece"
+PACK_LEVELS = (PACK_CARTON, PACK_BOX, PACK_PIECE)  # largest first
+PACK_LEVEL_CHOICES = (
+    (PACK_CARTON, "Carton"),
+    (PACK_BOX, "Box"),
+    (PACK_PIECE, "Piece"),
+)
+PACK_NAMES = {PACK_CARTON: "Carton", PACK_BOX: "Box", PACK_PIECE: "Piece"}
+PACK_SHORT_LABELS = {PACK_CARTON: "Ctn", PACK_BOX: "Box"}
+PACK_PLURALS = {PACK_CARTON: "cartons", PACK_BOX: "boxes", PACK_PIECE: "pieces"}
+ONE = Decimal("1")
+
+
+def normalize_pack_level(value, default=PACK_PIECE):
+    value = (value or "").strip().lower() if isinstance(value, str) else value
+    return value if value in PACK_LEVELS else default
+
+
+def packaging_enabled():
+    """Cartons and boxes are a switchable feature module; off means every product is plain pieces."""
+    from pos.services.modules import module_enabled
+
+    return module_enabled("packaging")
+
+
 def trial_days():
     """Length of the free trial for this install; TRIAL_DAYS in settings, 10 by default."""
     try:
@@ -101,11 +139,19 @@ class Brand(models.Model):
         return self.name
 
 
+# Routes and order bookers (the "field_sales" module) are defined beside this file.
+from . import models_field_sales  # noqa: E402
+
+Route = models_field_sales.Route
+OrderBooker = models_field_sales.OrderBooker
+
+
 class Supplier(models.Model):
     name = models.CharField(max_length=100)
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
+    city = models.CharField(max_length=100, blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
 
@@ -216,8 +262,18 @@ class Product(models.Model):
         default=UNIT_PIECE,
         help_text="Prices, cost and stock are all per this unit.",
     )
-    cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    price = models.DecimalField(max_digits=10, decimal_places=2, help_text="Selling price")
+    # Packaging. 1 means the level does not exist: 12 boxes of 1 piece is a carton of 12 pieces.
+    pieces_per_box = models.PositiveIntegerField(
+        default=1,
+        help_text="How many pieces one box holds. Leave at 1 when the product has no boxes.",
+    )
+    boxes_per_carton = models.PositiveIntegerField(
+        default=1,
+        help_text="How many boxes one carton holds (or pieces, when there are no boxes). Leave at 1 for no cartons.",
+    )
+    # Per base unit (one piece), six places: see quantize_price.
+    cost_price = models.DecimalField(max_digits=16, decimal_places=6, default=0)
+    price = models.DecimalField(max_digits=16, decimal_places=6, help_text="Selling price")
     markup_percent = models.DecimalField(
         max_digits=6,
         decimal_places=2,
@@ -226,13 +282,15 @@ class Product(models.Model):
         help_text="Set the sale price as cost plus this percentage. Leave blank to type the price yourself.",
     )
     markup_amount = models.DecimalField(
-        max_digits=10,
-        decimal_places=2,
+        max_digits=16,
+        decimal_places=6,
         null=True,
         blank=True,
         help_text="Set the sale price as cost plus this fixed amount. Leave blank to type the price yourself.",
     )
     minimum_margin_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    # Retail price (MRP) printed on the pack, per base unit like price. Shown, never charged.
+    retail_price = models.DecimalField(max_digits=16, decimal_places=6, null=True, blank=True)
     stock = models.DecimalField(max_digits=12, decimal_places=3, default=0)
     track_stock = models.BooleanField(
         default=True,
@@ -290,8 +348,49 @@ class Product(models.Model):
         if self.markup_percent is not None:
             return f"Cost + {Decimal(self.markup_percent).normalize():f}%"
         if self.markup_amount is not None:
+            if self.has_packaging:
+                top = self.top_pack_level
+                amount = quantize_money(Decimal(self.markup_amount) * self.pack_factor(top))
+                return f"Cost + {amount} / {self.pack_label(top)}"
             return f"Cost + {quantize_money(self.markup_amount)}"
         return ""
+
+    @property
+    def is_packed(self):
+        """Packaging figures are filled in, whether or not the module is switched on."""
+        return int(self.pieces_per_box or 1) > 1 or int(self.boxes_per_carton or 1) > 1
+
+    def quantize_unit_money(self, value):
+        """Cost or price of one base unit: six places for a packed product, plain money otherwise."""
+        return quantize_price(value) if self.is_packed else quantize_money(value)
+
+    @property
+    def top_pack_label(self):
+        return self.pack_label(self.top_pack_level)
+
+    @property
+    def top_pack_price(self):
+        return self.pack_price(self.top_pack_level)
+
+    @property
+    def top_pack_cost(self):
+        return self.pack_cost(self.top_pack_level)
+
+    @property
+    def top_pack_minimum_price(self):
+        return self.minimum_sale_price_for_cost(self.top_pack_cost)
+
+    @property
+    def pack_price_list(self):
+        """Price and cost at every level, largest first, for the product page and the purchase hints."""
+        return [
+            {
+                **level,
+                "price": self.pack_price(level["code"]),
+                "cost": self.pack_cost(level["code"]),
+            }
+            for level in self.pack_levels
+        ]
 
     @property
     def allows_fractional_quantity(self):
@@ -301,30 +400,165 @@ class Product(models.Model):
     def quantity_step(self):
         return "0.001" if self.allows_fractional_quantity else "1"
 
+    # ------------------------------------------------------------------ packaging
+    def _raw_pack_factor(self, level):
+        """Base units in one unit of this level, whatever the module switch says."""
+        per_box = max(int(self.pieces_per_box or 1), 1)
+        per_carton = max(int(self.boxes_per_carton or 1), 1)
+        if level == PACK_CARTON:
+            return Decimal(per_box * per_carton)
+        if level == PACK_BOX:
+            return Decimal(per_box)
+        return ONE
+
+    @property
+    def pack_levels(self):
+        """The levels this product really has, largest first: [{"code", "name", "label", "factor"}, ...].
+
+        The piece (the base unit) is always there. A level whose count is 1 does not exist.
+        """
+        levels = []
+        if packaging_enabled():
+            if int(self.boxes_per_carton or 1) > 1:
+                levels.append(PACK_CARTON)
+            if int(self.pieces_per_box or 1) > 1:
+                levels.append(PACK_BOX)
+        levels.append(PACK_PIECE)
+        return [
+            {
+                "code": level,
+                "name": PACK_NAMES[level] if level != PACK_PIECE else self.get_unit_display(),
+                "label": self.pack_label(level),
+                "factor": self._raw_pack_factor(level) if level != PACK_PIECE else ONE,
+            }
+            for level in levels
+        ]
+
+    @property
+    def pack_level_codes(self):
+        return [level["code"] for level in self.pack_levels]
+
+    @property
+    def has_packaging(self):
+        return len(self.pack_levels) > 1
+
+    @property
+    def top_pack_level(self):
+        """The largest level: the one cost and price are typed in (the carton, when there is one)."""
+        return self.pack_levels[0]["code"]
+
+    def resolve_pack_level(self, preferred=None):
+        """The preferred level when the product has it, otherwise the next smaller one it does have."""
+        available = self.pack_level_codes
+        preferred = normalize_pack_level(preferred, default=available[0])
+        for level in PACK_LEVELS[PACK_LEVELS.index(preferred):]:
+            if level in available:
+                return level
+        return PACK_PIECE
+
+    def pack_factor(self, level):
+        """Base units in one unit of the level; 1 for a level this product does not have."""
+        level = normalize_pack_level(level)
+        if level == PACK_PIECE or level not in self.pack_level_codes:
+            return ONE
+        return self._raw_pack_factor(level)
+
+    def pack_label(self, level):
+        """Short unit word for a quantity: "Ctn", "Box", or the product's own unit ("pcs", "kg")."""
+        return PACK_SHORT_LABELS.get(normalize_pack_level(level), self.unit or self.UNIT_PIECE)
+
+    def pack_price(self, level):
+        """Sale price of one unit of the level, as line money (two places)."""
+        return quantize_money(Decimal(self.price or 0) * self.pack_factor(level))
+
+    def pack_retail_price(self, level):
+        """Retail price (MRP) of one unit of the level, or None when the product has none."""
+        if self.retail_price is None:
+            return None
+        return quantize_money(Decimal(self.retail_price) * self.pack_factor(level))
+
+    def pack_cost(self, level):
+        """Cost of one unit of the level, as line money (two places)."""
+        return quantize_money(Decimal(self.cost_price or 0) * self.pack_factor(level))
+
+    def pack_cost_exact(self, level):
+        """Cost of one unit of the level at six places, for a sale line's cost snapshot."""
+        return quantize_price(Decimal(self.cost_price or 0) * self.pack_factor(level))
+
+    def to_base_quantity(self, quantity, level):
+        return quantize_qty(Decimal(quantity or 0) * self.pack_factor(level))
+
+    def split_quantity(self, quantity, top_level=None):
+        """Break a base quantity into whole packs: [(level, count), ...] largest first, zero counts left out."""
+        remaining = abs(quantize_qty(quantity))
+        top = self.resolve_pack_level(top_level) if top_level else self.top_pack_level
+        parts = []
+        for level in self.pack_levels:
+            code = level["code"]
+            if PACK_LEVELS.index(code) < PACK_LEVELS.index(top):
+                continue
+            if code == PACK_PIECE:
+                if remaining > 0:
+                    parts.append((code, remaining))
+                continue
+            count = (remaining // level["factor"]).to_integral_value()
+            if count > 0:
+                parts.append((code, count))
+                remaining = quantize_qty(remaining - count * level["factor"])
+        return parts
+
+    def format_quantity(self, quantity, top_level=None):
+        """A base quantity in packs: "12 Ctn 3 Box 5 pcs" (or "147 Box 5 pcs" from the box down)."""
+        quantity = quantize_qty(quantity)
+        parts = self.split_quantity(quantity, top_level)
+        if not parts:
+            top = self.resolve_pack_level(top_level) if top_level else self.top_pack_level
+            return f"0 {self.pack_label(top)}"
+        text = " ".join(f"{format_qty(count)} {self.pack_label(level)}" for level, count in parts)
+        return f"-{text}" if quantity < 0 else text
+
+    @property
+    def packing_display(self):
+        """"1 Ctn = 12 Box = 144 pcs"; empty for a product with no packaging."""
+        levels = self.pack_levels
+        if len(levels) < 2:
+            return ""
+        top = levels[0]["factor"]
+        return " = ".join(f"{format_qty(top / level['factor'])} {level['label']}" for level in levels)
+
     @property
     def stock_display(self):
         if not self.track_stock:
             return "Not tracked"
-        return f"{format_qty(self.stock)} {self.unit}"
+        return self.format_quantity(self.stock)
 
-    def validate_quantity(self, quantity):
-        """Return an error message when the quantity does not suit this product's unit."""
+    def validate_quantity(self, quantity, level=PACK_PIECE):
+        """Return an error message when the quantity does not suit this product's unit (or pack level)."""
         quantity = quantize_qty(quantity)
         if quantity <= 0:
             return "Quantity must be greater than zero."
+        level = normalize_pack_level(level)
+        if level != PACK_PIECE and self.pack_factor(level) > 1:
+            if quantity != quantity.to_integral_value():
+                return f"{self.display_name} is counted in whole {PACK_PLURALS[level]}. Switch the unit to sell less."
+            return ""
         if not self.allows_fractional_quantity and quantity != quantity.to_integral_value():
             return f"{self.display_name} is sold in whole {self.get_unit_display().lower()} units."
         return ""
 
-    def price_for_cost(self, cost_price=None):
-        """Sale price from the markup (a percentage or a fixed amount on cost); None when typed by hand."""
+    def price_for_cost(self, cost_price=None, factor=ONE):
+        """Sale price from the markup (a percentage or a fixed amount on cost); None when typed by hand.
+
+        ``cost_price`` may be the cost of a whole pack: pass that pack's ``factor`` so a fixed
+        amount, which is set per base unit, is added once for every piece in the pack.
+        """
         if self.markup_percent is None and self.markup_amount is None:
             return None
         cost = Decimal(cost_price if cost_price is not None else self.cost_price or 0)
         if self.markup_percent is not None:
             multiplier = Decimal("1") + (Decimal(self.markup_percent) / Decimal("100"))
             return quantize_money(cost * multiplier)
-        return quantize_money(cost + Decimal(self.markup_amount))
+        return quantize_money(cost + Decimal(self.markup_amount) * Decimal(factor or 1))
 
     def minimum_markup_amount_for_cost(self, cost_price=None):
         """The smallest fixed amount on this cost that still keeps the minimum margin."""
@@ -386,6 +620,32 @@ class Product(models.Model):
             errors["price"] = "Sale price cannot be negative."
         if Decimal(self.minimum_margin_percent or 0) < 0:
             errors["minimum_margin_percent"] = "Minimum margin cannot be negative."
+        if int(self.pieces_per_box or 0) < 1:
+            errors["pieces_per_box"] = "Enter 1 or more. 1 means the product has no boxes."
+        if int(self.boxes_per_carton or 0) < 1:
+            errors["boxes_per_carton"] = "Enter 1 or more. 1 means the product has no cartons."
+        if (
+            "pieces_per_box" not in errors
+            and int(self.pieces_per_box or 1) > 1
+            and self.unit == "box"
+        ):
+            # How a product is sold is chosen per line (carton, box or piece); the packing only
+            # has to be known. A product packed in boxes is counted in its pieces.
+            self.unit = self.UNIT_PIECE
+
+        # The pricing rules are checked at the level prices are typed in (the carton when the
+        # product has one), in line money. With no packaging that is the plain unit, as before.
+        factor = self.pack_factor(self.top_pack_level) if not errors else ONE
+        pack_cost = quantize_money(Decimal(self.cost_price or 0) * factor)
+        minimum_pack_price = self.minimum_sale_price_for_cost(pack_cost)
+        pack_label = f" a {PACK_NAMES[self.top_pack_level].lower()}" if factor > 1 else ""
+
+        def price_from_markup():
+            return self.price_for_cost(pack_cost, factor)
+
+        def store_pack_price(pack_price):
+            self.price = self.quantize_unit_money(Decimal(pack_price) / factor)
+
         if self.markup_percent is not None and self.markup_amount is not None:
             errors["markup_amount"] = "Use a percentage or an amount on cost, not both."
         elif self.markup_percent is not None:
@@ -394,24 +654,23 @@ class Product(models.Model):
             elif Decimal(self.markup_percent) < Decimal(self.minimum_margin_percent or 0):
                 errors["markup_percent"] = "Markup cannot be lower than the minimum margin."
             elif Decimal(self.cost_price or 0) > 0:
-                self.price = self.price_for_cost()
+                store_pack_price(price_from_markup())
         elif self.markup_amount is not None:
             if Decimal(self.markup_amount) < 0:
                 errors["markup_amount"] = "The amount added on cost cannot be negative."
             elif Decimal(self.cost_price or 0) > 0:
-                if self.price_for_cost() < self.minimum_sale_price:
+                if price_from_markup() < minimum_pack_price:
                     errors["markup_amount"] = (
-                        f"Add at least {self.minimum_markup_amount_for_cost()} on this cost to keep the "
-                        f"minimum margin (lowest sale price {self.minimum_sale_price})."
+                        f"Add at least {quantize_money(minimum_pack_price - pack_cost)}{pack_label} on this cost to keep the "
+                        f"minimum margin (lowest sale price {minimum_pack_price}{pack_label})."
                     )
                 else:
-                    self.price = self.price_for_cost()
+                    store_pack_price(price_from_markup())
 
         if "markup_amount" not in errors and Decimal(self.price or 0) and Decimal(self.cost_price or 0):
-            minimum_sale_price = self.minimum_sale_price
-            if Decimal(self.price) < minimum_sale_price:
+            if quantize_money(Decimal(self.price) * factor) < minimum_pack_price:
                 errors["price"] = (
-                    f"Sale price must be at least {minimum_sale_price} to keep the minimum margin."
+                    f"Sale price must be at least {minimum_pack_price}{pack_label} to keep the minimum margin."
                 )
 
         self.variant_label = (self.variant_label or "").strip()
@@ -433,6 +692,28 @@ class Customer(models.Model):
     phone = models.CharField(max_length=20, blank=True)
     email = models.EmailField(blank=True)
     address = models.TextField(blank=True)
+    city = models.CharField(max_length=100, blank=True)
+    route = models.ForeignKey(
+        "pos.Route",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="customers",
+    )
+    # The order booker who normally serves this customer; each sale keeps its own copy.
+    order_booker = models.ForeignKey(
+        "pos.OrderBooker",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="customers",
+    )
+    # The most this customer may owe. Empty means no limit.
+    credit_limit = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
+    # Trade prices this customer buys at; empty means the route's list, then the product price.
+    price_list = models.ForeignKey(
+        "pricing.PriceList", null=True, blank=True, on_delete=models.SET_NULL, related_name="customers"
+    )
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(default=timezone.now)
 
@@ -474,12 +755,28 @@ class Sale(models.Model):
         blank=True,
         related_name="sales_made",
     )
+    # Copied from the customer when the sale is made; sales from before order bookers stay empty.
+    order_booker = models.ForeignKey(
+        "pos.OrderBooker",
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="sales",
+    )
     is_credit = models.BooleanField(default=False, help_text="Sale on credit")
     payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default=CASH)
     bank_account = models.ForeignKey("accounts.BankAccount", null=True, blank=True, on_delete=models.PROTECT, related_name="sales")
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     created_at = models.DateTimeField(auto_now_add=True)
-    discount_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    # The percentage every calculation uses. Ten decimals, so a discount typed as cash converts to a
+    # rate that gives the same amount back to the paisa (see pos/services/discounts.py).
+    discount_rate = models.DecimalField(max_digits=13, decimal_places=10, default=0)
+    # How the cashier typed it: a percentage (discount_value mirrors the rate) or a cash amount.
+    DISCOUNT_PERCENT = "percent"
+    DISCOUNT_AMOUNT = "amount"
+    DISCOUNT_TYPE_CHOICES = ((DISCOUNT_PERCENT, "Percentage"), (DISCOUNT_AMOUNT, "Cash amount"))
+    discount_type = models.CharField(max_length=10, choices=DISCOUNT_TYPE_CHOICES, default=DISCOUNT_PERCENT)
+    discount_value = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     tax_rate = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     tax_mode = models.CharField(max_length=20, choices=TAX_MODE_CHOICES, default=TAX_MODE_MANUAL)
     tax_label = models.CharField(max_length=30, default="GST")
@@ -517,6 +814,8 @@ class Sale(models.Model):
 
         if paid_amount < 0:
             errors["paid_amount"] = "Paid amount cannot be negative."
+        if self.safe_decimal(self.discount_value) < 0:
+            errors["discount_value"] = "A discount cannot be less than zero."
         if self.is_credit or self.payment_method == self.CASH:
             self.bank_account = None
 
@@ -579,6 +878,13 @@ class Sale(models.Model):
         discount_rate = min(max(self.safe_decimal(self.discount_rate), Decimal("0")), Decimal("100"))
         discount_amount = subtotal * (discount_rate / Decimal("100"))
         after_discount = subtotal - discount_amount
+        if self.discount_type == self.DISCOUNT_AMOUNT:
+            # Typed as cash: the amount stays what was typed, and the rate is what it comes to on these lines.
+            from pos.services.discounts import cash_discount_on
+
+            discount_amount, self.discount_rate = cash_discount_on(self.discount_value, subtotal)
+            after_discount = subtotal - discount_amount
+            self.save(update_fields=["discount_rate"])
         if self.tax_mode == self.TAX_MODE_CATEGORY:
             tax_amount = self._category_tax_amount(items, discount_amount, payment_method=self.payment_method)
             self.tax_rate = Decimal("0")
@@ -595,13 +901,47 @@ class Sale(models.Model):
 class SaleItem(models.Model):
     sale = models.ForeignKey(Sale, related_name="items", on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    # Quantity, price and cost are all per the unit the line was sold in (unit_level):
+    # 5 cartons at 1,000. unit_factor is how many base units one of them was at the time.
     quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    unit_level = models.CharField(max_length=10, choices=PACK_LEVEL_CHOICES, default=PACK_PIECE)
+    unit_factor = models.DecimalField(max_digits=12, decimal_places=3, default=1)
     original_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     price = models.DecimalField(max_digits=10, decimal_places=2)
     discount_percent = models.DecimalField(max_digits=5, decimal_places=2, default=0)
-    cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    cost_price = models.DecimalField(max_digits=16, decimal_places=6, default=0)
     cash_tax_rate_snapshot = models.DecimalField(max_digits=5, decimal_places=2, default=0)
     bank_tax_rate_snapshot = models.DecimalField(max_digits=5, decimal_places=2, default=0)
+    # Schemes (pricing app). A free-goods line is priced at zero and leaves stock at cost; a line a
+    # scheme discounted keeps the scheme's name and the money it took off (scheme_discount).
+    is_free = models.BooleanField(default=False)
+    scheme = models.ForeignKey(
+        "pricing.Scheme", null=True, blank=True, on_delete=models.SET_NULL, related_name="sale_items"
+    )
+    scheme_name = models.CharField(max_length=100, blank=True)
+    scheme_discount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    @property
+    def base_quantity(self):
+        """The quantity in the product's base unit: what left the shelf."""
+        return quantize_qty(Decimal(self.quantity or 0) * Decimal(self.unit_factor or 1))
+
+    @property
+    def unit_label(self):
+        return self.product.pack_label(self.unit_level)
+
+    @property
+    def quantity_display(self):
+        return f"{format_qty(self.quantity)} {self.unit_label}"
+
+    def _resolve_unit(self, old_item=None):
+        """Fix the level and its factor. A saved line keeps its factor unless the product or unit changed."""
+        self.unit_level = normalize_pack_level(self.unit_level)
+        if old_item is not None and old_item.product_id == self.product_id and old_item.unit_level == self.unit_level:
+            self.unit_factor = old_item.unit_factor
+            return
+        self.unit_level = self.product.resolve_pack_level(self.unit_level)
+        self.unit_factor = self.product.pack_factor(self.unit_level)
 
     def tax_rate_for_payment_method(self, payment_method):
         if payment_method == Sale.BANK:
@@ -637,13 +977,36 @@ class SaleItem(models.Model):
     def line_cost(self):
         return quantize_money(Decimal(self.cost_price) * Decimal(self.quantity))
 
+    @property
+    def rate_note(self):
+        """Why the rate is not the list rate: the scheme that set it, or a price typed by hand."""
+        if self.is_free:
+            return ""
+        if self.scheme_name:
+            return self.scheme_name
+        if self.price != self.original_price:
+            return "Custom price"
+        return ""
+
+    @property
+    def retail_price_each(self):
+        """Retail price (MRP) of one unit of the line, or None."""
+        retail = self.product.retail_price
+        if retail is None:
+            return None
+        return quantize_money(Decimal(retail) * Decimal(self.unit_factor or 1))
+
     def clean(self):
         errors = {}
         self.quantity = quantize_qty(self.quantity)
-        quantity_error = self.product.validate_quantity(self.quantity)
+        quantity_error = self.product.validate_quantity(self.quantity, self.unit_level)
         if quantity_error:
             errors["quantity"] = quantity_error
-        if Decimal(self.price or 0) <= 0:
+        if self.is_free:
+            # Free goods of a scheme: no price, no discount; only their cost leaves the books.
+            if Decimal(self.price or 0) != 0 or Decimal(self.discount_percent or 0) != 0:
+                errors["price"] = "Free goods carry no price or discount."
+        elif Decimal(self.price or 0) <= 0:
             errors["price"] = "Price must be greater than zero."
         if Decimal(self.original_price or 0) < 0:
             errors["original_price"] = "Original price cannot be negative."
@@ -654,8 +1017,10 @@ class SaleItem(models.Model):
         if discount_percent < 0 or discount_percent > 100:
             errors["discount_percent"] = "Discount percent must be between 0 and 100."
 
-        minimum_price = self.product.minimum_sale_price_for_cost(self.cost_price or self.product.cost_price)
-        if self.discounted_unit_price < minimum_price:
+        # Cost and price are both per the line's unit, so the margin rule compares like with like.
+        line_unit_cost = self.cost_price or (Decimal(self.product.cost_price or 0) * Decimal(self.unit_factor or 1))
+        minimum_price = self.product.minimum_sale_price_for_cost(line_unit_cost)
+        if not self.is_free and self.discounted_unit_price < minimum_price:
             errors["price"] = f"Final unit price cannot go below {minimum_price}."
 
         if self.product.track_stock:
@@ -663,8 +1028,8 @@ class SaleItem(models.Model):
             if self.pk:
                 old_item = SaleItem.objects.select_related("product").get(pk=self.pk)
                 if old_item.product_id == self.product_id:
-                    available_stock += old_item.quantity
-            if self.quantity > available_stock:
+                    available_stock += old_item.base_quantity
+            if self.base_quantity > available_stock:
                 errors["quantity"] = f"Not enough stock for {self.product.display_name}."
 
         if errors:
@@ -672,43 +1037,45 @@ class SaleItem(models.Model):
 
     def save(self, *args, **kwargs):
         is_new = self.pk is None
-        if is_new and not self.original_price:
-            self.original_price = self.product.price
-        if is_new and not self.price:
-            self.price = self.product.price
+        old_item = None if is_new else SaleItem.objects.select_related("product").get(pk=self.pk)
+        self._resolve_unit(old_item)
+        if is_new and not self.original_price and not self.is_free:
+            self.original_price = self.product.pack_price(self.unit_level)
+        if is_new and not self.price and not self.is_free:
+            self.price = self.product.pack_price(self.unit_level)
         if is_new and self.discount_percent in (None, ""):
             self.discount_percent = Decimal("0")
         if not self.product.track_stock:
             # Nothing ever entered Inventory for an untracked item, so nothing may leave it as COGS.
             self.cost_price = Decimal("0")
         elif is_new and not self.cost_price:
-            self.cost_price = self.product.cost_price
+            self.cost_price = self.product.pack_cost_exact(self.unit_level)
 
         self.clean()
 
         with transaction.atomic():
             if is_new:
-                self.product.apply_stock_change(-self.quantity)
+                self.product.apply_stock_change(-self.base_quantity)
+            elif old_item.product_id == self.product_id:
+                self.product.apply_stock_change(old_item.base_quantity - self.base_quantity)
             else:
-                old_item = SaleItem.objects.select_related("product").get(pk=self.pk)
-                if old_item.product_id == self.product_id:
-                    self.product.apply_stock_change(old_item.quantity - self.quantity)
-                else:
-                    old_item.product.apply_stock_change(old_item.quantity)
-                    self.product.apply_stock_change(-self.quantity)
+                old_item.product.apply_stock_change(old_item.base_quantity)
+                self.product.apply_stock_change(-self.base_quantity)
 
             super().save(*args, **kwargs)
             self.sale.update_total()
 
     def delete(self, *args, **kwargs):
         with transaction.atomic():
-            self.product.apply_stock_change(self.quantity)
+            self.product.apply_stock_change(self.base_quantity)
             sale = self.sale
             super().delete(*args, **kwargs)
             sale.update_total()
 
     def __str__(self):
-        return f"{self.product.display_name} x {format_qty(self.quantity)}"
+        if self.unit_level == PACK_PIECE:
+            return f"{self.product.display_name} x {format_qty(self.quantity)}"
+        return f"{self.product.display_name} x {self.quantity_display}"
 
 
 class Purchase(models.Model):
@@ -783,9 +1150,70 @@ class Purchase(models.Model):
 class PurchaseItem(models.Model):
     purchase = models.ForeignKey(Purchase, related_name="items", on_delete=models.CASCADE)
     product = models.ForeignKey(Product, on_delete=models.PROTECT)
+    # Quantity, cost and sale price are all per the unit the line was bought in (unit_level):
+    # 10 cartons at 1,000 a carton. unit_factor is how many base units one of them held.
     quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    unit_level = models.CharField(max_length=10, choices=PACK_LEVEL_CHOICES, default=PACK_PIECE)
+    unit_factor = models.DecimalField(max_digits=12, decimal_places=3, default=1)
     cost_price = models.DecimalField(max_digits=10, decimal_places=2)
     sale_price = models.DecimalField(max_digits=10, decimal_places=2, null=True, blank=True)
+
+    # Not a column. Set True on an instance to take the unit's size from the product again on
+    # the next clean/save: the purchase screen does it when the packing was corrected on the line.
+    refresh_unit_factor = False
+
+    @property
+    def base_quantity(self):
+        """The quantity in the product's base unit: what reached the shelf."""
+        return quantize_qty(Decimal(self.quantity or 0) * Decimal(self.unit_factor or 1))
+
+    @property
+    def unit_label(self):
+        return self.product.pack_label(self.unit_level)
+
+    @property
+    def quantity_display(self):
+        return f"{format_qty(self.quantity)} {self.unit_label}"
+
+    @property
+    def base_quantity_display(self):
+        """The line in every smaller unit, for the eye: 5 cartons of 82 boxes of 24 is "410 Box = 9,840 pcs"."""
+
+        def readable(value):
+            whole, dot, fraction = format_qty(value).partition(".")
+            return f"{int(whole):,}{dot}{fraction}"
+
+        parts = [
+            f"{readable(self.base_quantity / level['factor'])} {level['label']}"
+            for level in self.product.pack_levels
+            if level["code"] != PACK_PIECE and level["factor"] < Decimal(self.unit_factor or 1)
+        ]
+        parts.append(f"{readable(self.base_quantity)} {self.product.unit or Product.UNIT_PIECE}")
+        return " = ".join(parts)
+
+    @property
+    def base_unit_cost(self):
+        """What one base unit cost on this line."""
+        return quantize_price(Decimal(self.cost_price or 0) / Decimal(self.unit_factor or 1))
+
+    def _stored(self):
+        if not self.pk:
+            return None
+        return PurchaseItem.objects.select_related("product").filter(pk=self.pk).first()
+
+    def _resolve_unit(self, old_item=None):
+        """Fix the level and its factor. A saved line keeps its factor unless the product or unit changed."""
+        self.unit_level = normalize_pack_level(self.unit_level)
+        if (
+            not self.refresh_unit_factor
+            and old_item is not None
+            and old_item.product_id == self.product_id
+            and old_item.unit_level == self.unit_level
+        ):
+            self.unit_factor = old_item.unit_factor
+            return
+        self.unit_level = self.product.resolve_pack_level(self.unit_level)
+        self.unit_factor = self.product.pack_factor(self.unit_level)
 
     @property
     def line_total(self):
@@ -814,11 +1242,13 @@ class PurchaseItem(models.Model):
                 f"{self.product.display_name} does not track stock, so it cannot be purchased into inventory. "
                 "Record its cost as an expense instead."
             )
+        if self.product_id:
+            self._resolve_unit(self._stored())
         if self.quantity in (None, "") or Decimal(self.quantity) <= 0:
             errors["quantity"] = "Quantity must be greater than zero."
         elif self.product_id:
             self.quantity = quantize_qty(self.quantity)
-            quantity_error = self.product.validate_quantity(self.quantity)
+            quantity_error = self.product.validate_quantity(self.quantity, self.unit_level)
             if quantity_error:
                 errors["quantity"] = quantity_error
         if self.cost_price in (None, "") or Decimal(self.cost_price or 0) <= 0:
@@ -831,7 +1261,7 @@ class PurchaseItem(models.Model):
             and self.product.has_markup
         ):
             # Markup-priced products take their sale price from the new cost.
-            self.sale_price = self.product.price_for_cost(self.cost_price)
+            self.sale_price = self.product.price_for_cost(self.cost_price, self.unit_factor)
             priced_from_markup = True
         if self.sale_price in (None, "") or Decimal(self.sale_price or 0) <= 0:
             errors["sale_price"] = "Sale price must be greater than zero."
@@ -853,19 +1283,26 @@ class PurchaseItem(models.Model):
         if errors:
             raise ValidationError(errors)
 
-    def _average_cost(self, stock_before, old_quantity=ZERO_QTY, old_cost=Decimal("0"), current_cost=None):
-        """Weighted-average cost after this line, so COGS follows what was actually paid."""
+    def _average_cost(self, stock_before, old_quantity=ZERO_QTY, old_cost=Decimal("0"), current_cost=None, old_value=None):
+        """Weighted-average cost of one base unit after this line, so COGS follows what was actually paid.
+
+        ``old_quantity`` is the line as it was saved before, in base units; ``old_value`` is what
+        that line was worth (its own packs x pack cost), or pass ``old_cost`` per base unit.
+        """
         if current_cost is None:
             current_cost = self.product.cost_price
         current_cost = Decimal(current_cost or 0)
         stock_before = max(Decimal(stock_before), ZERO_QTY)
-        value = (stock_before * current_cost) - (Decimal(old_quantity) * Decimal(old_cost)) + (
+        if old_value is None:
+            old_value = Decimal(old_quantity) * Decimal(old_cost)
+        # The line's own money is exact (packs x pack cost); it is never rebuilt from the per-piece cost.
+        value = (stock_before * current_cost) - Decimal(old_value) + (
             Decimal(self.quantity) * Decimal(self.cost_price)
         )
-        units = stock_before - Decimal(old_quantity) + Decimal(self.quantity)
+        units = stock_before - Decimal(old_quantity) + self.base_quantity
         if units <= 0 or value <= 0 or current_cost <= 0:
-            return quantize_money(self.cost_price)
-        return quantize_money(value / units)
+            return self.product.quantize_unit_money(Decimal(self.cost_price) / Decimal(self.unit_factor or 1))
+        return self.product.quantize_unit_money(value / units)
 
     def _sync_product_pricing(self, average_cost):
         updated_fields = []
@@ -875,8 +1312,10 @@ class PurchaseItem(models.Model):
         if Decimal(self.product.cost_price or 0) != average_cost:
             self.product.cost_price = average_cost
             updated_fields.append("cost_price")
-        if Decimal(self.product.price or 0) != Decimal(self.sale_price or 0):
-            self.product.price = self.sale_price
+        # The line's sale price is per its own unit; the product keeps the price of one base unit.
+        base_price = self.product.quantize_unit_money(Decimal(self.sale_price or 0) / Decimal(self.unit_factor or 1))
+        if Decimal(self.product.price or 0) != base_price:
+            self.product.price = base_price
             updated_fields.append("price")
 
         if updated_fields:
@@ -898,7 +1337,7 @@ class PurchaseItem(models.Model):
 
             if is_new:
                 average_cost = self._average_cost(stock_before)
-                self.product.apply_stock_change(self.quantity)
+                self.product.apply_stock_change(self.base_quantity)
             else:
                 old_item = PurchaseItem.objects.select_related("product").get(pk=self.pk)
                 pricing_changed = (
@@ -906,28 +1345,37 @@ class PurchaseItem(models.Model):
                     or Decimal(old_item.cost_price) != Decimal(self.cost_price)
                     or Decimal(old_item.sale_price or 0) != Decimal(self.sale_price or 0)
                     or Decimal(old_item.quantity) != Decimal(self.quantity)
+                    or old_item.unit_level != self.unit_level
+                    or Decimal(old_item.unit_factor) != Decimal(self.unit_factor)
                 )
-                returned = sum((row.quantity for row in self.return_items.all()), ZERO_QTY)
-                if Decimal(self.quantity) < returned:
+                returned = sum((row.base_quantity for row in self.return_items.all()), ZERO_QTY)
+                if self.base_quantity < returned:
+                    returned_text = (
+                        self.product.format_quantity(returned) if self.product.has_packaging else format_qty(returned)
+                    )
                     raise ValidationError(
-                        f"{format_qty(returned)} of {self.product.display_name} was already returned to the supplier."
+                        f"{returned_text} of {self.product.display_name} was already returned to the supplier."
                     )
 
                 if old_item.product_id == self.product_id:
-                    average_cost = self._average_cost(stock_before, old_item.quantity, old_item.cost_price)
+                    average_cost = self._average_cost(
+                        stock_before,
+                        old_item.base_quantity,
+                        old_value=Decimal(old_item.quantity) * Decimal(old_item.cost_price),
+                    )
                     try:
-                        self.product.apply_stock_change(Decimal(self.quantity) - Decimal(old_item.quantity))
+                        self.product.apply_stock_change(self.base_quantity - old_item.base_quantity)
                     except ValidationError as exc:
                         raise ValidationError("Cannot reduce stock below zero") from exc
                 else:
                     try:
-                        old_item.product.apply_stock_change(-old_item.quantity)
+                        old_item.product.apply_stock_change(-old_item.base_quantity)
                     except ValidationError as exc:
                         raise ValidationError(
                             "Cannot change this purchase item because existing stock has already been consumed"
                         ) from exc
                     average_cost = self._average_cost(stock_before)
-                    self.product.apply_stock_change(self.quantity)
+                    self.product.apply_stock_change(self.base_quantity)
 
             super().save(*args, **kwargs)
             # Re-saving an untouched line (e.g. editing only the paid amount of an old
@@ -943,7 +1391,7 @@ class PurchaseItem(models.Model):
             )
         with transaction.atomic():
             try:
-                self.product.apply_stock_change(-self.quantity)
+                self.product.apply_stock_change(-self.base_quantity)
             except ValidationError as exc:
                 raise ValidationError("Cannot reduce stock below zero") from exc
 
@@ -952,7 +1400,9 @@ class PurchaseItem(models.Model):
             purchase.update_total()
 
     def __str__(self):
-        return f"{self.product.display_name} x {format_qty(self.quantity)}"
+        if self.unit_level == PACK_PIECE:
+            return f"{self.product.display_name} x {format_qty(self.quantity)}"
+        return f"{self.product.display_name} x {self.quantity_display}"
 
 
 class PurchaseEditLog(models.Model):
@@ -1544,16 +1994,51 @@ class SystemSettings(models.Model):
     enable_product_expiry = models.BooleanField(default=False)
     expiry_alert_days = models.PositiveIntegerField(default=30)
     allow_credit_sales = models.BooleanField(default=True)
+    # What the till does with a credit sale that would take a customer over their credit limit.
+    CREDIT_LIMIT_REFUSE = "refuse"
+    CREDIT_LIMIT_WARN = "warn"
+    CREDIT_LIMIT_ACTION_CHOICES = (
+        (CREDIT_LIMIT_REFUSE, "Refuse the sale"),
+        (CREDIT_LIMIT_WARN, "Warn only"),
+    )
+    credit_limit_action = models.CharField(
+        max_length=10,
+        choices=CREDIT_LIMIT_ACTION_CHOICES,
+        default=CREDIT_LIMIT_REFUSE,
+        help_text="A credit sale that takes a customer over their credit limit is refused, or only warned about.",
+    )
     allow_price_override = models.BooleanField(default=True)
     allow_line_discount = models.BooleanField(default=True)
     allow_zero_total_sales = models.BooleanField(
         default=False,
         help_text="Let a sale close at a total of zero (a 100% discount or a giveaway).",
     )
+    # Schemes: may the cashier take a free-goods line off the bill?
+    allow_remove_free_goods = models.BooleanField(
+        default=False,
+        help_text="Let the cashier take the free goods of a scheme off a bill.",
+    )
     default_sale_payment_method = models.CharField(
         max_length=10,
         choices=Sale.PAYMENT_METHOD_CHOICES,
         default=Sale.CASH,
+    )
+    # Packaging defaults. A product without the chosen level falls to the next smaller one it has.
+    till_default_unit = models.CharField(
+        max_length=10,
+        choices=PACK_LEVEL_CHOICES,
+        default=PACK_BOX,
+        help_text="The unit a product goes on the bill in. The cashier can change it on the line.",
+    )
+    stock_default_unit = models.CharField(
+        max_length=10,
+        choices=PACK_LEVEL_CHOICES,
+        default=PACK_CARTON,
+        help_text="The unit purchases start in and stock is shown from.",
+    )
+    require_bank_receipt = models.BooleanField(
+        default=True,
+        help_text="Refuse a sale, purchase, party payment or expense paid by bank until its receipt is attached.",
     )
     thermal_printer_width_mm = models.PositiveIntegerField(default=50)
     currency_symbol = models.CharField(max_length=8, default="Rs", help_text="Shown before every amount.")
@@ -1752,7 +2237,10 @@ class SaleReturnItem(models.Model):
     sale_return = models.ForeignKey(SaleReturn, on_delete=models.CASCADE, related_name="items")
     sale_item = models.ForeignKey(SaleItem, on_delete=models.PROTECT, related_name="return_items")
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="sale_return_items")
+    # In the unit the goods came back in, which need not be the unit they were sold in.
     quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    unit_level = models.CharField(max_length=10, choices=PACK_LEVEL_CHOICES, default=PACK_PIECE)
+    unit_factor = models.DecimalField(max_digits=12, decimal_places=3, default=1)
     unit_price = models.DecimalField(max_digits=10, decimal_places=2)
     line_amount = models.DecimalField(max_digits=12, decimal_places=2)
     net_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
@@ -1761,6 +2249,18 @@ class SaleReturnItem(models.Model):
 
     class Meta:
         ordering = ["id"]
+
+    @property
+    def base_quantity(self):
+        return quantize_qty(Decimal(self.quantity or 0) * Decimal(self.unit_factor or 1))
+
+    @property
+    def unit_label(self):
+        return self.product.pack_label(self.unit_level)
+
+    @property
+    def quantity_display(self):
+        return f"{format_qty(self.quantity)} {self.unit_label}"
 
     def __str__(self):
         return f"{self.product.display_name} x {format_qty(self.quantity)}"
@@ -1819,23 +2319,197 @@ class PurchaseReturnItem(models.Model):
     purchase_return = models.ForeignKey(PurchaseReturn, on_delete=models.CASCADE, related_name="items")
     purchase_item = models.ForeignKey(PurchaseItem, on_delete=models.PROTECT, related_name="return_items")
     product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="purchase_return_items")
+    # In the unit the goods went back in, which need not be the unit they were bought in.
     quantity = models.DecimalField(max_digits=12, decimal_places=3)
+    unit_level = models.CharField(max_length=10, choices=PACK_LEVEL_CHOICES, default=PACK_PIECE)
+    unit_factor = models.DecimalField(max_digits=12, decimal_places=3, default=1)
     line_amount = models.DecimalField(max_digits=12, decimal_places=2)
 
     class Meta:
         ordering = ["id"]
 
+    @property
+    def base_quantity(self):
+        return quantize_qty(Decimal(self.quantity or 0) * Decimal(self.unit_factor or 1))
+
+    @property
+    def unit_label(self):
+        return self.product.pack_label(self.unit_level)
+
+    @property
+    def quantity_display(self):
+        return f"{format_qty(self.quantity)} {self.unit_label}"
+
     def __str__(self):
         return f"{self.product.display_name} x {format_qty(self.quantity)}"
 
 
+class Builty(models.Model):
+    """A builty (bilty): the transporter's freight bill for goods received.
+
+    Its amount is shared over the lines of the purchases it covers and added to the cost
+    of those goods; see pos.services.builty for the rule. Once posted it is never edited,
+    only reversed, so every cost it moved can be traced to its voucher.
+    """
+
+    CASH = "cash"
+    BANK = "bank"
+    CREDIT = "credit"
+    PAYMENT_METHOD_CHOICES = (
+        (CASH, "Cash"),
+        (BANK, "Bank"),
+        (CREDIT, "On the transporter's account"),
+    )
+
+    PER_BOX = "box"
+    PER_CARTON = "carton"
+    PER_PIECE = "piece"
+    BY_VALUE = "value"
+    BASIS_CHOICES = (
+        (PER_BOX, "Per box"),
+        (PER_CARTON, "Per carton"),
+        (PER_PIECE, "Per piece"),
+        (BY_VALUE, "By purchase value"),
+    )
+
+    date = models.DateField(default=timezone.localdate)
+    builty_number = models.CharField(max_length=50, blank=True)
+    transporter = models.ForeignKey(
+        Supplier,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="builties",
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_method = models.CharField(max_length=10, choices=PAYMENT_METHOD_CHOICES, default=CASH)
+    bank_account = models.ForeignKey(
+        "accounts.BankAccount",
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="builties",
+    )
+    basis = models.CharField(max_length=10, choices=BASIS_CHOICES, default=PER_BOX)
+    notes = models.TextField(blank=True)
+    purchases = models.ManyToManyField(Purchase, related_name="builties")
+    # What the freight did when it was posted: the part added to stock value and the part
+    # charged to Cost of Goods Sold for goods already gone. They add up to the amount.
+    stock_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    cogs_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    voucher = models.ForeignKey(
+        "accounts.Voucher",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="builties",
+    )
+    created_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="builties_recorded",
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    reversed_at = models.DateTimeField(null=True, blank=True)
+    reversed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="builties_reversed",
+    )
+    reversal_reason = models.CharField(max_length=255, blank=True)
+    reversal_voucher = models.ForeignKey(
+        "accounts.Voucher",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="builty_reversals",
+    )
+    reversal_stock_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    reversal_cogs_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+
+    class Meta:
+        ordering = ["-date", "-id"]
+        indexes = [
+            models.Index(fields=["date"], name="pos_builty_date_idx"),
+        ]
+
+    def __str__(self):
+        return self.display_number
+
+    @property
+    def display_number(self):
+        """"Builty 4417" with the transporter's own number, else "Builty #12"."""
+        return f"Builty {self.builty_number}" if self.builty_number else f"Builty #{self.pk}"
+
+    @property
+    def is_reversed(self):
+        return self.reversed_at is not None
+
+    @property
+    def payment_display(self):
+        if self.payment_method == self.BANK and self.bank_account_id:
+            return f"Bank ({self.bank_account.display_name})"
+        return self.get_payment_method_display()
 
 
+class BuiltyAllocation(models.Model):
+    """One purchase line's share of a builty, and where that share went."""
 
+    COUNTED_AS_VALUE = "value"
+    COUNTED_AS_CHOICES = (*PACK_LEVEL_CHOICES, (COUNTED_AS_VALUE, "Purchase value"))
 
+    builty = models.ForeignKey(Builty, on_delete=models.CASCADE, related_name="allocations")
+    purchase_item = models.ForeignKey(PurchaseItem, on_delete=models.PROTECT, related_name="builty_allocations")
+    product = models.ForeignKey(Product, on_delete=models.PROTECT, related_name="builty_allocations")
+    # What the line was counted in for the split: boxes, cartons or pieces, or its money value.
+    counted_as = models.CharField(max_length=10, choices=COUNTED_AS_CHOICES)
+    units_counted = models.DecimalField(max_digits=16, decimal_places=3)
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    amount_to_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    amount_to_cogs = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    # The product as the builty found it and left it (per base unit).
+    stock_at_posting = models.DecimalField(max_digits=12, decimal_places=3, default=0)
+    cost_before = models.DecimalField(max_digits=16, decimal_places=6, default=0)
+    cost_after = models.DecimalField(max_digits=16, decimal_places=6, default=0)
+    # Filled when the builty is reversed.
+    reversed_to_stock = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    reversed_to_cogs = models.DecimalField(max_digits=12, decimal_places=2, default=0)
 
+    class Meta:
+        ordering = ["id"]
 
+    def __str__(self):
+        return f"{self.builty} -> {self.purchase_item}"
 
+    @property
+    def counted_label(self):
+        """"Box", "Ctn", "pcs" (the product's own unit), or "value"."""
+        if self.counted_as == self.COUNTED_AS_VALUE:
+            return "value"
+        return self.product.pack_label(self.counted_as)
 
+    @property
+    def share_per_unit(self):
+        """The freight on one counted unit (one box, carton or piece), at six places."""
+        units = Decimal(self.units_counted or 0)
+        if self.counted_as == self.COUNTED_AS_VALUE or units <= 0:
+            return None
+        return quantize_price(Decimal(self.amount) / units)
 
+    @property
+    def freight_per_line_unit(self):
+        """This builty's freight on one unit the line was bought in (one carton, box or piece)."""
+        quantity = Decimal(self.purchase_item.quantity or 0)
+        if quantity <= 0:
+            return Decimal("0")
+        return quantize_price(Decimal(self.amount) / quantity)
 
+    @property
+    def landed_unit_cost(self):
+        """Purchase cost of one unit the line was bought in, plus this builty's freight on it."""
+        return quantize_money(Decimal(self.purchase_item.cost_price) + self.freight_per_line_unit)

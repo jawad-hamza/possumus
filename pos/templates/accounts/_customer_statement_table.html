@@ -1,0 +1,53 @@
+{% comment %}
+The customer statement: Date | Reference / description | Qty | Debit | Credit | Balance.
+Oldest entry first under an opening balance row; the balance is signed, so a minus means the
+customer has paid in advance. Needs the context of accounts.services.customer_statement
+(statement_rows, quantity_label, total_quantity, signed_opening, signed_closing) and the ledger totals.
+{% endcomment %}
+{% load currency_tags field_sales_tags bank_receipt_tags %}
+<div class="table-responsive">
+    <table class="k-table k-ledger--stack b-bahi">
+        <thead>
+            <tr>
+                <th scope="col" data-k="meta">Date</th>
+                <th scope="col" data-k="what">Reference / description</th>
+                <th scope="col" class="k-num" data-k="meta">{{ quantity_label }}</th>
+                <th scope="col" class="k-num" data-k="amount" data-k-suffix="Dr">Debit</th>
+                <th scope="col" class="k-num" data-k="amount" data-k-suffix="Cr">Credit</th>
+                <th scope="col" class="k-num" data-k="balance">Balance</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% if page_obj.number == 1 %}{% if filter_start or signed_opening %}
+            <tr class="b-bf">
+                <td colspan="5" class="b-stack-title" data-k="what">Opening balance{% if filter_start %} on {{ start_date|date:"d M Y" }}{% endif %}</td>
+                <td class="k-num b-bal" data-label="Balance" data-k="balance">{{ signed_opening|statement_amount }}</td>
+            </tr>
+            {% endif %}{% endif %}
+            {% mark_ledger_receipts statement_rows %}
+            {% for row in statement_rows %}
+            <tr>
+                <td data-label="Date" data-k="meta">{{ row.date|date:"d M Y" }}</td>
+                <td class="b-particulars" data-label="Reference" data-k="what">{{ row.reference }}{% bank_receipt_link row.receipt %}{% if row.narration %}<small>{{ row.narration }}</small>{% endif %}</td>
+                <td class="k-num" data-label="{{ quantity_label }}" data-k="meta"{% if row.quantity is not None %} data-k-suffix="{{ quantity_label|lower }}"{% endif %}>{% if row.quantity is not None %}{{ row.quantity|qty }}{% endif %}</td>
+                <td class="k-num" data-label="Debit" data-k="amount"{% if row.debit %} data-k-suffix="Dr"{% endif %}>{% if row.debit %}{{ row.debit|statement_amount }}{% endif %}</td>
+                <td class="k-num" data-label="Credit" data-k="amount"{% if row.credit %} data-k-suffix="Cr"{% endif %}>{% if row.credit %}{{ row.credit|statement_amount }}{% endif %}</td>
+                <td class="k-num b-bal" data-label="Balance" data-k="balance">{{ row.signed_balance|statement_amount }}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="6" class="k-empty" data-k="note"><p class="k-empty-title">Nothing was posted for this customer in this period.</p><p>Widen the dates or choose All time. Credit sales, returns, payments and the opening balance are written here.</p></td>
+            </tr>
+            {% endfor %}
+        </tbody>
+        <tfoot>
+            <tr>
+                <td colspan="2" class="b-stack-title" data-k="what">Total for the period</td>
+                <td class="k-num" data-label="{{ quantity_label }}" data-k="meta" data-k-suffix="{{ quantity_label|lower }}">{{ total_quantity|qty }}</td>
+                <td class="k-num" data-label="Debit" data-k="amount" data-k-suffix="Dr">{{ total_debit|statement_amount }}</td>
+                <td class="k-num" data-label="Credit" data-k="amount" data-k-suffix="Cr">{{ total_credit|statement_amount }}</td>
+                <td class="k-num b-bal" data-label="Closing balance" data-k="balance">{{ signed_closing|statement_amount }}</td>
+            </tr>
+        </tfoot>
+    </table>
+</div>

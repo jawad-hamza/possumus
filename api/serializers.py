@@ -34,6 +34,8 @@ class PartyStatementRowSerializer(serializers.Serializer):
     voucher_type = serializers.CharField()
     ref = serializers.CharField()
     document = serializers.CharField(required=False, allow_blank=True)
+    # Goods on the entry (an invoice's total quantity, a return's as a minus); null when it moved none.
+    quantity = serializers.DecimalField(max_digits=15, decimal_places=3, required=False, allow_null=True)
     debit = serializers.DecimalField(max_digits=12, decimal_places=2)
     credit = serializers.DecimalField(max_digits=12, decimal_places=2)
     running_balance = serializers.DecimalField(max_digits=12, decimal_places=2)
@@ -43,8 +45,11 @@ class PartyStatementRowSerializer(serializers.Serializer):
 
 class PartyStatementSerializer(serializers.Serializer):
     party = serializers.CharField()
+    from_date = serializers.DateField(required=False, allow_null=True)
+    to_date = serializers.DateField(required=False, allow_null=True)
     opening_balance = serializers.DecimalField(max_digits=12, decimal_places=2)
     closing_balance = serializers.DecimalField(max_digits=12, decimal_places=2)
+    total_quantity = serializers.DecimalField(max_digits=15, decimal_places=3, required=False)
     balance_type = serializers.CharField()
     rows = PartyStatementRowSerializer(many=True)
 

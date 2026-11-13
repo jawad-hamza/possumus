@@ -12,6 +12,7 @@ from ..services.access import module_access_required, module_disabled_response
 from ..services.modules import REPORT_MODULES, report_enabled
 from ..services.reporting import (
     REPORTS_BY_SLUG,
+    parse_report_period,
     parse_report_range,
     report_csv_response,
     report_filename,
@@ -35,6 +36,8 @@ def analytics_report(request, slug):
     if spec.range_mode == "as_of":
         _, end = parse_report_range(request.GET, None, today)
         start, end = None, end or today
+    elif spec.range_mode == "period":
+        _, start, end = parse_report_period(request.GET, spec.period_codes, today)
     else:
         start, end = parse_report_range(request.GET, today.replace(day=1), today)
 
@@ -45,7 +48,8 @@ def analytics_report(request, slug):
     page = Paginator(report.rows, REPORT_PAGE_SIZE).get_page(request.GET.get("page"))
     extra_params = {item["name"]: item["value"] for item in report.filters}
     context = report_shell_context(
-        request, spec.slug, start=start, end=end, range_mode=spec.range_mode, extra_params=extra_params
+        request, spec.slug, start=start, end=end, range_mode=spec.range_mode, extra_params=extra_params,
+        periods=spec.periods,
     )
     context.update(
         {

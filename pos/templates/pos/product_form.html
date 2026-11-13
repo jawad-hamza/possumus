@@ -10,9 +10,11 @@
 {% block page_actions %}<a href="{{ back_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to products</a>{% endblock %}
 
 {% block content %}
-<form method="post" class="st-form" data-st-entry data-product-form{% if copy_source and not form.is_bound %} data-another-size{% endif %} data-back-url="{{ back_url }}" data-rf-draft="product"{% if form.is_bound %} data-rf-bound{% endif %} data-fractional-units='{% fractional_units_json %}' data-piece-unit="{% piece_unit %}" data-currency="{{ currency_symbol }}">
+<form method="post" class="st-form" data-st-entry data-product-form{% if copy_source and not form.is_bound %} data-another-size{% endif %} data-back-url="{{ back_url }}" data-rf-draft="product"{% if form.is_bound %} data-rf-bound{% endif %} data-fractional-units='{% fractional_units_json %}' data-piece-unit="{% piece_unit %}" data-currency="{{ currency_symbol }}"{% if form.boxes_per_carton %} data-stock-unit="{{ form.default_stock_unit }}"{% endif %}>
     {% csrf_token %}
     {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+    {# Which pack figures were typed over by hand, so a figure merely left on the page is never divided again. #}
+    {% if form.boxes_per_carton %}<input type="hidden" name="pack_money_typed" value="{{ request.POST.pack_money_typed }}" data-pack-typed>{% endif %}
 
     {% if copy_source %}
     <div class="alert alert-info" role="note"><i class="bi bi-info-circle" aria-hidden="true"></i><div>Another size of <strong>{{ copy_source.name }}</strong>. {% if form.variant_label %}Name this size, then type its own SKU, cost and price.{% else %}Put the size in the name, such as &ldquo;{{ copy_source.name }} Large&rdquo;, then type its own cost and price.{% endif %} Each size keeps its own stock.</div></div>
@@ -47,6 +49,21 @@
         </div>
     </section>
 
+    {% if form.boxes_per_carton %}
+    <section class="k-section" aria-labelledby="group-packing">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="group-packing">Packing {% include "pos/partials/_help_tip.html" with tip_id="tipPacking" tip_name="Packing" tip_text="How the product comes packed. Stock is always counted in single pieces; cartons and boxes are ways of buying, selling and showing it. Leave both at 1 for a product that is not packed." %}</h2>
+        </div>
+        <div class="k-form-grid st-packing">
+            <div>{% include "pos/partials/_entry_field.html" with field=form.boxes_per_carton %}</div>
+            <div>{% include "pos/partials/_entry_field.html" with field=form.pieces_per_box %}</div>
+            <div class="st-switch-cell">
+                <div class="st-readout st-pack-line{% if not form.instance.has_packaging %} is-empty{% endif %}" data-pack-line aria-live="polite" aria-label="Packing">{{ form.instance.packing_display|default:"No cartons or boxes" }}</div>
+            </div>
+        </div>
+    </section>
+    {% endif %}
+
     <section class="k-section" aria-labelledby="group-pricing">
         <div class="k-section-head">
             <h2 class="k-section-title" id="group-pricing">Pricing <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Pricing" aria-describedby="tipPricing" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipPricing" role="tooltip" hidden>{% if form.price_by %}Type the sale price, or let it follow the cost: a percentage on cost, or a fixed amount on cost.{% else %}Type the cost and the sale price.{% endif %} The sale price must stay above the minimum margin. Purchase entries can update both cost and sale price.</span></span></h2>
@@ -54,14 +71,15 @@
         <div class="st-pricing">
             <div class="k-form-grid">
                 <div>{% include "pos/partials/_entry_field.html" with field=form.unit %}</div>
-                <div>{% include "pos/partials/_entry_field.html" with field=form.cost_price %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=form.cost_price %}{% if form.boxes_per_carton %}<div class="st-pack-split" data-pack-split="cost_price" hidden></div>{% endif %}</div>
                 {% if form.price_by %}
                 <div>{% include "pos/partials/_entry_field.html" with field=form.price_by %}</div>
                 <div data-price-by-input="percent">{% include "pos/partials/_entry_field.html" with field=form.markup_percent %}</div>
                 <div data-price-by-input="amount">{% include "pos/partials/_entry_field.html" with field=form.markup_amount %}</div>
                 {% endif %}
-                <div>{% include "pos/partials/_entry_field.html" with field=form.price %}</div>
+                <div>{% include "pos/partials/_entry_field.html" with field=form.price %}{% if form.boxes_per_carton %}<div class="st-pack-split" data-pack-split="price" hidden></div>{% endif %}</div>
                 <div>{% include "pos/partials/_entry_field.html" with field=form.minimum_margin_percent %}</div>
+                {% if form.retail_price %}<div>{% include "pos/partials/_entry_field.html" with field=form.retail_price %}</div>{% endif %}
             </div>
             <div class="st-summary" id="pricing-preview" aria-live="polite">
                 <dl class="st-sum" aria-label="Pricing check">
@@ -84,7 +102,7 @@
         </div>
         <div class="k-form-grid">
             {% if form.opening_stock %}
-            <div>{% include "pos/partials/_entry_field.html" with field=form.opening_stock %}</div>
+            <div>{% include "pos/partials/_qty_unit_field.html" with field=form.opening_stock unit_field=form.opening_stock_unit %}</div>
             {% else %}
             <div>
                 <div class="st-field k-form-field">
@@ -93,7 +111,7 @@
                 </div>
             </div>
             {% endif %}
-            <div>{% include "pos/partials/_entry_field.html" with field=form.low_stock_threshold %}</div>
+            <div>{% include "pos/partials/_qty_unit_field.html" with field=form.low_stock_threshold unit_field=form.low_stock_unit %}</div>
             <div>{% include "pos/partials/_entry_field.html" with field=form.location %}</div>
             {% if form.expiry_date %}<div>{% include "pos/partials/_entry_field.html" with field=form.expiry_date %}</div>{% endif %}
             {% if form.track_stock %}<div class="st-switch-cell">{% include "pos/partials/_entry_field.html" with field=form.track_stock %}</div>{% endif %}
@@ -117,7 +135,7 @@
                 <tr{% if sibling.pk == form.instance.pk %} aria-current="true" class="is-selected"{% endif %}>
                     <td>{% if sibling.pk == form.instance.pk %}<strong>{{ sibling.variant_label }}</strong> <span class="k-badge k-badge--blue">this one</span>{% else %}<a href="{% url 'product_edit' sibling.pk %}">{{ sibling.variant_label|default:sibling.name }}</a>{% endif %}</td>
                     <td>{{ sibling.sku }}</td>
-                    <td class="k-num text-end">{{ sibling.price|money }}</td>
+                    <td class="k-num text-end">{{ sibling.top_pack_price|money }}{% if sibling.has_packaging %}<span class="st-sub">per {{ sibling.top_pack_label }}</span>{% endif %}</td>
                     <td class="k-num text-end">{{ sibling.stock_display }}</td>
                 </tr>
                 {% endfor %}

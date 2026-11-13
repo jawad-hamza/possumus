@@ -11,12 +11,14 @@ turnover, turnover_label, returned (optional), settle_title, settle_button, bank
             <li><i class="bi bi-telephone" aria-hidden="true"></i><span class="visually-hidden">Phone </span>{{ party.phone|default:"-" }}</li>
             {% if party.email %}<li><i class="bi bi-envelope" aria-hidden="true"></i><span class="visually-hidden">Email </span>{{ party.email }}</li>{% endif %}
             {% if party.address %}<li><i class="bi bi-geo-alt" aria-hidden="true"></i><span class="visually-hidden">Address </span>{{ party.address }}</li>{% endif %}
+            {% if party.city %}<li><i class="bi bi-pin-map" aria-hidden="true"></i><span class="visually-hidden">City </span>{{ party.city }}</li>{% endif %}
         </ul>
         <ul class="b-leaf-facts">
             <li><strong>{{ total_transactions }}</strong> {% if role == 'customer' %}invoice{{ total_transactions|pluralize }}{% else %}purchase{{ total_transactions|pluralize }}{% endif %}</li>
             <li>{{ turnover_label }} <strong>{{ turnover|money }}</strong>{% if returned %} after {{ returned|money }} returned{% endif %}</li>
             <li>Since <strong>{{ party.created_at|date:"d M Y" }}</strong></li>
         </ul>
+        {% if role == 'customer' %}{% include "parties/_customer_terms.html" with customer=party %}{% endif %}
     </div>
     <div class="b-leaf-balance" aria-live="polite">
         <div class="b-leaf-label">Balance</div>
@@ -28,7 +30,7 @@ turnover, turnover_label, returned (optional), settle_title, settle_button, bank
 <div class="b-grid">
     <section class="k-section" aria-labelledby="leaf-ledger-title">
         <div class="k-section-head">
-            <h2 class="k-section-title" id="leaf-ledger-title">Ledger {% include "pos/partials/_help_tip.html" with tip_id="tipLeafLedger" tip_name="Ledger" tip_text="Every credit sale or purchase, payment and opening balance for this party, newest first. Dr means they owe you; Cr means you owe them." %}</h2>
+            <h2 class="k-section-title" id="leaf-ledger-title">Ledger {% if role == 'customer' %}{% include "pos/partials/_help_tip.html" with tip_id="tipLeafLedger" tip_name="Ledger" tip_text="Every credit sale, return, payment and opening balance of this customer in date order, with the balance after each entry. Qty is the goods on the invoice; a return shows as a minus. A minus balance means the customer has paid in advance." %}{% else %}{% include "pos/partials/_help_tip.html" with tip_id="tipLeafLedger" tip_name="Ledger" tip_text="Every credit sale or purchase, payment and opening balance for this party, newest first. Dr means they owe you; Cr means you owe them." %}{% endif %}</h2>
             <form class="b-range b-no-print" onsubmit="loadStatement(); return false;">
                 <div>
                     <label class="form-label" for="from_date">From</label>
@@ -44,9 +46,14 @@ turnover, turnover_label, returned (optional), settle_title, settle_button, bank
         <div class="table-responsive">
             <table class="k-table k-ledger--stack b-bahi">
                 <thead>
+                    {% if role == 'customer' %}
+                    {# The customer ledger is laid out as a statement: the quantity of goods sits beside the money. #}
+                    <tr><th scope="col" data-k="meta">Date</th><th scope="col" data-k="what">Reference</th><th scope="col" class="k-num" data-k="meta">{{ quantity_label|default:"Qty" }}</th><th scope="col" class="k-num" data-k="amount">Debit</th><th scope="col" class="k-num" data-k="amount">Credit</th><th scope="col" class="k-num" data-k="balance">Balance</th></tr>
+                    {% else %}
                     <tr><th scope="col" data-k="meta">Date</th><th scope="col" data-k="what">Entry</th><th scope="col" class="k-num" data-k="amount">Debit</th><th scope="col" class="k-num" data-k="amount">Credit</th><th scope="col" class="k-num" data-k="balance">Balance</th></tr>
+                    {% endif %}
                 </thead>
-                <tbody id="ledger" aria-busy="true"><tr><td colspan="5" data-k="note"><div class="k-loading">Loading the ledger</div></td></tr></tbody>
+                <tbody id="ledger" aria-busy="true"><tr><td colspan="{% if role == 'customer' %}6{% else %}5{% endif %}" data-k="note"><div class="k-loading">Loading the ledger</div></td></tr></tbody>
                 <tfoot id="ledger_total"></tfoot>
             </table>
         </div>
@@ -77,6 +84,7 @@ turnover, turnover_label, returned (optional), settle_title, settle_button, bank
                     <option value="{{ bank.id }}">{{ bank.display_name }}</option>
                     {% endfor %}
                 </select>
+                {% include "accounts/_settle_receipt_input.html" %}
             </div>
             <div class="k-error" id="settle-error" role="alert" hidden></div>
             <button type="submit" class="btn btn-primary w-100" id="settle-submit">{{ settle_button }}</button>

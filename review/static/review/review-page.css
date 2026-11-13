@@ -1,0 +1,62 @@
+/* The private review page (/review/notes/). */
+.rv-muted { color: var(--k-ink-faint); font-weight: 400; }
+
+.rv-switch .k-section-head { display: flex; align-items: center; gap: var(--k-3); }
+.rv-switch-form { display: flex; flex-wrap: wrap; align-items: center; gap: var(--k-3) var(--k-5); }
+.rv-modes { display: flex; flex-wrap: wrap; gap: var(--k-2) var(--k-5); }
+.rv-mode { display: inline-flex; align-items: center; gap: var(--k-2); margin: 0; cursor: pointer; }
+.rv-mode .form-check-input { margin: 0; }
+.rv-switch-note { margin: var(--k-3) 0 0; font-size: var(--k-text-sm); }
+
+/* the same segmented choice as the books pages */
+.rv-tabs {
+    display: inline-flex;
+    flex-wrap: wrap;
+    gap: 2px;
+    padding: 3px;
+    border-radius: var(--k-radius);
+    background: var(--k-sunk);
+}
+.rv-tabs .btn {
+    min-height: var(--k-control-h-sm);
+    border: 0;
+    border-radius: var(--k-radius-sm);
+    background: transparent;
+    color: var(--k-ink-soft);
+    font-weight: 500;
+}
+.rv-tabs .btn:hover { background: var(--k-panel); color: var(--k-ink); }
+.rv-tabs .btn[aria-pressed="true"] {
+    background: var(--k-panel);
+    color: var(--k-accent-ink);
+    box-shadow: var(--k-shadow-panel), 0 0 0 1px var(--k-border);
+}
+
+.rv-list { margin: 0; padding: 0; list-style: none; }
+.rv-item {
+    padding: var(--k-4) 0;
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+.rv-item:first-child { border-top: 0; padding-top: var(--k-2); }
+.rv-item-top { display: flex; flex-wrap: wrap; align-items: baseline; gap: var(--k-1) var(--k-3); }
+.rv-author { font-weight: 600; color: var(--k-ink-title); }
+.rv-when { color: var(--k-ink-soft); font-size: var(--k-text-sm); font-variant-numeric: tabular-nums; }
+.rv-text {
+    max-width: 72ch;
+    margin: var(--k-2) 0;
+    font-size: var(--k-text-lg);
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+.rv-item.is-resolved .rv-text { color: var(--k-ink-soft); }
+.rv-where { margin: 0; font-size: var(--k-text-sm); color: var(--k-ink-soft); overflow-wrap: anywhere; }
+.rv-where strong { color: var(--k-ink); font-weight: 600; }
+.rv-resolved-by { margin: var(--k-1) 0 0; font-size: var(--k-text-sm); }
+.rv-row { display: flex; flex-wrap: wrap; align-items: center; gap: var(--k-2); margin-top: var(--k-3); }
+.rv-row form { margin: 0; }
+.rv-empty { padding: var(--k-6) var(--k-4); }
+
+@media (max-width: 575.98px) {
+    .rv-tabs { width: 100%; }
+    .rv-tabs .btn { flex: 1 1 auto; min-height: var(--k-control-h); }
+}

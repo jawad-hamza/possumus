@@ -1,0 +1,122 @@
+/* Customers of a distribution business: city, route, order booker, credit limit.
+   The till's order booker row, the customer list filters, the route and order booker
+   pages and the customer ledger header. Tokens only. */
+
+/* ---------- the till: order booker of this sale, under the customer ---------- */
+
+.fs-till-booker {
+    display: flex;
+    align-items: center;
+    gap: var(--k-3);
+    margin-top: 2px;
+}
+
+.fs-till-booker .form-label {
+    flex: none;
+    margin: 0;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+}
+
+.fs-till-booker .form-select {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+/* ---------- customer list: city, route and order booker filters ---------- */
+
+.fs-filters {
+    display: flex;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-2) var(--k-3);
+}
+
+.fs-filters .form-select {
+    flex: 0 1 200px;
+    width: auto;
+    min-width: 150px;
+}
+
+.fs-filters-clear {
+    color: var(--k-accent-ink);
+    font-size: var(--k-text-sm);
+    font-weight: 500;
+    text-decoration: none;
+}
+
+.fs-filters-clear:hover { text-decoration: underline; }
+
+/* ---------- routes and order bookers: the two master lists ---------- */
+
+.fs-tabs {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--k-1);
+    margin: 0 0 var(--k-4);
+}
+
+.fs-checks {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+    gap: var(--k-2) var(--k-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+.fs-checks .form-check {
+    display: flex;
+    align-items: center;
+    gap: var(--k-2);
+    min-height: var(--k-control-h-sm);
+    margin: 0;
+    padding: 0;
+}
+
+.fs-checks .form-check-input {
+    flex: none;
+    float: none;
+    margin: 0;
+}
+
+.fs-checks-none {
+    margin: 0;
+    color: var(--k-ink-soft);
+}
+
+/* ---------- customer page: where the customer is and what they may owe ---------- */
+
+.fs-terms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--k-1) var(--k-5);
+    margin: var(--k-2) 0 0;
+    padding: 0;
+    list-style: none;
+    color: var(--k-ink-soft);
+}
+
+.fs-terms strong {
+    color: var(--k-ink-title);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.fs-terms .fs-over { color: var(--k-out); }
+
+/* the printed statement names the customer's city, route and order booker under the shop name */
+.fs-statement-meta {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--k-1) var(--k-5);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+
+@media (max-width: 575.98px) {
+    .fs-filters .form-select { flex: 1 1 140px; }
+}

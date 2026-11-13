@@ -1,0 +1,107 @@
+{% extends "distribution/_base.html" %}
+{% load currency_tags %}
+{% block title %}Sales orders{% endblock %}
+{% block page_title %}Sales orders{% endblock %}
+{% block page_help %}Orders booked by your order bookers, shop by shop. An order moves no stock and no money until it is turned into an invoice. Tick booked orders and invoice them together; anything not in stock is invoiced short and the shortage stays on the order.{% endblock %}
+{% block page_actions %}{% if can_manage %}<a href="{% url 'distribution_order_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary" data-k-key="F2" data-k-key-label="New order"><i class="bi bi-plus-lg" aria-hidden="true"></i> New order</a>{% endif %}{% endblock %}
+
+{% block dist_content %}
+<section class="k-section" aria-label="Orders">
+    <form method="get" class="dist-filters" id="orderFilters">
+        <div class="b-filter-tabs" role="group" aria-label="Show by status">
+            {% for value, label, count in status_filters %}
+            <button type="submit" name="status" value="{{ value }}" class="btn btn-sm" aria-pressed="{% if value == status %}true{% else %}false{% endif %}">{{ label }}{% if count %} <span class="dist-muted">{{ count }}</span>{% endif %}</button>
+            {% endfor %}
+        </div>
+        <div><label class="form-label" for="f-start">From</label><input type="date" id="f-start" name="start" class="form-control form-control-sm" value="{{ start|date:'Y-m-d' }}"></div>
+        <div><label class="form-label" for="f-end">To</label><input type="date" id="f-end" name="end" class="form-control form-control-sm" value="{{ end|date:'Y-m-d' }}"></div>
+        {% if routes %}
+        <div><label class="form-label" for="f-route">Route</label>
+            <select id="f-route" name="route" class="form-select form-select-sm"><option value="">All routes</option>{% for route in routes %}<option value="{{ route.id }}"{% if route.id == route_id %} selected{% endif %}>{{ route.label }}</option>{% endfor %}</select></div>
+        <div><label class="form-label" for="f-booker">Order booker</label>
+            <select id="f-booker" name="order_booker" class="form-select form-select-sm"><option value="">All order bookers</option>{% for booker in bookers %}<option value="{{ booker.id }}"{% if booker.id == booker_id %} selected{% endif %}>{{ booker.name }}</option>{% endfor %}</select></div>
+        {% endif %}
+        <button type="submit" name="status" value="{{ status }}" class="btn btn-outline-secondary btn-sm">Show</button>
+        {% if start or end or route_id or booker_id %}<a class="dist-filters-clear" href="?status={{ status }}">Clear filters</a>{% endif %}
+    </form>
+
+    <form method="post" action="{% url 'distribution_order_bulk_invoice' %}" id="bulkInvoice">
+        {% csrf_token %}
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        {% if can_manage and status == "booked" and orders %}
+        <div class="dist-bulk">
+            <span class="dist-bulk-note"><span data-picked>0</span> ticked {% include "pos/partials/_help_tip.html" with tip_id="tipBulk" tip_name="Invoice ticked orders" tip_text="Each order becomes one invoice through the same rules as the till: stock, minimum margin, credit limit and invoice numbers. What is not in stock is left off the invoice and shown as short." %}</span>
+            <div class="b-filter-tabs" role="radiogroup" aria-label="Invoice as">
+                {% if allow_credit %}<label class="btn btn-sm mb-0"><input type="radio" class="form-check-input me-1" name="payment" value="credit" checked> On credit</label>{% endif %}
+                <label class="btn btn-sm mb-0"><input type="radio" class="form-check-input me-1" name="payment" value="cash"{% if not allow_credit %} checked{% endif %}> Cash</label>
+            </div>
+            <button type="submit" class="btn btn-primary btn-sm" data-bulk-submit disabled><i class="bi bi-receipt" aria-hidden="true"></i> Invoice ticked orders</button>
+        </div>
+        {% endif %}
+        <div class="table-responsive">
+            <table class="k-table k-ledger--stack b-index">
+                <thead>
+                    <tr>
+                        {% if can_manage and status == "booked" %}<th scope="col" class="dist-check" data-k="hide"><input type="checkbox" class="form-check-input" data-pick-all aria-label="Tick every order on this page"></th>{% endif %}
+                        <th scope="col" data-k="meta">Order</th>
+                        <th scope="col" data-k="what">Customer</th>
+                        {% if routes %}<th scope="col" data-k="more">Route / booker</th>{% endif %}
+                        <th scope="col" class="k-num" data-k="amount">Amount</th>
+                        <th scope="col" data-k="flag">Status</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for order in orders %}
+                    <tr data-rf-row="{{ order.id }}">
+                        {% if can_manage and status == "booked" %}<td data-k="hide">{% if order.is_open %}<input type="checkbox" class="form-check-input" name="order" value="{{ order.id }}" data-pick aria-label="Tick {{ order.display_number }}">{% endif %}</td>{% endif %}
+                        <td data-k="meta"><a href="{% url 'distribution_order_detail' order.id %}?next={{ request.get_full_path|urlencode }}" class="b-index-name">{{ order.display_number }}</a><span class="b-sub">{{ order.order_date|date:"d M Y" }}</span></td>
+                        <td data-k="what" class="b-stack-title">{{ order.customer.name }}<span class="b-sub">{{ order.items.all|length }} line{{ order.items.all|length|pluralize }}{% if order.notes %} &middot; {{ order.notes }}{% endif %}</span></td>
+                        {% if routes %}<td data-k="more" data-label="Route / booker">{{ order.route.name|default:"-" }}<span class="b-sub">{{ order.order_booker.name|default:"" }}</span></td>{% endif %}
+                        <td class="k-num" data-k="amount" data-label="Amount">{{ order.total_amount|money }}{% if order.has_shortage %}<span class="b-sub dist-short">Short {{ order.short_amount|money }}</span>{% endif %}</td>
+                        <td data-k="flag" data-label="Status">
+                            {% if order.status == "booked" %}<span class="k-badge k-badge--blue">Booked</span>
+                            {% elif order.status == "invoiced" %}<span class="k-badge k-badge--green">Invoiced</span>{% if order.sale %} <a href="{% url 'invoice' order.sale.id %}" class="b-sub">{{ order.sale.display_number }}</a>{% endif %}
+                            {% else %}<span class="k-badge">Cancelled</span>{% endif %}
+                        </td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="6" class="k-empty" data-k="note">
+                            <i class="bi bi-clipboard-check" aria-hidden="true"></i>
+                            <p class="k-empty-title">No orders here.</p>
+                            <p>Key in what the order bookers wrote at the shops, then invoice them for the load.</p>
+                            {% if can_manage %}<a class="btn btn-primary" href="{% url 'distribution_order_add' %}">New order</a>{% endif %}
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+                {% if orders %}
+                <tfoot><tr class="k-total"><td colspan="{{ total_span }}">This page</td><td class="k-num">{{ page_total|money }}</td><td></td></tr></tfoot>
+                {% endif %}
+            </table>
+        </div>
+    </form>
+    {% include "pos/reports/_pagination.html" %}
+</section>
+{% endblock %}
+
+{% block dist_js %}
+<script>
+(function () {
+    var form = document.getElementById('bulkInvoice');
+    if (!form) { return; }
+    var all = form.querySelector('[data-pick-all]');
+    var submit = form.querySelector('[data-bulk-submit]');
+    var counter = form.querySelector('[data-picked]');
+    function boxes() { return form.querySelectorAll('[data-pick]'); }
+    function sync() {
+        var ticked = Array.prototype.filter.call(boxes(), function (box) { return box.checked; }).length;
+        if (counter) { counter.textContent = ticked; }
+        if (submit) { submit.disabled = ticked === 0; }
+    }
+    if (all) { all.addEventListener('change', function () { Array.prototype.forEach.call(boxes(), function (box) { box.checked = all.checked; }); sync(); }); }
+    form.addEventListener('change', sync);
+    sync();
+})();
+</script>
+{% endblock %}

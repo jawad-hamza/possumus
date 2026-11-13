@@ -1,5 +1,6 @@
 {% extends "pos/reports/_shell.html" %}
 {% load currency_tags %}
+{% load discount_tags %}
 {% block title %}Sales report{% endblock %}
 
 {% block report_body %}
@@ -68,7 +69,7 @@
                     <td class="rp-lead text-nowrap"><a href="{% url 'invoice' sale.id %}" data-tip="Open the receipt">{{ sale.report_number }}</a><div class="rp-cell-note">{{ sale.created_at|date:"d M Y H:i" }}</div></td>
                     <td class="rp-clip" data-label="Customer">{{ sale.customer|default:"Walk-in Customer" }}</td>
                     <td class="k-num rp-extra" data-label="Subtotal">{{ sale.report_subtotal|amount }}</td>
-                    <td class="k-num rp-extra" data-label="Discount">{{ sale.report_discount_amount|amount }}</td>
+                    <td class="k-num rp-extra" data-label="Discount">{{ sale|discount_cell }}</td>
                     <td class="k-num rp-extra" data-label="{{ tax_label }}">{{ sale.report_tax_amount|amount }}</td>
                     <td class="k-num fw-semibold" data-label="Total">{{ sale.total_amount|amount }}{% if sale.report_returned_total %}<div class="rp-cell-note k-out">-{{ sale.report_returned_total|amount }} returned</div>{% endif %}</td>
                     <td class="k-num rp-extra" data-label="Cost">{{ sale.report_cost_total|amount }}</td>

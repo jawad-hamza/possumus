@@ -1,0 +1,143 @@
+/* Distribution: orders, loads, settlement, stock returns, recovery.
+   Builds on books.css (filters, index lists) and stock.css (line editor, sums). Tokens only. */
+
+/* ---------- the tabs under the page title ---------- */
+.dist-tabs { margin: 0 0 var(--k-4); }
+.dist-tabs .b-filter-tabs { overflow-x: auto; flex-wrap: nowrap; max-width: 100%; }
+.dist-tabs .btn { white-space: nowrap; }
+
+/* ---------- filter bar ---------- */
+.dist-filters {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: flex-end;
+    gap: var(--k-2) var(--k-3);
+    margin: 0 0 var(--k-4);
+}
+.dist-filters > div { display: flex; flex-direction: column; gap: 2px; }
+.dist-filters .form-label { margin: 0; color: var(--k-ink-soft); font-size: var(--k-text-xs); font-weight: 500; }
+.dist-filters .form-select,
+.dist-filters .form-control { min-width: 150px; width: auto; }
+.dist-filters-clear { align-self: center; color: var(--k-accent-ink); font-size: var(--k-text-sm); text-decoration: none; }
+.dist-filters-clear:hover { text-decoration: underline; }
+
+/* ---------- facts beside a document ---------- */
+.dist-facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--k-2) var(--k-6);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+}
+.dist-facts dt,
+.dist-facts .dist-fact-label { color: var(--k-ink-soft); font-size: var(--k-text-xs); font-weight: 500; }
+.dist-facts dd,
+.dist-facts .dist-fact-value { margin: 0; color: var(--k-ink-title); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+.dist-facts > div { display: flex; flex-direction: column; min-width: 7rem; }
+
+.dist-terms {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--k-1) var(--k-5);
+    margin: var(--k-2) 0 0;
+    padding: var(--k-2) var(--k-3);
+    border-radius: var(--k-radius-sm);
+    background: var(--k-sunk);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+}
+.dist-terms[hidden] { display: none; }
+.dist-terms strong { color: var(--k-ink-title); font-weight: 600; font-variant-numeric: tabular-nums lining-nums; }
+.dist-terms .dist-over { color: var(--k-out); }
+
+/* ---------- the bulk bar over the order list ---------- */
+.dist-bulk {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--k-2) var(--k-3);
+    margin: 0 0 var(--k-3);
+}
+.dist-bulk-note { margin-right: auto; color: var(--k-ink-soft); font-size: var(--k-text-sm); }
+.dist-check { width: 2.25rem; }
+.dist-short { color: var(--k-out); }
+.dist-muted { color: var(--k-ink-soft); }
+.dist-line-error { margin-top: 4px; color: var(--k-out); font-size: var(--k-text-xs); }
+.dist-line-hint { margin-top: 4px; color: var(--k-ink-soft); font-size: var(--k-text-xs); }
+
+/* ---------- settlement ---------- */
+.dist-invoice {
+    margin: 0 0 var(--k-4);
+    padding: var(--k-3) 0 0;
+    border-top: var(--k-hair) solid var(--k-divider);
+}
+.dist-invoice:first-of-type { border-top: 0; padding-top: 0; }
+.dist-invoice-head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--k-1) var(--k-4);
+    margin: 0 0 var(--k-2);
+}
+.dist-invoice-head h3 { margin: 0; font-size: var(--k-text-md); font-weight: 600; color: var(--k-ink-title); }
+.dist-invoice-head .dist-muted { font-size: var(--k-text-sm); }
+.dist-return-qty { display: flex; gap: 4px; max-width: 15rem; }
+.dist-return-qty .form-control { width: 6rem; text-align: right; }
+.dist-return-qty .form-select { width: 6.5rem; }
+
+.dist-cash {
+    display: grid;
+    gap: var(--k-2);
+    margin: 0;
+}
+.dist-cash > div { display: flex; justify-content: space-between; gap: var(--k-4); }
+.dist-cash dt { color: var(--k-ink-soft); font-weight: 500; }
+.dist-cash dd { margin: 0; font-variant-numeric: tabular-nums lining-nums; color: var(--k-ink-title); }
+.dist-cash .dist-cash-total { padding-top: var(--k-2); border-top: var(--k-hair) solid var(--k-border); font-weight: 600; }
+
+/* ---------- recovery sheet ---------- */
+.dist-recovery-amount { width: 9rem; text-align: right; }
+.dist-recovery-method { width: 6.5rem; }
+
+/* ---------- the printed load sheet ---------- */
+.dist-sheet { max-width: 210mm; margin: 0 auto; color: var(--k-ink-title); }
+.dist-sheet-head { display: flex; justify-content: space-between; gap: var(--k-4); margin: 0 0 var(--k-4); padding: 0 0 var(--k-3); border-bottom: 2px solid var(--k-ink-title); }
+.dist-sheet-head h2 { margin: 0; font-size: var(--k-text-2xl); font-weight: 700; }
+.dist-sheet-head p { margin: 2px 0 0; color: var(--k-ink-soft); }
+.dist-sheet-meta { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--k-2) var(--k-4); margin: 0 0 var(--k-4); }
+.dist-sheet-meta div { display: flex; flex-direction: column; }
+.dist-sheet-meta dt { color: var(--k-ink-soft); font-size: var(--k-text-xs); font-weight: 500; text-transform: uppercase; letter-spacing: 0.04em; }
+.dist-sheet-meta dd { margin: 0; font-weight: 600; }
+.dist-sheet table { width: 100%; margin: 0 0 var(--k-4); border-collapse: collapse; font-size: var(--k-text-sm); }
+.dist-sheet th,
+.dist-sheet td { padding: 5px 6px; border: var(--k-hair) solid var(--k-border-strong); }
+.dist-sheet th { background: var(--k-sunk); font-weight: 600; text-align: left; }
+.dist-sheet .num { text-align: right; font-variant-numeric: tabular-nums lining-nums; white-space: nowrap; }
+.dist-sheet tfoot td { font-weight: 700; }
+.dist-sheet h3 { margin: var(--k-4) 0 var(--k-2); font-size: var(--k-text-lg); font-weight: 600; }
+.dist-sign { display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--k-6); margin-top: 18mm; }
+.dist-sign div { padding-top: var(--k-2); border-top: 1px solid var(--k-ink-title); text-align: center; font-size: var(--k-text-sm); }
+.dist-sheet-tools { display: flex; gap: var(--k-2); justify-content: flex-end; margin: 0 auto var(--k-4); max-width: 210mm; }
+
+@media (max-width: 575.98px) {
+    .dist-sheet-meta { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .dist-filters .form-select,
+    .dist-filters .form-control { min-width: 0; width: 100%; }
+    .dist-filters > div { flex: 1 1 140px; }
+}
+
+@media print {
+    @page { size: A4; margin: 12mm 10mm; }
+    .dist-tabs,
+    .dist-sheet-tools,
+    .dist-no-print { display: none !important; }
+    .dist-sheet { max-width: none; color: black; }
+    .dist-sheet th { background: #eee !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .dist-sheet th,
+    .dist-sheet td { border-color: #555; }
+    .dist-sheet tr { page-break-inside: avoid; }
+}
+
+/* a plain product has one unit: its box reads as text */
+.st-lines .dist-one-unit { pointer-events: none; background-image: none; background-color: var(--k-sunk); }

@@ -1,0 +1,78 @@
+{% extends "pos/base.html" %}
+{% load static currency_tags %}
+
+{% block title %}Bank receipt: {{ facts.label }}{% endblock %}
+{% block page_title %}Bank receipt{% endblock %}
+{% block page_help %}The photo, screenshot or PDF slip that proves this bank payment. Anyone who can open the payment can see it and can add a missing one. Replacing or removing it needs manage access and is written to the audit log.{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/pages/receipt.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="{{ back_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>{% endblock %}
+
+{% block content %}
+<div class="b-grid">
+    <section class="k-section" aria-labelledby="receipt-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="receipt-title">{{ facts.label }}</h2>
+            {% if receipt %}
+            <span class="k-section-note">{{ receipt.original_name|default:"Receipt" }} &middot; {{ receipt.size_label }}</span>
+            {% if not file_missing %}<div class="k-actions"><a class="btn btn-outline-secondary btn-sm" href="{{ file_url }}&amp;download=1"><i class="bi bi-download" aria-hidden="true"></i> Download</a></div>{% endif %}
+            {% endif %}
+        </div>
+        {% if receipt and file_missing %}
+        <div class="k-note k-note--out" role="alert">The file of this receipt is not in this shop's storage. A restored backup brings back the entry but not the file.{% if may_change %} Attach the receipt again to replace it.{% endif %}</div>
+        {% elif receipt and receipt.is_pdf %}
+        <iframe class="rc-pdf" src="{{ file_url }}" title="Bank receipt for {{ facts.label }}"></iframe>
+        {% elif receipt %}
+        <img class="rc-image" src="{{ file_url }}" alt="Bank receipt for {{ facts.label }}">
+        {% else %}
+        <div class="k-empty">
+            <p class="k-empty-title">No bank receipt attached</p>
+            <p>{% if facts.is_bank %}Add the photo, the screenshot or the PDF slip of this bank transfer.{% else %}This payment did not go through a bank, so it has no bank receipt.{% endif %}</p>
+        </div>
+        {% endif %}
+    </section>
+
+    <aside class="k-side" aria-labelledby="payment-title">
+        <div class="k-section-head">
+            <h2 class="k-section-title" id="payment-title">Payment</h2>
+        </div>
+        <dl class="rc-facts">
+            <div><dt>Entry</dt><dd><a href="{{ facts.home }}">{{ facts.label }}</a></dd></div>
+            {% if facts.party %}<div><dt>Party</dt><dd>{{ facts.party }}</dd></div>{% endif %}
+            <div><dt>Amount</dt><dd class="k-num">{{ facts.amount|money }}</dd></div>
+            {% if facts.date %}<div><dt>Date</dt><dd>{{ facts.date|date:"d M Y" }}</dd></div>{% endif %}
+            {% if facts.is_bank and facts.bank %}<div><dt>{{ facts.direction }}</dt><dd>{{ facts.bank }}</dd></div>{% endif %}
+            {% if receipt %}<div><dt>Attached</dt><dd>{{ receipt.uploaded_at|date:"d M Y, H:i" }}{% if receipt.uploaded_by %} by {{ receipt.uploaded_by.get_full_name|default:receipt.uploaded_by.username }}{% endif %}</dd></div>{% endif %}
+        </dl>
+
+        {% if may_attach or receipt and may_change %}
+        <form method="post" enctype="multipart/form-data" action="{{ form_action }}">
+            {% csrf_token %}
+            {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+            <div>
+                <label class="form-label" for="{{ form.bank_receipt.id_for_label }}">{% if receipt %}Replace with another file{% else %}Receipt file{% endif %}{% include "pos/partials/_help_tip.html" with tip_id="tipReceiptFile" tip_name="the receipt file" tip_text=form.bank_receipt.help_text %}</label>
+                {{ form.bank_receipt }}
+                {% if form.bank_receipt.errors %}<div class="k-error" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.bank_receipt.errors|join:" " }}</div>{% endif %}
+            </div>
+            <button class="btn {% if receipt %}btn-outline-secondary{% else %}btn-primary{% endif %} w-100">{% if receipt %}Replace receipt{% else %}Attach receipt{% endif %}</button>
+        </form>
+        {% endif %}
+
+        {% if receipt and may_change %}
+        {% if confirm_remove %}
+        <form method="post" action="{{ form_action }}" class="rc-remove">
+            {% csrf_token %}
+            <input type="hidden" name="action" value="remove">
+            {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+            <p class="k-note k-note--out" role="alert">Remove this receipt from {{ facts.label }}? The payment itself stays as it is.</p>
+            <div class="rc-remove-actions">
+                <button class="btn btn-danger">Remove receipt</button>
+                <a class="btn btn-outline-secondary" href="{{ cancel_url }}">Keep it</a>
+            </div>
+        </form>
+        {% else %}
+        <div class="rc-remove"><a class="btn btn-outline-danger w-100" href="{{ confirm_remove_url }}">Remove receipt</a></div>
+        {% endif %}
+        {% endif %}
+    </aside>
+</div>
+{% endblock %}

@@ -11,6 +11,7 @@ from accounts.models import (
     ExpensePayment,
     MoneyTransfer,
 )
+from accounts.receipt_forms import BankReceiptFormMixin
 from accounts.services.books_lock import assert_books_open
 from accounts.services.cash_bank import bank_account_queryset
 from accounts.services.party_opening import DIRECTION_CHOICES, THEY_OWE_US, WE_OWE_THEM
@@ -119,7 +120,10 @@ class ExpenseCategoryForm(StyledModelForm):
         return cleaned_data
 
 
-class ExpenseForm(BooksLockDateMixin, StyledModelForm):
+class ExpenseForm(BankReceiptFormMixin, BooksLockDateMixin, StyledModelForm):
+    # What is paid now through a bank carries its receipt (see accounts.receipt_forms).
+    bank_receipt_amount_field = "paid_amount"
+
     class Meta:
         model = Expense
         fields = [
@@ -189,7 +193,7 @@ class ExpenseForm(BooksLockDateMixin, StyledModelForm):
         return cleaned_data
 
 
-class ExpensePaymentForm(BooksLockDateMixin, StyledModelForm):
+class ExpensePaymentForm(BankReceiptFormMixin, BooksLockDateMixin, StyledModelForm):
     class Meta:
         model = ExpensePayment
         fields = [
@@ -240,7 +244,11 @@ class ExpensePaymentForm(BooksLockDateMixin, StyledModelForm):
         return cleaned_data
 
 
-class CapitalEntryForm(BooksLockDateMixin, StyledModelForm):
+class CapitalEntryForm(BankReceiptFormMixin, BooksLockDateMixin, StyledModelForm):
+    # Money desk entries may carry a bank receipt; it is never demanded.
+    bank_receipt_method_fields = ("deposit_to",)
+    bank_receipt_required = False
+
     class Meta:
         model = CapitalEntry
         fields = [
@@ -289,7 +297,10 @@ class CapitalEntryForm(BooksLockDateMixin, StyledModelForm):
         return cleaned_data
 
 
-class MoneyTransferForm(BooksLockDateMixin, StyledModelForm):
+class MoneyTransferForm(BankReceiptFormMixin, BooksLockDateMixin, StyledModelForm):
+    bank_receipt_method_fields = ("from_account", "to_account")
+    bank_receipt_required = False
+
     class Meta:
         model = MoneyTransfer
         fields = [

@@ -1,15 +1,16 @@
 {% extends "pos/base.html" %}
-{% load static %}
+{% load static field_sales_tags %}
 
-{% block title %}Add customer{% endblock %}
-{% block page_title %}Add customer{% endblock %}
-{% block page_help %}Create the party record once and reuse it for cash or credit sales.{% endblock %}
-{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block title %}{% if customer %}Edit {{ customer.name }}{% else %}Add customer{% endif %}{% endblock %}
+{% block page_title %}{% if customer %}Edit customer{% else %}Add customer{% endif %}{% endblock %}
+{% block page_help %}{% if customer %}Change the customer's details, route and credit limit. Their balance and ledger are not touched.{% else %}Create the party record once and reuse it for cash or credit sales.{% endif %}{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/return-flow.css' %}" rel="stylesheet">{% endblock %}
 {% block page_actions %}<a href="{{ next_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>{% endblock %}
 
 {% block content %}
+{% field_sales_quick_add as fs_quick %}
 <div class="k-form">
-    <form method="post">
+    <form method="post" data-fs-customer>
         {% csrf_token %}
         <input type="hidden" name="next" value="{{ next_url }}">
 
@@ -23,15 +24,7 @@
         <div class="alert alert-danger">{{ form.non_field_errors }}</div>
         {% endif %}
 
-        <section class="k-section" aria-labelledby="party-details-title">
-            <div class="k-section-head"><h2 class="k-section-title" id="party-details-title">Customer details</h2></div>
-            <div class="k-form-grid">
-                {% include "pos/partials/_field.html" with field=form.name %}
-                {% include "pos/partials/_field.html" with field=form.phone %}
-                {% include "pos/partials/_field.html" with field=form.email %}
-                <div class="k-span-2">{% include "pos/partials/_field.html" with field=form.address %}</div>
-            </div>
-        </section>
+        {% include "parties/_customer_fields.html" %}
 
         {% include "pos/partials/_party_opening_fields.html" with party_word="customer" %}
 
@@ -41,4 +34,8 @@
         </div>
     </form>
 </div>
+{% include "pos/partials/_quick_add_panel.html" with quick_add=fs_quick.quick_add %}
+{% if form.route %}{% route_defaults as fs_route_defaults %}{{ fs_route_defaults|json_script:"fs-route-defaults" }}{% endif %}
 {% endblock %}
+
+{% block extra_js %}<script src="{% static 'zehnms/js/return-flow.js' %}"></script><script src="{% static 'zehnms/js/pages/customer-form.js' %}"></script>{% endblock %}

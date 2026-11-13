@@ -1,0 +1,9 @@
+{% comment %}
+The bank receipt of a customer receipt or supplier payment, beside the bank ledger of the settle form.
+books.js (ZehnBooks.settle) sends the file marked data-settle-receipt with a bank settlement.
+{% endcomment %}
+{% load bank_receipt_tags %}{% bank_receipt_upload_rules as receipt_rules %}
+<div class="mt-3">
+    <label class="form-label" for="settle_bank_receipt">Bank receipt{% if not receipt_rules.required %} <span class="k-receipt-none">optional</span>{% endif %} {% include "pos/partials/_help_tip.html" with tip_id="tipSettleReceipt" tip_name="the bank receipt" tip_text=receipt_rules.help %}</label>
+    <input class="form-control" type="file" id="settle_bank_receipt" accept="{{ receipt_rules.accept }}" data-settle-receipt>
+</div>

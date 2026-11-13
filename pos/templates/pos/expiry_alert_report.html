@@ -37,7 +37,7 @@
                 <tr>
                     <td class="rp-lead"><a href="{% url 'product_view' product.id %}">{{ product.display_name }}</a><div class="rp-cell-note">SKU {{ product.sku }}</div></td>
                     <td data-label="Location">{{ product.location|default:"-" }}</td>
-                    <td class="k-num" data-label="On hand">{{ product.stock|qty_unit:product.unit }}</td>
+                    <td class="k-num" data-label="On hand">{{ product.stock|in_packs:product }}</td>
                     <td class="k-num k-out" data-label="Stock value">{{ product.stock_value_at_risk|money }}</td>
                     <td class="text-nowrap" data-label="Expiry">{{ product.expiry_date|date:"d M Y" }}</td>
                     <td class="k-num" data-label="Days over"><span class="k-badge k-badge--red">{{ product.days_overdue }} day{{ product.days_overdue|pluralize }}</span></td>
@@ -68,7 +68,7 @@
                 <tr>
                     <td class="rp-lead"><a href="{% url 'product_view' product.id %}">{{ product.display_name }}</a><div class="rp-cell-note">SKU {{ product.sku }}</div></td>
                     <td data-label="Location">{{ product.location|default:"-" }}</td>
-                    <td class="k-num" data-label="On hand">{{ product.stock|qty_unit:product.unit }}</td>
+                    <td class="k-num" data-label="On hand">{{ product.stock|in_packs:product }}</td>
                     <td class="k-num" data-label="Stock value">{{ product.stock_value_at_risk|money }}</td>
                     <td class="text-nowrap" data-label="Expiry">{{ product.expiry_date|date:"d M Y" }}</td>
                     <td class="k-num" data-label="Days left"><span class="k-badge k-badge--amber">{{ product.days_to_expiry }} day{{ product.days_to_expiry|pluralize }}</span></td>

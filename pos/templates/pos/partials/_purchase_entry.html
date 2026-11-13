@@ -1,6 +1,6 @@
 {% load currency_tags %}
 <div class="st-work" id="purchaseWork">
-    <form method="post" id="purchaseForm" data-st-entry data-back-url="{{ back_url }}" data-rf-draft="purchase" data-rf-grow="#addPurchaseLineBtn"{% if purchase_form.is_bound %} data-rf-bound{% endif %}>
+    <form method="post" enctype="multipart/form-data" id="purchaseForm" data-st-entry data-back-url="{{ back_url }}" data-rf-draft="purchase" data-rf-grow="#addPurchaseLineBtn"{% if purchase_form.is_bound %} data-rf-bound{% endif %}>
         {% csrf_token %}
         {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
         {{ formset.management_form }}
@@ -26,7 +26,7 @@
 
         <section class="k-section" aria-labelledby="group-lines">
             <div class="k-section-head">
-                <h2 class="k-section-title" id="group-lines">Items {% include "pos/partials/_help_tip.html" with tip_id="tipLines" tip_name="Items" tip_text="Enter quantity or weight received, landed cost per unit, and the sale price you want active at the till." %}</h2>
+                <h2 class="k-section-title" id="group-lines">Items {% if feature_modules.packaging %}{% include "pos/partials/_help_tip.html" with tip_id="tipLines" tip_name="Items" tip_text="Choose the unit the goods came in (carton, box or piece), then enter the landed cost and the sale price of one of that unit. What that comes to for the smaller units shows underneath. The packing under a product says what one carton and one box hold; it is saved to the product with the purchase." %}{% else %}{% include "pos/partials/_help_tip.html" with tip_id="tipLines" tip_name="Items" tip_text="Enter quantity or weight received, landed cost per unit, and the sale price you want active at the till." %}{% endif %}</h2>
             </div>
             {% include "pos/partials/_purchase_line_editor.html" with formset=formset %}
         </section>
@@ -40,6 +40,7 @@
                     <div class="k-form-grid">
                         <div>{% include "pos/partials/_entry_field.html" with field=purchase_form.payment_method %}</div>
                         <div>{% include "pos/partials/_entry_field.html" with field=purchase_form.bank_account %}</div>
+                        <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=purchase_form.bank_receipt %}{% if purchase %}{% load bank_receipt_tags %}{% bank_receipt_panel purchase "attached" %}{% endif %}</div>
                         {% if purchase %}
                         <div class="k-span-2 k-form-field">
                             <label for="reason" class="form-label">Reason for edit<span class="st-req" title="Required">*</span>{% include "pos/partials/_help_tip.html" with tip_id="tipEditReason" tip_name="Reason for edit" tip_text="Editing a purchase will restate stock value, supplier balance, and accounting vouchers for this document." %}</label>
@@ -77,4 +78,4 @@
 
     {% include "pos/partials/_purchase_quick_setup.html" %}
 </div>
-<script id="purchaseConfig" type="application/json">{"fractionalUnits": {% fractional_units_json %}, "pieceUnit": "{% piece_unit %}", "currency": "{{ currency_symbol|escapejs }}", "ids": {"supplier": "{{ purchase_form.supplier.id_for_label }}", "quickBrand": "{{ quick_product_form.brand.id_for_label }}", "quickCategory": "{{ quick_product_form.category.id_for_label }}", "quickSupplier": "{{ quick_product_form.supplier.id_for_label }}"}}</script>
+<script id="purchaseConfig" type="application/json">{"fractionalUnits": {% fractional_units_json %}, "pieceUnit": "{% piece_unit %}", "currency": "{{ currency_symbol|escapejs }}", "packaging": {{ purchase_packaging|default:"{}"|safe }}, "ids": {"supplier": "{{ purchase_form.supplier.id_for_label }}", "quickBrand": "{{ quick_product_form.brand.id_for_label }}", "quickCategory": "{{ quick_product_form.category.id_for_label }}", "quickSupplier": "{{ quick_product_form.supplier.id_for_label }}"}}</script>

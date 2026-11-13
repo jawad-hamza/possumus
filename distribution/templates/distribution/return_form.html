@@ -1,0 +1,56 @@
+{% extends "distribution/_base.html" %}
+{% load static %}
+{% block title %}{% if is_customer %}Market return{% else %}Return to supplier{% endif %}{% endblock %}
+{% block page_title %}{% if is_customer %}Market return{% else %}Return to supplier{% endif %}{% endblock %}
+{% block page_help %}{% if is_customer %}Goods a shop gives back without naming an invoice. Good stock goes back on the shelf. Damaged or expired stock is kept out of saleable stock and held at cost for a claim on the company. The customer is credited the rate on each line.{% else %}Goods going back to the company. Good stock leaves the shelf; damaged stock leaves what is held for claims. The supplier is charged the rate on each line, at cost by default.{% endif %}{% endblock %}
+{% block page_actions %}<a href="{{ back_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>{% endblock %}
+
+{% block dist_content %}
+<form method="post" novalidate id="returnForm">
+    {% csrf_token %}
+    {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+    <section class="k-section" aria-labelledby="return-head">
+        <div class="k-section-head"><h2 class="k-section-title" id="return-head">{% if is_customer %}From{% else %}To{% endif %}</h2></div>
+        <div class="k-form-grid">
+            <div class="k-span-2">{% if is_customer %}{% include "pos/partials/_entry_field.html" with field=form.customer %}{% else %}{% include "pos/partials/_entry_field.html" with field=form.supplier %}{% endif %}</div>
+            <div>{% include "pos/partials/_entry_field.html" with field=form.return_date %}</div>
+            {% if form.load_form %}<div>{% include "pos/partials/_entry_field.html" with field=form.load_form %}</div>{% endif %}
+            <div><div data-dist-settlement-wrap>{% include "pos/partials/_entry_field.html" with field=form.settlement %}</div></div>
+            <div data-dist-bank>{% include "pos/partials/_entry_field.html" with field=form.bank_account %}</div>
+            <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.reason %}</div>
+            <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.notes %}</div>
+        </div>
+    </section>
+
+    <section class="k-section" aria-labelledby="return-lines">
+        <div class="k-section-head"><h2 class="k-section-title" id="return-lines">Items {% include "pos/partials/_help_tip.html" with tip_id="tipReturnLines" tip_name="Items" tip_text="Choose the unit (carton, box or piece) and the rate of one of that unit. Mark each line good or damaged." %}</h2></div>
+        <table class="k-ledger st-lines st-lines--packs" id="distLines">
+            <thead>
+                <tr>
+                    <th scope="col">Product</th>
+                    <th scope="col" class="st-col-qty text-end">Quantity</th>
+                    <th scope="col" class="st-col-money text-end">Rate</th>
+                    <th scope="col" class="st-col-money">Condition</th>
+                    <th scope="col" class="st-col-amount text-end">Amount</th>
+                    <th scope="col" class="st-col-x"><span class="visually-hidden">Remove</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for line in lines %}{% include "distribution/_line_row.html" with line=line with_condition=True %}{% endfor %}
+            </tbody>
+            <tfoot><tr><td colspan="4">Total <span class="st-sum-unit" data-dist-count></span></td><td class="k-num text-end" data-dist-total>0.00</td><td></td></tr></tfoot>
+        </table>
+        <template id="distLineTemplate">{% include "distribution/_line_row.html" with line=None with_condition=True %}</template>
+        <div class="st-lines-tools"><button type="button" class="btn btn-outline-secondary" id="distAddLine" data-k-key="F4" data-k-key-label="Add a line"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add line</button></div>
+    </section>
+
+    <div class="st-actionbar">
+        <span class="st-actionbar-note">{% if is_customer %}Credit to the customer{% else %}Charge to the supplier{% endif %} <strong data-dist-total>0.00</strong></span>
+        <a href="{{ back_url }}" class="btn btn-outline-secondary">Cancel</a>
+        <button type="submit" class="btn btn-primary" data-k-key="Ctrl+S" data-k-key-label="Save return">Save return</button>
+    </div>
+</form>
+{{ product_data|json_script:"distProducts" }}
+{% endblock %}
+
+{% block dist_js %}<script src="{% static 'distribution/js/lines.js' %}"></script>{% endblock %}

@@ -36,7 +36,7 @@
         <div class="k-section-head">
             <h2 class="k-section-title" id="capital-title">Opening funds / owner capital <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Opening funds" aria-describedby="tipCapital" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipCapital" role="tooltip" hidden>Record where business money came from and which account it entered into.<br><strong>Opening Funds / Owner Capital</strong> increases Cash or Bank and credits Owner Capital.</span></span></h2>
         </div>
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="action" value="capital">
             <div class="k-form-grid">
@@ -45,6 +45,7 @@
                 {% include "pos/partials/_field.html" with field=capital_form.amount %}
                 {% include "pos/partials/_field.html" with field=capital_form.deposit_to %}
                 {% include "pos/partials/_field.html" with field=capital_form.bank_account %}
+                {% include "pos/partials/_field.html" with field=capital_form.bank_receipt %}
                 <div class="k-span-2">{% include "pos/partials/_field.html" with field=capital_form.notes %}</div>
             </div>
             {% if capital_form.non_field_errors %}<div class="k-error mt-3" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ capital_form.non_field_errors|join:', ' }}</div>{% endif %}
@@ -58,7 +59,7 @@
         <div class="k-section-head">
             <h2 class="k-section-title" id="transfer-title">Transfer cash and bank <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Transfer" aria-describedby="tipTransfer" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipTransfer" role="tooltip" hidden>Clearly mark which account money moved out from and which account it moved into.<br><strong>Transfer</strong> moves money between Cash and Bank without changing total money available.</span></span></h2>
         </div>
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="action" value="transfer">
             <div class="k-form-grid">
@@ -68,6 +69,7 @@
                 {% include "pos/partials/_field.html" with field=transfer_form.to_account %}
                 {% include "pos/partials/_field.html" with field=transfer_form.from_bank_account %}
                 {% include "pos/partials/_field.html" with field=transfer_form.to_bank_account %}
+                <div class="k-span-2">{% include "pos/partials/_field.html" with field=transfer_form.bank_receipt %}</div>
             </div>
             {% if transfer_form.non_field_errors %}<div class="k-error mt-3" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ transfer_form.non_field_errors|join:', ' }}</div>{% endif %}
             <div class="k-form-actions">
@@ -82,7 +84,7 @@
         <div class="k-section-head">
             <h2 class="k-section-title" id="pay-expense-title">Pay outstanding expense <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About Pay outstanding expense" aria-describedby="tipPayExpense" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipPayExpense" role="tooltip" hidden>Choose an unpaid bill and record where the payment left from.<br><strong>Expense Payment</strong> reduces Cash or Bank and clears Expense Payable.</span></span></h2>
         </div>
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="action" value="pay_expense">
             <div class="k-form-grid">
@@ -91,6 +93,7 @@
                 {% include "pos/partials/_field.html" with field=expense_payment_form.amount %}
                 {% include "pos/partials/_field.html" with field=expense_payment_form.payment_method %}
                 {% include "pos/partials/_field.html" with field=expense_payment_form.bank_account %}
+                {% include "pos/partials/_field.html" with field=expense_payment_form.bank_receipt %}
             </div>
             {% if expense_payment_form.non_field_errors %}<div class="k-error mt-3" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ expense_payment_form.non_field_errors|join:', ' }}</div>{% endif %}
             <div class="k-form-actions">
@@ -131,10 +134,11 @@
                     <tr><th scope="col">Bill</th><th scope="col">From</th><th scope="col" class="k-num">Amount</th></tr>
                 </thead>
                 <tbody>
+                    {% load bank_receipt_tags %}{% mark_bank_receipts recent_expense_payments %}
                     {% for payment in recent_expense_payments %}
                     <tr>
                         <td><strong>{{ payment.expense.display_title }}</strong><span class="b-sub">#{{ payment.voucher_id|default:'-' }}</span></td>
-                        <td>{{ payment.from_account_title }}{% if payment.payment_method == 'bank' %}<span class="b-sub">{{ payment.bank_reference }}</span>{% endif %}</td>
+                        <td>{{ payment.from_account_title }}{% if payment.payment_method == 'bank' %}<span class="b-sub">{{ payment.bank_reference }}</span>{% endif %}{% bank_receipt_link payment.bank_receipt_mark %}</td>
                         <td class="k-num k-out">{{ payment.amount|money }}</td>
                     </tr>
                     {% empty %}
@@ -157,10 +161,11 @@
                     <tr><th scope="col">Source</th><th scope="col">Into</th><th scope="col" class="k-num">Amount</th></tr>
                 </thead>
                 <tbody>
+                    {% mark_bank_receipts recent_capital_entries %}
                     {% for entry in recent_capital_entries %}
                     <tr>
                         <td><strong>{{ entry.source_name }}</strong><span class="b-sub">#{{ entry.voucher_id|default:'-' }}</span></td>
-                        <td>{{ entry.to_account_title }}{% if entry.deposit_to == 'bank' %}<span class="b-sub">{{ entry.bank_reference }}</span>{% endif %}</td>
+                        <td>{{ entry.to_account_title }}{% if entry.deposit_to == 'bank' %}<span class="b-sub">{{ entry.bank_reference }}</span>{% endif %}{% bank_receipt_link entry.bank_receipt_mark %}</td>
                         <td class="k-num k-in">{{ entry.amount|money }}</td>
                     </tr>
                     {% empty %}
@@ -183,10 +188,11 @@
                     <tr><th scope="col">Out</th><th scope="col">In</th><th scope="col" class="k-num">Amount</th></tr>
                 </thead>
                 <tbody>
+                    {% mark_bank_receipts recent_transfers %}
                     {% for transfer in recent_transfers %}
                     <tr>
                         <td>{{ transfer.from_account_title }}{% if transfer.from_account == 'bank' %}<span class="b-sub">{{ transfer.from_bank_reference }}</span>{% endif %}</td>
-                        <td>{{ transfer.to_account_title }}{% if transfer.to_account == 'bank' %}<span class="b-sub">{{ transfer.to_bank_reference }}</span>{% endif %}</td>
+                        <td>{{ transfer.to_account_title }}{% if transfer.to_account == 'bank' %}<span class="b-sub">{{ transfer.to_bank_reference }}</span>{% endif %}{% bank_receipt_link transfer.bank_receipt_mark %}</td>
                         <td class="k-num"><strong>{{ transfer.amount|money }}</strong><span class="b-sub">#{{ transfer.voucher_id|default:'-' }}</span></td>
                     </tr>
                     {% empty %}

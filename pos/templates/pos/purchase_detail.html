@@ -8,7 +8,7 @@
 
 {% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet">{% endblock %}
 
-{% block page_actions %}<a href="{% url 'purchase_edit' purchase.id %}" class="btn btn-primary" data-k-key="F2" data-k-key-label="Edit this purchase"><i class="bi bi-pencil" aria-hidden="true"></i> Edit</a>{% if feature_modules.returns %}<a href="{% url 'purchase_return' purchase.id %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-return-left" aria-hidden="true"></i> Return</a>{% endif %}<a href="{% url 'purchase_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>{% endblock %}
+{% block page_actions %}<a href="{% url 'purchase_edit' purchase.id %}" class="btn btn-primary" data-k-key="F2" data-k-key-label="Edit this purchase"><i class="bi bi-pencil" aria-hidden="true"></i> Edit</a>{% if feature_modules.returns %}<a href="{% url 'purchase_return' purchase.id %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-return-left" aria-hidden="true"></i> Return</a>{% endif %}{% if feature_modules.builty and manage_access.purchases %}<a href="{% url 'builty_add' %}?purchase={{ purchase.id }}&amp;next={{ request.get_full_path|urlencode }}" class="btn btn-outline-secondary" data-tip="Add the transporter's freight bill to this purchase"><i class="bi bi-truck-flatbed" aria-hidden="true"></i> Add builty</a>{% endif %}<a href="{% url 'purchase_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>{% endblock %}
 
 {% block content %}
 <section class="k-section" aria-label="Summary">
@@ -34,45 +34,112 @@
         <div class="k-balance">
             <div class="k-balance-label">Payment method</div>
             <div class="k-balance-figure k-balance-figure--text">{{ purchase.get_payment_method_display }}</div>
+            {% load bank_receipt_tags %}{% bank_receipt_panel purchase "note" %}
         </div>
+        {% if has_freight %}
+        <div class="k-balance">
+            <div class="k-balance-label">Freight (builty) {% include "pos/partials/_help_tip.html" with tip_id="tipFreight" tip_name="Freight" tip_text="Transport paid on these goods through a builty. It is not part of the supplier's bill; it was added to the cost of the goods, so each line's landed cost below includes its share." %}</div>
+            <div class="k-balance-figure">{{ freight_total|money }}</div>
+            <div class="k-balance-note">Landed total {{ landed_total|money }}</div>
+        </div>
+        {% endif %}
     </div>
 </section>
 
 <section class="k-section" aria-labelledby="items-title">
-    <div class="k-section-head"><h2 class="k-section-title" id="items-title">Items received</h2></div>
+    <div class="k-section-head"><h2 class="k-section-title" id="items-title">Items received</h2>{% if has_freight %}<span class="k-badge">Builty</span>{% endif %}</div>
     <table class="k-ledger k-ledger--stack">
         <thead>
             <tr>
                 <th scope="col" data-k="what">Product</th>
                 <th scope="col" class="text-end" data-k="meta">Qty</th>
                 <th scope="col" class="text-end" data-k="more">Cost</th>
+                {% if has_freight %}<th scope="col" class="text-end" data-k="more">Freight {% include "pos/partials/_help_tip.html" with tip_id="tipLineFreight" tip_name="Freight" tip_text="This line's share of the builty freight." %}</th>
+                <th scope="col" class="text-end" data-k="more">Landed cost {% include "pos/partials/_help_tip.html" with tip_id="tipLanded" tip_name="Landed cost" tip_text="Purchase cost of one unit plus its share of the freight: what one unit really cost to bring to the shop. The figure underneath is one piece." %}</th>{% endif %}
                 <th scope="col" class="text-end" data-k="more">Sale</th>
                 <th scope="col" class="text-end" data-k="amount">Line total</th>
             </tr>
         </thead>
         <tbody>
-            {% for item in purchase.items.all %}
+            {% for item in items %}
             <tr>
                 <td class="st-wrap" data-k="what">{% if nav_access.products %}<a href="{% url 'product_view' item.product.id %}" class="st-name">{{ item.product.display_name }}</a>{% else %}<span class="st-name">{{ item.product.display_name }}</span>{% endif %}</td>
-                <td class="k-num text-end" data-k="meta" data-label="Qty">{{ item.quantity|qty_short:item.product.unit }}</td>
+                {% if item.unit_factor != 1 %}
+                <td class="k-num text-end" data-k="meta" data-label="Qty">{{ item.quantity_display }}<span class="st-sub">{{ item.base_quantity_display }}</span></td>
+                <td class="k-num text-end" data-k="more" data-label="Cost">{{ item.cost_price|money }} / {{ item.unit_label }}</td>
+                {% else %}
+                <td class="k-num text-end" data-k="meta" data-label="Qty">{{ item.quantity|qty_short:item.unit_label }}</td>
                 <td class="k-num text-end" data-k="more" data-label="Cost">{{ item.cost_price|money }}</td>
+                {% endif %}
+                {% if has_freight %}
+                <td class="k-num text-end" data-k="more" data-label="Freight">{% if item.freight %}{{ item.freight|money }}{% else %}<span class="st-dim">&ndash;</span>{% endif %}</td>
+                <td class="k-num text-end" data-k="more" data-label="Landed cost">{% if item.freight %}{{ item.landed_unit_cost|money }}{% if item.unit_factor != 1 %} / {{ item.unit_label }}<span class="st-sub">{{ item.landed_piece_cost|floatformat:"-4" }} / {{ item.product.unit|default:"pcs" }}</span>{% endif %}{% else %}<span class="st-dim">&ndash;</span>{% endif %}</td>
+                {% endif %}
+                {% if item.unit_factor != 1 %}
+                <td class="k-num text-end" data-k="more" data-label="Sale">{{ item.sale_price|money }} / {{ item.unit_label }}</td>
+                {% else %}
                 <td class="k-num text-end" data-k="more" data-label="Sale">{{ item.sale_price|money }}</td>
+                {% endif %}
                 <td class="k-num text-end" data-k="amount" data-label="Line total">{{ item.line_total|money }}</td>
             </tr>
             {% empty %}
-            <tr><td colspan="5" class="k-empty" data-k="note">No items in this purchase.</td></tr>
+            <tr><td colspan="{% if has_freight %}7{% else %}5{% endif %}" class="k-empty" data-k="note">No items in this purchase.</td></tr>
             {% endfor %}
         </tbody>
-        {% if purchase.items.all %}
+        {% if items %}
         <tfoot>
             <tr>
-                <td colspan="4" data-k="what">Total</td>
+                <td colspan="3" data-k="what">Total</td>
+                {% if has_freight %}<td class="k-num text-end" data-k="more">{{ freight_total|money }}</td><td data-k="more"></td>{% endif %}
+                <td data-k="more"></td>
                 <td class="k-num text-end" data-k="amount">{{ purchase.total_amount|money }}</td>
             </tr>
         </tfoot>
         {% endif %}
     </table>
 </section>
+
+{% if builties %}
+<section class="k-section" aria-labelledby="builty-title">
+    <div class="k-section-head"><h2 class="k-section-title" id="builty-title">Builty</h2></div>
+    <table class="k-ledger k-ledger--stack">
+        <thead>
+            <tr><th scope="col" data-k="meta">Builty</th><th scope="col" data-k="what">Transporter</th><th scope="col" class="text-end" data-k="more">Builty amount</th><th scope="col" class="text-end" data-k="amount">On this purchase</th></tr>
+        </thead>
+        <tbody>
+            {% for builty in builties %}
+            <tr>
+                <td data-k="meta"><a href="{% url 'builty_detail' builty.id %}" class="st-name">{{ builty.display_number }}</a><span class="st-sub">{{ builty.date|date:"d M Y" }}</span></td>
+                <td data-k="what" class="st-wrap">{{ builty.transporter|default:"No transporter" }}{% if builty.is_reversed %} <span class="k-badge">Reversed</span>{% endif %}</td>
+                <td class="k-num text-end" data-k="more" data-label="Builty amount">{{ builty.amount|money }}</td>
+                <td class="k-num text-end" data-k="amount" data-label="On this purchase">{% if builty.is_reversed %}<s class="st-dim">{{ builty.share_here|money }}</s>{% else %}{{ builty.share_here|money }}{% endif %}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
+
+{% if purchase.returns.all %}
+<section class="k-section" aria-labelledby="returns-title">
+    <div class="k-section-head"><h2 class="k-section-title" id="returns-title">Returned to supplier</h2></div>
+    <table class="k-ledger k-ledger--stack">
+        <thead>
+            <tr><th scope="col" data-k="meta">Return</th><th scope="col" data-k="what">Items</th><th scope="col" data-k="more">Reason</th><th scope="col" class="text-end" data-k="amount">Amount</th></tr>
+        </thead>
+        <tbody>
+            {% for entry in purchase.returns.all %}
+            <tr>
+                <td data-k="meta" data-label="Return">#{{ entry.id }}<span class="st-sub">{{ entry.created_at|date:"d M Y H:i" }}</span></td>
+                <td data-k="what" class="st-wrap">{% for line in entry.items.all %}<div>{{ line.product.display_name }} &times; {{ line.quantity_display }}</div>{% endfor %}</td>
+                <td data-k="more" data-label="Reason" class="st-wrap">{{ entry.reason }}</td>
+                <td class="k-num text-end" data-k="amount" data-label="Amount">{{ entry.total_amount|money }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</section>
+{% endif %}
 
 {% if purchase.edit_logs.exists %}
 <section class="k-section" aria-labelledby="log-title">

@@ -841,6 +841,79 @@ class BackupSnapshot(models.Model):
         return self.label or self.file_name
 
 
+def bank_receipt_upload_path(instance, filename):
+    """bank_receipts/2026/11/<random>.<ext>: never the name the uploader's file had."""
+    import secrets
+    from pathlib import PurePosixPath
+
+    extension = PurePosixPath(str(filename).replace("\\", "/")).suffix.lower()
+    return f"{BankReceipt.UPLOAD_FOLDER}/{timezone.now():%Y/%m}/{secrets.token_hex(16)}{extension}"
+
+
+class BankReceipt(models.Model):
+    """
+    The proof of one bank money movement: a photo, a screenshot or the bank's PDF slip.
+
+    It belongs to the record that moved the money (a sale, a purchase, a settlement, an
+    expense, an expense payment, a refund or a transfer). One receipt is in force for a
+    record at a time. A replaced or removed receipt keeps its row and its file, marked
+    with removed_at, so the audit trail can always show what was there.
+    Reading and writing go through accounts.services.bank_receipts.
+    """
+
+    UPLOAD_FOLDER = "bank_receipts"
+
+    content_type = models.ForeignKey(ContentType, on_delete=models.CASCADE)
+    object_id = models.PositiveIntegerField()
+    payment = GenericForeignKey("content_type", "object_id")
+
+    file = models.FileField(upload_to=bank_receipt_upload_path, max_length=255)
+    original_name = models.CharField(max_length=255, blank=True)
+    mime_type = models.CharField(max_length=40)
+    size_bytes = models.PositiveIntegerField(default=0)
+    sha256 = models.CharField(max_length=64, blank=True)
+    uploaded_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="bank_receipts_uploaded",
+    )
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    removed_at = models.DateTimeField(null=True, blank=True)
+    removed_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="bank_receipts_removed",
+    )
+
+    class Meta:
+        ordering = ["-uploaded_at", "-id"]
+        indexes = [
+            models.Index(fields=["content_type", "object_id"], name="acc_bankreceipt_payment_idx"),
+        ]
+
+    @property
+    def is_pdf(self):
+        return self.mime_type == "application/pdf"
+
+    @property
+    def is_image(self):
+        return self.mime_type.startswith("image/")
+
+    @property
+    def size_label(self):
+        size = self.size_bytes or 0
+        if size >= 1024 * 1024:
+            return f"{size / (1024 * 1024):.1f} MB"
+        return f"{max(round(size / 1024), 1)} KB"
+
+    def __str__(self):
+        return f"Bank receipt #{self.id} ({self.original_name or self.mime_type})"
+
+
 
 
 

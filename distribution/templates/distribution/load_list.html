@@ -1,0 +1,64 @@
+{% extends "distribution/_base.html" %}
+{% load currency_tags %}
+{% block title %}Load forms{% endblock %}
+{% block page_title %}Load forms{% endblock %}
+{% block page_help %}A load form is the list of invoices that leave together on one vehicle with one delivery man. Print the load sheet for the storekeeper, mark it out for delivery, and settle it when the van comes back.{% endblock %}
+{% block page_actions %}{% if can_manage %}<a href="{% url 'distribution_load_add' %}" class="btn btn-primary" data-k-key="F2" data-k-key-label="New load"><i class="bi bi-plus-lg" aria-hidden="true"></i> New load</a>{% endif %}{% endblock %}
+
+{% block dist_content %}
+<section class="k-section" aria-label="Loads">
+    <form method="get" class="dist-filters">
+        <div><label class="form-label" for="f-status">Status</label>
+            <select id="f-status" name="status" class="form-select form-select-sm">{% for value, label in status_filters %}<option value="{{ value }}"{% if value == status %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+        <div><label class="form-label" for="f-start">From</label><input type="date" id="f-start" name="start" class="form-control form-control-sm" value="{{ start|date:'Y-m-d' }}"></div>
+        <div><label class="form-label" for="f-end">To</label><input type="date" id="f-end" name="end" class="form-control form-control-sm" value="{{ end|date:'Y-m-d' }}"></div>
+        {% if routes %}<div><label class="form-label" for="f-route">Route</label>
+            <select id="f-route" name="route" class="form-select form-select-sm"><option value="">All routes</option>{% for route in routes %}<option value="{{ route.id }}"{% if route.id == route_id %} selected{% endif %}>{{ route.label }}</option>{% endfor %}</select></div>{% endif %}
+        {% if delivery_men %}<div><label class="form-label" for="f-dm">Delivery man</label>
+            <select id="f-dm" name="delivery_man" class="form-select form-select-sm"><option value="">Everyone</option>{% for man in delivery_men %}<option value="{{ man.id }}"{% if man.id == delivery_man_id %} selected{% endif %}>{{ man.name }}</option>{% endfor %}</select></div>{% endif %}
+        <button type="submit" class="btn btn-outline-secondary btn-sm">Show</button>
+        {% if status or start or end or route_id or delivery_man_id %}<a class="dist-filters-clear" href="?">Clear filters</a>{% endif %}
+    </form>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack b-index">
+            <thead>
+                <tr>
+                    <th scope="col" data-k="meta">Load</th>
+                    <th scope="col" data-k="what">Route / delivery man</th>
+                    <th scope="col" data-k="more">Vehicle</th>
+                    <th scope="col" class="k-num" data-k="more">Invoices</th>
+                    <th scope="col" class="k-num" data-k="amount">Bill value</th>
+                    <th scope="col" data-k="flag">Status</th>
+                    <th scope="col" class="text-end" data-k="hide"><span class="visually-hidden">Actions</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for load in loads %}
+                <tr data-rf-row="{{ load.id }}">
+                    <td data-k="meta"><a href="{% url 'distribution_load_detail' load.id %}" class="b-index-name">{{ load.display_number }}</a><span class="b-sub">{{ load.load_date|date:"d M Y" }}</span></td>
+                    <td data-k="what" class="b-stack-title">{{ load.route.label|default:"No route" }}<span class="b-sub">{{ load.delivery_man.name|default:"No delivery man" }}</span></td>
+                    <td data-k="more" data-label="Vehicle">{{ load.vehicle|default:"-" }}</td>
+                    <td class="k-num" data-k="more" data-label="Invoices">{{ load.invoice_count }}</td>
+                    <td class="k-num" data-k="amount" data-label="Bill value">{{ load.bill_value|money }}</td>
+                    <td data-k="flag" data-label="Status">{% if load.status == "open" %}<span class="k-badge k-badge--blue">Being loaded</span>{% elif load.status == "dispatched" %}<span class="k-badge k-badge--amber">Out for delivery</span>{% else %}<span class="k-badge k-badge--green">Settled</span>{% if load.cash_variance %} <span class="b-sub dist-short">{% if load.cash_variance < 0 %}Short{% else %}Over{% endif %} {{ load.cash_variance|money }}</span>{% endif %}{% endif %}</td>
+                    <td class="text-end" data-k="hide"><span class="k-row-actions">
+                        <a href="{% url 'distribution_load_print' load.id %}" class="k-icon-btn" data-tip="Print load sheet" aria-label="Print load sheet {{ load.display_number }}"><i class="bi bi-printer" aria-hidden="true"></i></a>
+                        {% if load.status != "open" %}<a href="{% url 'distribution_load_settle' load.id %}" class="k-icon-btn" data-tip="{% if load.status == 'settled' %}Settlement{% else %}Settle{% endif %}" aria-label="Settlement of {{ load.display_number }}"><i class="bi bi-clipboard2-check" aria-hidden="true"></i></a>{% endif %}
+                    </span></td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="k-empty" data-k="note">
+                        <i class="bi bi-truck" aria-hidden="true"></i>
+                        <p class="k-empty-title">No load forms here.</p>
+                        <p>Open a load for a vehicle and a delivery man, then put the day's invoices on it.</p>
+                        {% if can_manage %}<a class="btn btn-primary" href="{% url 'distribution_load_add' %}">New load</a>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include "pos/reports/_pagination.html" %}
+</section>
+{% endblock %}

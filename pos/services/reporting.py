@@ -9,9 +9,10 @@ Every figure built here follows the same rules:
 * sums, counts and groupings happen in the database, never over python lists of
   whole querysets.
 """
+import calendar
 import csv
 from dataclasses import dataclass, field
-from datetime import datetime, time, timedelta
+from datetime import date, datetime, time, timedelta
 from decimal import Decimal
 from urllib.parse import urlencode
 
@@ -40,6 +41,7 @@ from django.utils import timezone
 from accounts.models import Expense, PartyLedgerEntry
 from accounts.services.expense_alerts import monthly_bill_alerts
 from pos.models import (
+    PACK_PIECE,
     Category,
     Product,
     Purchase,
@@ -174,6 +176,11 @@ def _sale_due_expression():
         default=Value(ZERO),
         output_field=MONEY_FIELD,
     )
+
+
+def _base_qty_expression():
+    """A sale, purchase or return line's quantity in the product's base unit (packs x pieces per pack)."""
+    return ExpressionWrapper(F("quantity") * F("unit_factor"), output_field=QTY_FIELD)
 
 
 def _item_cost_expression():
@@ -408,7 +415,7 @@ def best_selling_products(start=None, end=None, limit=10):
     sold = (
         SaleItem.objects.filter(range_q(start, end, "sale__created_at"))
         .values("product__id", "product__name", "product__unit", "product__variant_label", "product__variant_group_id")
-        .annotate(total_qty=_qty_sum("quantity"))
+        .annotate(total_qty=_qty_sum(_base_qty_expression()))
         .order_by()
     )
     rows = {}
@@ -422,7 +429,7 @@ def best_selling_products(start=None, end=None, limit=10):
     returned = (
         SaleReturnItem.objects.filter(range_q(start, end, "sale_return__created_at"))
         .values("product__id")
-        .annotate(total_qty=_qty_sum("quantity"))
+        .annotate(total_qty=_qty_sum(_base_qty_expression()))
         .order_by()
     )
     for row in returned:
@@ -431,8 +438,13 @@ def best_selling_products(start=None, end=None, limit=10):
     ranked = sorted(
         (row for row in rows.values() if row["total_qty"] > 0),
         key=lambda row: (-row["total_qty"], row["product__name"]),
-    )
-    return ranked[:limit]
+    )[:limit]
+    products = Product.objects.in_bulk([row["product__id"] for row in ranked])
+    for row in ranked:
+        product = products.get(row["product__id"])
+        # "12 Ctn 3 Box" for a packed product; empty for a plain one, which shows the number and its unit.
+        row["qty_display"] = product.format_quantity(row["total_qty"]) if product is not None and product.has_packaging else ""
+    return ranked
 
 
 def top_customers(start=None, end=None, limit=10):
@@ -729,6 +741,9 @@ class Column:
     unit_key: str = ""
     url_key: str = ""
     note_key: str = ""
+    # Row key holding a function that words a base quantity in packs ("12 Ctn 3 Box 5 pcs").
+    # The CSV keeps the plain number and its unit so a spreadsheet can still add it up.
+    packs_key: str = ""
 
     @property
     def is_numeric(self):
@@ -755,11 +770,18 @@ class ReportSpec:
     group: str
     url_name: str
     builder: object = None
-    # "range": start and end dates, "as_of": one date, "none": no dates at all.
+    # "range": start and end dates, "as_of": one date, "none": no dates at all,
+    # "period": one day, month or year chosen from ``periods``.
     range_mode: str = "range"
     accent: str = "primary"
     # Label inside the switcher, where the group name already says "Sales" or "Stock".
     short_title: str = ""
+    # For range_mode "period": ((code, label), ...), the first being the default.
+    periods: tuple = ()
+
+    @property
+    def period_codes(self):
+        return tuple(code for code, _ in self.periods)
 
 
 def _card(label, value, kind=MONEY, accent="primary", meta=""):
@@ -813,13 +835,13 @@ def build_sales_by_product(start, end, params):
     sold = (
         SaleItem.objects.filter(range_q(start, end, "sale__created_at"))
         .values(*_SALES_BY_PRODUCT_FIELDS)
-        .annotate(qty=_qty_sum("quantity"), net=_money_sum(_item_net_expression()), cost=_money_sum(_item_cost_expression()))
+        .annotate(qty=_qty_sum(_base_qty_expression()), net=_money_sum(_item_net_expression()), cost=_money_sum(_item_cost_expression()))
         .order_by()
     )
     returned = (
         SaleReturnItem.objects.filter(range_q(start, end, "sale_return__created_at"))
         .values(*_SALES_BY_PRODUCT_FIELDS)
-        .annotate(qty=_qty_sum("quantity"), net=_money_sum("net_amount"), cost=_money_sum("cost_amount"))
+        .annotate(qty=_qty_sum(_base_qty_expression()), net=_money_sum("net_amount"), cost=_money_sum("cost_amount"))
         .order_by()
     )
 
@@ -855,8 +877,10 @@ def build_sales_by_product(start, end, params):
         row["cost"] -= source["cost"]
 
     result = []
-    for row in rows.values():
+    products = Product.objects.in_bulk(list(rows.keys()))
+    for product_id, row in rows.items():
         row["net_qty"] = quantize_qty(row["sold_qty"] - row["returned_qty"])
+        row["packer"] = pack_formatter(products.get(product_id))
         result.append(_profit_row(row))
     result.sort(key=lambda row: (-row["net_sales"], row["product"]))
 
@@ -865,9 +889,9 @@ def build_sales_by_product(start, end, params):
         columns=[
             Column("product", "Product", url_key="product_url", note_key="sku"),
             Column("category", "Category"),
-            Column("sold_qty", "Sold", QTY, unit_key="unit"),
-            Column("returned_qty", "Returned", QTY, unit_key="unit"),
-            Column("net_qty", "Net Qty", QTY, unit_key="unit"),
+            Column("sold_qty", "Sold", QTY, unit_key="unit", packs_key="packer"),
+            Column("returned_qty", "Returned", QTY, unit_key="unit", packs_key="packer"),
+            Column("net_qty", "Net Qty", QTY, unit_key="unit", packs_key="packer"),
             Column("net_sales", "Net Sales", MONEY),
             Column("cost", "Cost", MONEY),
             Column("gross_profit", "Gross Profit", MONEY),
@@ -1242,23 +1266,122 @@ def build_tax_summary(start, end, params):
 
 # --- Stock -----------------------------------------------------------------
 
+@dataclass(frozen=True)
+class _MovementSource:
+    """One kind of record that moves a product's shelf stock.
+
+    ``when`` is the record's timestamp, or a date when ``dated`` (a stock return is booked on
+    the date typed on it, the same date its voucher carries); a dated movement counts from
+    the local midnight that starts its date. ``sign`` is +1 for stock in, -1 for stock out and
+    0 for a figure that is only shown (free goods are already inside "sold").
+    """
+
+    bucket: str
+    model: object
+    when: str
+    quantity: object
+    sign: int
+    condition: Q = field(default_factory=Q)
+    dated: bool = False
+
+
+# Buckets of the opening and closing stock report. Stock in less stock out is the net change.
+STOCK_IN_BUCKETS = ("purchased", "returned_in", "adjusted_in")
+STOCK_OUT_BUCKETS = ("sold", "returned_out", "adjusted_out")
+
+
+def _stock_movement_sources():
+    """Every record that changes Product.stock, in one list so that rolling stock back to a
+    date, the stock card and the opening and closing report can never disagree.
+
+    Damaged goods on a stock return never touch saleable stock (they are held for a claim),
+    so only good ("saleable") lines count.
+    """
+    from distribution.models import StockReturn, StockReturnItem
+
+    base = _base_qty_expression()
+    saleable = Q(condition=StockReturnItem.SALEABLE)
+    return (
+        _MovementSource("purchased", PurchaseItem, "purchase__created_at", base, 1),
+        _MovementSource("sold", SaleItem, "sale__created_at", base, -1),
+        _MovementSource("free", SaleItem, "sale__created_at", base, 0, Q(is_free=True)),
+        _MovementSource("returned_in", SaleReturnItem, "sale_return__created_at", base, 1),
+        _MovementSource(
+            "returned_in", StockReturnItem, "stock_return__return_date", base, 1,
+            saleable & Q(stock_return__kind=StockReturn.FROM_CUSTOMER), dated=True,
+        ),
+        _MovementSource("returned_out", PurchaseReturnItem, "purchase_return__created_at", base, -1),
+        _MovementSource(
+            "returned_out", StockReturnItem, "stock_return__return_date", base, -1,
+            saleable & Q(stock_return__kind=StockReturn.TO_SUPPLIER), dated=True,
+        ),
+        _MovementSource("adjusted_in", StockAdjustment, "created_at", F("quantity_delta"), 1, Q(quantity_delta__gt=0)),
+        _MovementSource(
+            "adjusted_out", StockAdjustment, "created_at",
+            ExpressionWrapper(Value(ZERO) - F("quantity_delta"), output_field=QTY_FIELD), -1, Q(quantity_delta__lt=0),
+        ),
+    )
+
+
+def _first_local_date_from(moment):
+    """The first local date whose midnight is at or after ``moment``: where a dated movement starts to count."""
+    local = timezone.localtime(moment)
+    return local.date() if local.time() == time.min else local.date() + timedelta(days=1)
+
+
+def _source_queryset(source, lower=None, upper=None, product_ids=None):
+    """The source's records in [lower, upper); either bound may be None."""
+    queryset = source.model.objects.filter(source.condition)
+    if lower is not None:
+        value = _first_local_date_from(lower) if source.dated else lower
+        queryset = queryset.filter(**{f"{source.when}__gte": value})
+    if upper is not None:
+        value = _first_local_date_from(upper) if source.dated else upper
+        queryset = queryset.filter(**{f"{source.when}__lt": value})
+    if product_ids is not None:
+        queryset = queryset.filter(product_id__in=product_ids)
+    return queryset
+
+
 def _movement_sums_after(moment, product_ids=None):
     """{product_id: net quantity moved} for every stock movement at or after ``moment``."""
-    sources = (
-        (PurchaseItem, "purchase__created_at", "quantity", 1),
-        (SaleItem, "sale__created_at", "quantity", -1),
-        (SaleReturnItem, "sale_return__created_at", "quantity", 1),
-        (PurchaseReturnItem, "purchase_return__created_at", "quantity", -1),
-        (StockAdjustment, "created_at", "quantity_delta", 1),
-    )
     moved = {}
-    for model, date_field, qty_field, sign in sources:
-        queryset = model.objects.filter(**{f"{date_field}__gte": moment})
-        if product_ids is not None:
-            queryset = queryset.filter(product_id__in=product_ids)
-        for product_id, quantity in queryset.values("product_id").annotate(total=_qty_sum(qty_field)).order_by().values_list("product_id", "total"):
-            moved[product_id] = moved.get(product_id, ZERO) + sign * Decimal(quantity or 0)
+    for source in _stock_movement_sources():
+        if not source.sign:
+            continue
+        queryset = _source_queryset(source, lower=moment, product_ids=product_ids)
+        for product_id, quantity in queryset.values("product_id").annotate(total=_qty_sum(source.quantity)).order_by().values_list("product_id", "total"):
+            moved[product_id] = moved.get(product_id, ZERO) + source.sign * Decimal(quantity or 0)
     return moved
+
+
+def _movement_buckets(lower, upper, product_ids=None, *, by_day=False):
+    """Stock moved in [lower, upper), per product and bucket, in base units (all positive).
+
+    Returns {product_id: {bucket: qty}}, or {(product_id, local date): {bucket: qty}} by day.
+    """
+    tz = timezone.get_current_timezone()
+    moved = {}
+    for source in _stock_movement_sources():
+        queryset = _source_queryset(source, lower, upper, product_ids)
+        if by_day:
+            day = F(source.when) if source.dated else TruncDate(source.when, tzinfo=tz)
+            grouped = queryset.annotate(movement_day=day).values("product_id", "movement_day")
+            fields = ("product_id", "movement_day", "total")
+        else:
+            grouped = queryset.values("product_id")
+            fields = ("product_id", "total")
+        for values in grouped.annotate(total=_qty_sum(source.quantity)).order_by().values_list(*fields):
+            key = (values[0], values[1]) if by_day else values[0]
+            buckets = moved.setdefault(key, {})
+            buckets[source.bucket] = buckets.get(source.bucket, ZERO) + Decimal(values[-1] or 0)
+    return moved
+
+
+def _net_moved(buckets):
+    return sum((buckets.get(name, ZERO) for name in STOCK_IN_BUCKETS), ZERO) - sum(
+        (buckets.get(name, ZERO) for name in STOCK_OUT_BUCKETS), ZERO
+    )
 
 
 def build_stock_valuation(start, end, params):
@@ -1292,9 +1415,11 @@ def build_stock_valuation(start, end, params):
                 "category": product.category.name if product.category else "Uncategorised",
                 "quantity": quantity,
                 "unit": product.unit,
-                "average_cost": quantize_money(product.cost_price or 0),
+                "packer": pack_formatter(product),
+                "per_pack": f"per {product.top_pack_label}" if product.has_packaging else "",
+                "average_cost": product.top_pack_cost,
                 "cost_value": cost_value,
-                "sale_price": quantize_money(product.price or 0),
+                "sale_price": product.top_pack_price,
                 "retail_value": retail_value,
                 "potential_profit": quantize_money(retail_value - cost_value),
             }
@@ -1311,10 +1436,10 @@ def build_stock_valuation(start, end, params):
         columns=[
             Column("product", "Product", url_key="product_url", note_key="sku"),
             Column("category", "Category"),
-            Column("quantity", "On Hand", QTY, unit_key="unit"),
-            Column("average_cost", "Avg Cost", MONEY),
+            Column("quantity", "On Hand", QTY, unit_key="unit", packs_key="packer"),
+            Column("average_cost", "Avg Cost", MONEY, note_key="per_pack"),
             Column("cost_value", "Stock Value", MONEY),
-            Column("sale_price", "Sale Price", MONEY),
+            Column("sale_price", "Sale Price", MONEY, note_key="per_pack"),
             Column("retail_value", "Retail Value", MONEY),
             Column("potential_profit", "Potential Profit", MONEY),
         ],
@@ -1339,6 +1464,11 @@ def build_stock_valuation(start, end, params):
     )
 
 
+def _rate_note(item):
+    """Words the unit beside a rate that is not for the base unit, such as per Ctn."""
+    return f"per {item.unit_label}" if item.unit_level != PACK_PIECE else ""
+
+
 def _stock_movements(product, lower, upper):
     def bounded(queryset, date_field):
         if lower is not None:
@@ -1357,8 +1487,9 @@ def _stock_movements(product, lower, upper):
                 "reference": f"Purchase #{item.purchase_id}",
                 "reference_url": reverse("purchase_detail", args=[item.purchase_id]),
                 "party": item.purchase.supplier.name if item.purchase.supplier else "Cash purchase",
-                "delta": Decimal(item.quantity),
+                "delta": Decimal(item.base_quantity),
                 "rate": item.cost_price,
+                "rate_note": _rate_note(item),
             }
         )
     sales = bounded(SaleItem.objects.filter(product=product), "sale__created_at").select_related("sale__customer")
@@ -1370,8 +1501,9 @@ def _stock_movements(product, lower, upper):
                 "reference": f"Invoice {sale_number(item.sale)}",
                 "reference_url": reverse("invoice", args=[item.sale_id]),
                 "party": item.sale.customer.name if item.sale.customer else "Walk-in customer",
-                "delta": -Decimal(item.quantity),
+                "delta": -Decimal(item.base_quantity),
                 "rate": item.discounted_unit_price,
+                "rate_note": _rate_note(item),
             }
         )
     sale_returns = bounded(SaleReturnItem.objects.filter(product=product), "sale_return__created_at").select_related(
@@ -1385,8 +1517,9 @@ def _stock_movements(product, lower, upper):
                 "reference": f"Return #{item.sale_return_id} of invoice {sale_number(item.sale_return.sale)}",
                 "reference_url": reverse("invoice", args=[item.sale_return.sale_id]),
                 "party": item.sale_return.customer.name if item.sale_return.customer else "Walk-in customer",
-                "delta": Decimal(item.quantity),
+                "delta": Decimal(item.base_quantity),
                 "rate": item.unit_price,
+                "rate_note": _rate_note(item),
             }
         )
     purchase_returns = bounded(
@@ -1400,10 +1533,38 @@ def _stock_movements(product, lower, upper):
                 "reference": f"Return #{item.purchase_return_id} of purchase #{item.purchase_return.purchase_id}",
                 "reference_url": reverse("purchase_detail", args=[item.purchase_return.purchase_id]),
                 "party": item.purchase_return.supplier.name if item.purchase_return.supplier else "Cash purchase",
-                "delta": -Decimal(item.quantity),
+                "delta": -Decimal(item.base_quantity),
                 "rate": item.purchase_item.cost_price,
+                "rate_note": _rate_note(item.purchase_item),
             }
         )
+    for source in _stock_movement_sources():
+        if not source.dated:
+            continue
+        # Good stock on a market return or a return to the supplier (damaged goods never reach the shelf).
+        items = _source_queryset(source, lower, upper, [product.pk]).select_related(
+            "stock_return__customer", "stock_return__supplier"
+        )
+        for item in items:
+            stock_return = item.stock_return
+            created = timezone.localtime(stock_return.created_at)
+            when = (
+                stock_return.created_at
+                if created.date() == stock_return.return_date
+                else timezone.make_aware(datetime.combine(stock_return.return_date, time.min), timezone.get_current_timezone())
+            )
+            movements.append(
+                {
+                    "when": when,
+                    "type": "Market return" if source.sign > 0 else "Return to supplier",
+                    "reference": f"Stock return {stock_return.display_number}",
+                    "reference_url": reverse("distribution_return_detail", args=[stock_return.pk]),
+                    "party": stock_return.party_name,
+                    "delta": source.sign * Decimal(item.base_quantity),
+                    "rate": item.rate,
+                    "rate_note": _rate_note(item),
+                }
+            )
     adjustments = bounded(StockAdjustment.objects.filter(product=product), "created_at").select_related("created_by")
     for adjustment in adjustments:
         movements.append(
@@ -1441,10 +1602,10 @@ def build_stock_card(start, end, params):
         Column("type", "Movement"),
         Column("reference", "Reference", url_key="reference_url"),
         Column("party", "Party / By"),
-        Column("rate", "Unit Rate", MONEY),
-        Column("qty_in", "In", QTY, unit_key="unit"),
-        Column("qty_out", "Out", QTY, unit_key="unit"),
-        Column("balance", "Balance", QTY, unit_key="unit"),
+        Column("rate", "Unit Rate", MONEY, note_key="rate_note"),
+        Column("qty_in", "In", QTY, unit_key="unit", packs_key="packer"),
+        Column("qty_out", "Out", QTY, unit_key="unit", packs_key="packer"),
+        Column("balance", "Balance", QTY, unit_key="unit", packs_key="packer"),
     ]
     if product is None:
         return Report(columns=columns, rows=[], filters=filters, empty_message="Choose a product to see its stock movements.")
@@ -1463,6 +1624,7 @@ def build_stock_card(start, end, params):
     balance = opening
     total_in = ZERO
     total_out = ZERO
+    packer = pack_formatter(product)
     for movement in movements:
         delta = movement["delta"]
         balance += delta
@@ -1478,6 +1640,8 @@ def build_stock_card(start, end, params):
                 "reference_url": movement["reference_url"],
                 "party": movement["party"],
                 "rate": movement["rate"],
+                "rate_note": movement.get("rate_note", ""),
+                "packer": packer,
                 "qty_in": quantize_qty(delta) if delta >= 0 else None,
                 "qty_out": quantize_qty(-delta) if delta < 0 else None,
                 "balance": quantize_qty(balance),
@@ -1489,7 +1653,13 @@ def build_stock_card(start, end, params):
     return Report(
         columns=columns,
         rows=rows,
-        totals={"qty_in": quantize_qty(total_in), "qty_out": quantize_qty(total_out), "balance": quantize_qty(closing), "unit": unit},
+        totals={
+            "qty_in": quantize_qty(total_in),
+            "qty_out": quantize_qty(total_out),
+            "balance": quantize_qty(closing),
+            "unit": unit,
+            "packer": packer,
+        },
         cards=[
             _card("Opening Balance", f"{format_qty(opening)} {unit}", TEXT, "slate", "Before the first day of the period"),
             _card("Stock In", f"{format_qty(total_in)} {unit}", TEXT, "success", "Purchases, returns from customers, adjustments up"),
@@ -1499,6 +1669,361 @@ def build_stock_card(start, end, params):
         filters=filters,
         note=f"{product.display_name} ({product.sku}). On hand now: {format_qty(product.stock)} {unit}.",
         empty_message="No stock movements for this product in the period.",
+    )
+
+
+# --- Opening and closing stock ----------------------------------------------
+
+PERIOD_DAY = "day"
+PERIOD_MONTH = "month"
+PERIOD_YEAR = "year"
+STOCK_SHOW_OPTIONS = (("", "Products with stock or movement"), ("all", "All products"))
+
+
+def _month_end(first):
+    return date(first.year, first.month, calendar.monthrange(first.year, first.month)[1])
+
+
+def _parse_month(value):
+    """The first day of a month typed as 2026-11 (or a full date in it); None when unreadable."""
+    value = (value or "").strip()
+    for fmt in ("%Y-%m", "%Y-%m-%d", "%m/%Y"):
+        try:
+            return datetime.strptime(value, fmt).date().replace(day=1)
+        except ValueError:
+            continue
+    return None
+
+
+def _parse_year(value):
+    value = (value or "").strip()
+    if value.isdigit() and 1900 <= int(value) <= 9999:
+        return int(value)
+    return None
+
+
+def parse_report_period(params, periods, today=None):
+    """(period, start, end) for a report that covers one day, one month or one year.
+
+    ``periods`` are the codes the report offers, the first being its default. When the
+    period changes, the date already chosen carries over: switching 13 Nov to Monthly
+    opens November.
+    """
+    today = today or timezone.localdate()
+    period = params.get("period") if params.get("period") in periods else periods[0]
+    day = parse_report_date(params.get("day"))
+    month = _parse_month(params.get("month"))
+    year = _parse_year(params.get("year"))
+    if period == PERIOD_DAY:
+        if day is None:
+            anchor = month or (date(year, 1, 1) if year else None)
+            day = today if anchor is None or (anchor.year, anchor.month) == (today.year, today.month) else anchor
+        return period, day, day
+    if period == PERIOD_MONTH:
+        if month is None:
+            if day is not None:
+                month = day.replace(day=1)
+            elif year is not None and year != today.year:
+                month = date(year, 1, 1)
+            else:
+                month = today.replace(day=1)
+        return period, month, _month_end(month)
+    if year is None:
+        year = (day or month or today).year
+    return PERIOD_YEAR, date(year, 1, 1), date(year, 12, 31)
+
+
+def period_label(start, end):
+    if start == end:
+        return start.strftime("%a %d %b %Y")
+    if start.day == 1 and end == _month_end(start):
+        return start.strftime("%B %Y")
+    if (start.month, start.day, end.month, end.day) == (1, 1, 12, 31) and start.year == end.year:
+        return f"Year {start.year}"
+    return range_label(start, end)
+
+
+def _period_shortcuts(periods, today):
+    """Quick links for a period report: today and yesterday, this and last month, this and last year."""
+    last_month = today.replace(day=1) - timedelta(days=1)
+    choices = {
+        PERIOD_DAY: (("Today", today.isoformat()), ("Yesterday", (today - timedelta(days=1)).isoformat())),
+        PERIOD_MONTH: (("This month", today.strftime("%Y-%m")), ("Last month", last_month.strftime("%Y-%m"))),
+        PERIOD_YEAR: (("This year", str(today.year)), ("Last year", str(today.year - 1))),
+    }
+    shortcuts = []
+    for period in periods:
+        for label, value in choices.get(period, ()):
+            query = {"period": period, period: value}
+            _, start, end = parse_report_period(query, periods, today)
+            shortcuts.append({"label": label, "query": query, "start": start, "end": end})
+    return shortcuts
+
+
+def _tracked_products(params):
+    """Stock-tracked products narrowed by the category and product filters, and those filters."""
+    category_id = (params.get("category") or "").strip()
+    product_id = (params.get("product") or "").strip()
+    products = Product.objects.filter(track_stock=True).select_related("category").order_by("name", "variant_label", "id")
+    narrowed = False
+    if category_id.isdigit():
+        products = products.filter(category_id=int(category_id))
+        narrowed = True
+    if product_id.isdigit():
+        products = products.filter(pk=int(product_id))
+        narrowed = True
+    filters = [
+        _select_filter(
+            "category",
+            "Category",
+            category_id,
+            [("", "All categories")] + [(category.id, category.name) for category in Category.objects.order_by("name")],
+        ),
+        _select_filter(
+            "product",
+            "Product",
+            product_id,
+            [("", "All products")]
+            + [
+                (row.id, f"{row.display_name} ({row.sku})")
+                for row in Product.objects.filter(track_stock=True)
+                .order_by("name", "variant_label")
+                .only("id", "name", "sku", "variant_label", "variant_group_id")
+            ],
+        ),
+    ]
+    return list(products), (category_id if category_id.isdigit() else ""), (product_id if product_id.isdigit() else ""), narrowed, filters
+
+
+def _stock_at_bounds(products, lower, upper, narrowed):
+    """({product_id: stock at ``lower``}, {product_id: {bucket: qty}} moved in [lower, upper)).
+
+    Today's stock is rolled back by every movement from ``upper`` on, then by the period's
+    own movements, so opening + movements = closing for every product, exactly.
+    """
+    product_ids = [product.id for product in products] if narrowed else None
+    after = _movement_sums_after(upper, product_ids)
+    moved = _movement_buckets(lower, upper, product_ids)
+    opening = {}
+    for product in products:
+        closing = Decimal(product.stock or 0) - after.get(product.id, ZERO)
+        opening[product.id] = closing - _net_moved(moved.get(product.id, {}))
+    return opening, moved
+
+
+def _qty_or_none(value):
+    value = quantize_qty(value)
+    return value if value != 0 else None
+
+
+def build_opening_closing_stock(start, end, params):
+    """Per product: stock at the start of the first day, what came in and went out, stock at the end of the last day."""
+    today = timezone.localdate()
+    start = start or today
+    end = end or start
+    show_all = (params.get("show") or "").strip() == "all"
+    products, category_id, product_id, narrowed, filters = _tracked_products(params)
+    filters.append(_select_filter("show", "Show", "all" if show_all else "", STOCK_SHOW_OPTIONS))
+
+    lower, upper = local_day_bounds(start, end)
+    opening_stock, moved = _stock_at_bounds(products, lower, upper, narrowed)
+
+    rows = []
+    for product in products:
+        buckets = moved.get(product.id, {})
+        opening = quantize_qty(opening_stock[product.id])
+        closing = quantize_qty(opening_stock[product.id] + _net_moved(buckets))
+        has_movement = any(buckets.get(name, ZERO) for name in STOCK_IN_BUCKETS + STOCK_OUT_BUCKETS)
+        if not show_all and opening == 0 and closing == 0 and not has_movement:
+            continue
+        cost = Decimal(product.cost_price or 0)
+        packer = pack_formatter(product)
+        free = quantize_qty(buckets.get("free", ZERO))
+        rows.append(
+            {
+                "product": product.display_name,
+                "sku": product.sku,
+                "product_url": date_range_url("report_stock_card", start, end, product=product.id),
+                "category": product.category.name if product.category else "Uncategorised",
+                "opening": opening,
+                "purchased": _qty_or_none(buckets.get("purchased", ZERO)),
+                "sold": _qty_or_none(buckets.get("sold", ZERO)),
+                "sold_note": f"incl. {packer(free) if packer else f'{format_qty(free)} {product.unit}'} free" if free else "",
+                "returned_in": _qty_or_none(buckets.get("returned_in", ZERO)),
+                "returned_out": _qty_or_none(buckets.get("returned_out", ZERO)),
+                "adjusted": _qty_or_none(buckets.get("adjusted_in", ZERO) - buckets.get("adjusted_out", ZERO)),
+                "closing": closing,
+                "unit": product.unit,
+                "packer": packer,
+                "opening_value": quantize_money(opening * cost),
+                "closing_value": quantize_money(closing * cost),
+            }
+        )
+
+    totals = {key: quantize_money(sum((row[key] for row in rows), ZERO)) for key in ("opening_value", "closing_value")}
+    if product_id and len(rows) == 1:
+        # One product: its quantities add up too.
+        row = rows[0]
+        totals.update({key: row[key] for key in ("opening", "purchased", "sold", "returned_in", "returned_out", "adjusted", "closing", "unit", "packer")})
+    change = quantize_money(totals["closing_value"] - totals["opening_value"])
+
+    label = period_label(start, end)
+    first_day = start.strftime("%d %b %Y")
+    last_day = end.strftime("%d %b %Y")
+    return Report(
+        columns=[
+            Column("product", "Product", url_key="product_url", note_key="sku"),
+            Column("category", "Category"),
+            Column("opening", "Opening Stock", QTY, unit_key="unit", packs_key="packer"),
+            Column("purchased", "Purchased", QTY, unit_key="unit", packs_key="packer"),
+            Column("sold", "Sold", QTY, unit_key="unit", packs_key="packer", note_key="sold_note"),
+            Column("returned_in", "Returned In", QTY, unit_key="unit", packs_key="packer"),
+            Column("returned_out", "Returned Out", QTY, unit_key="unit", packs_key="packer"),
+            Column("adjusted", "Adjusted +/-", QTY, unit_key="unit", packs_key="packer"),
+            Column("closing", "Closing Stock", QTY, unit_key="unit", packs_key="packer"),
+            Column("opening_value", "Opening Value", MONEY),
+            Column("closing_value", "Closing Value", MONEY),
+        ],
+        rows=rows,
+        totals=totals,
+        cards=[
+            _card("Opening Value", totals["opening_value"], accent="slate", meta=f"Start of {first_day}"),
+            _card("Closing Value", totals["closing_value"], accent="primary", meta=f"End of {last_day}"),
+            _card(
+                "Net Change", change, accent="success" if change >= 0 else "danger",
+                meta="Stock grew in value" if change > 0 else ("Stock fell in value" if change < 0 else "No change in value"),
+            ),
+            _card("Products", len(rows), INT, "info", label),
+        ],
+        filters=filters,
+        note=(
+            f"Opening is the stock at the start of {first_day}, closing at the end of {last_day}. "
+            "Sold includes free goods; returned in is goods back on the shelf from customers (sale and market "
+            "returns; damaged goods held for a claim are not stock); returned out is goods sent back to suppliers. "
+            "Values use each product's current weighted-average cost, not the cost on those dates."
+        ),
+        empty_message="No product had stock or movement in this period.",
+    )
+
+
+def build_stock_by_period(start, end, params):
+    """One line per day of a month (or per month of a year): opening value, stock in, stock out, closing value."""
+    today = timezone.localdate()
+    start = start or today.replace(day=1)
+    end = end or _month_end(start)
+    by_month = (end - start).days > 31
+    last = min(end, today)
+    products, category_id, product_id, narrowed, filters = _tracked_products(params)
+    columns = [
+        Column("period", "Month" if by_month else "Day", url_key="period_url"),
+        Column("opening_value", "Opening Value", MONEY),
+        Column("stock_in", "Stock In", MONEY),
+        Column("stock_out", "Stock Out", MONEY),
+        Column("closing_value", "Closing Value", MONEY),
+        Column("change", "Net Change", MONEY),
+    ]
+    note = (
+        "Stock in is purchases, goods back on the shelf from customers and adjustments up; stock out is sales "
+        "with free goods, returns to suppliers and adjustments down. Values use each product's current "
+        "weighted-average cost. Open a line to see every product."
+    )
+    if last < start:
+        return Report(columns=columns, rows=[], filters=filters, note=note, empty_message="This period has not started yet.")
+
+    lower, _ = local_day_bounds(start, None)
+    _, upper = local_day_bounds(None, last)
+    product_ids = [product.id for product in products] if narrowed else None
+    after = _movement_sums_after(upper, product_ids)
+    moved_by_day = _movement_buckets(lower, upper, product_ids, by_day=True)
+    cost = {product.id: Decimal(product.cost_price or 0) for product in products}
+
+    # Group each product's movements by the line they fall in: the day, or the first of its month.
+    per_line = {}
+    period_net = {}
+    for (pid, day), buckets in moved_by_day.items():
+        if pid not in cost:
+            continue
+        if isinstance(day, datetime):
+            day = day.date()
+        key = max(day.replace(day=1), start) if by_month else day
+        line = per_line.setdefault(key, {}).setdefault(pid, {"in": ZERO, "out": ZERO})
+        line["in"] += sum((buckets.get(name, ZERO) for name in STOCK_IN_BUCKETS), ZERO)
+        line["out"] += sum((buckets.get(name, ZERO) for name in STOCK_OUT_BUCKETS), ZERO)
+        period_net[pid] = period_net.get(pid, ZERO) + _net_moved(buckets)
+
+    # Stock of each product at the start of the first line.
+    on_hand = {}
+    for product in products:
+        quantity = Decimal(product.stock or 0) - after.get(product.id, ZERO) - period_net.get(product.id, ZERO)
+        if quantity:
+            on_hand[product.id] = quantity
+
+    def value_of(quantities):
+        return sum((quantize_money(quantity * cost[pid]) for pid, quantity in quantities.items()), ZERO)
+
+    keys = []
+    cursor = start
+    while cursor <= last:
+        keys.append(cursor)
+        cursor = (_month_end(cursor) + timedelta(days=1)) if by_month else cursor + timedelta(days=1)
+
+    base_params = {"category": category_id, "product": product_id}
+    report_path = reverse("report_opening_closing_stock")
+    rows = []
+    for key in keys:
+        opening_value = value_of(on_hand)
+        lines = per_line.get(key, {})
+        stock_in = ZERO
+        for pid, line in lines.items():
+            stock_in += quantize_money(line["in"] * cost[pid])
+            quantity = on_hand.get(pid, ZERO) + line["in"] - line["out"]
+            if quantity:
+                on_hand[pid] = quantity
+            else:
+                on_hand.pop(pid, None)
+        closing_value = value_of(on_hand)
+        # Out is what closes the line, so each line reads opening + in - out = closing to the paisa.
+        stock_out = opening_value + stock_in - closing_value
+        if by_month:
+            query = {"period": PERIOD_MONTH, "month": key.strftime("%Y-%m")}
+            label = key.strftime("%B %Y")
+        else:
+            query = {"period": PERIOD_DAY, "day": key.isoformat()}
+            label = key.strftime("%a %d %b")
+        query.update({name: value for name, value in base_params.items() if value})
+        rows.append(
+            {
+                "period": label,
+                "period_url": f"{report_path}?{urlencode(query)}",
+                "opening_value": quantize_money(opening_value),
+                "stock_in": quantize_money(stock_in),
+                "stock_out": quantize_money(stock_out),
+                "closing_value": quantize_money(closing_value),
+                "change": quantize_money(closing_value - opening_value),
+            }
+        )
+
+    totals = {
+        "opening_value": rows[0]["opening_value"],
+        "stock_in": quantize_money(sum((row["stock_in"] for row in rows), ZERO)),
+        "stock_out": quantize_money(sum((row["stock_out"] for row in rows), ZERO)),
+        "closing_value": rows[-1]["closing_value"],
+        "change": quantize_money(rows[-1]["closing_value"] - rows[0]["opening_value"]),
+    }
+    last_text = last.strftime("%d %b %Y")
+    return Report(
+        columns=columns,
+        rows=rows,
+        totals=totals,
+        cards=[
+            _card("Opening Value", totals["opening_value"], accent="slate", meta=f"Start of {start.strftime('%d %b %Y')}"),
+            _card("Stock In", totals["stock_in"], accent="success", meta="At current average cost"),
+            _card("Stock Out", totals["stock_out"], accent="warning", meta="At current average cost"),
+            _card("Closing Value", totals["closing_value"], accent="primary", meta=f"End of {last_text}"),
+        ],
+        filters=filters,
+        note=note,
+        empty_message="Nothing to show for this period.",
     )
 
 
@@ -1594,15 +2119,60 @@ def build_returns(start, end, params):
     )
 
 
+def _field_sales_report(name):
+    """A builder of pos.services.field_sales_reports, imported on first use (that module imports this one)."""
+
+    def build(start, end, params):
+        from pos.services import field_sales_reports
+
+        return getattr(field_sales_reports, name)(start, end, params)
+
+    return build
+
+
+def _distribution_report(name):
+    """A builder of distribution.reports, imported on first use (that module imports this one)."""
+
+    def build(start, end, params):
+        from distribution import reports as distribution_reports
+
+        return getattr(distribution_reports, name)(start, end, params)
+
+    return build
+
+
+def _pricing_report(name):
+    """A builder of pricing.reports, imported on first use (that module imports this one)."""
+
+    def build(start, end, params):
+        from pricing import reports as pricing_reports
+
+        return getattr(pricing_reports, name)(start, end, params)
+
+    return build
+
+
 REPORTS = (
     ReportSpec("sales-by-product", "Sales by Product", "What sold, how much came back, and the profit each product made.", "bi-bag-check", "Sales", "report_sales_by_product", build_sales_by_product, accent="primary", short_title="By Product"),
     ReportSpec("sales-by-category", "Sales by Category", "Which departments bring the sales and the margin.", "bi-tags", "Sales", "report_sales_by_category", build_sales_by_category, accent="info", short_title="By Category"),
     ReportSpec("sales-by-customer", "Sales by Customer", "Who buys the most, what they returned and what is unpaid.", "bi-people", "Sales", "report_sales_by_customer", build_sales_by_customer, accent="success", short_title="By Customer"),
+    ReportSpec("sales-by-order-booker", "Sales by Order Booker", "Invoices, quantity and sales each order booker brought in, net of returns.", "bi-person-badge", "Sales", "report_sales_by_order_booker", _field_sales_report("build_sales_by_order_booker"), accent="info", short_title="By Order Booker"),
+    ReportSpec("receivables-by-area", "Receivables by City and Route", "Customer balances grouped by city, route or order booker, with a subtotal for each group.", "bi-pin-map", "Sales", "report_receivables_by_area", _field_sales_report("build_receivables_by_area"), range_mode="as_of", accent="warning", short_title="Receivables"),
     ReportSpec("sales-by-payment-method", "Sales by Payment Method", "Cash, bank and credit sales with refunds taken off.", "bi-credit-card", "Sales", "report_sales_by_payment_method", build_sales_by_payment_method, accent="slate", short_title="By Payment"),
     ReportSpec("tax-summary", "Tax Summary", "Taxable sales and tax collected for each rate, net of returns.", "bi-percent", "Sales", "report_tax_summary", build_tax_summary, accent="warning", short_title="Tax"),
     ReportSpec("returns", "Returns", "Every sale and purchase return with its reason and value.", "bi-arrow-counterclockwise", "Sales", "report_returns", build_returns, accent="danger", short_title="Returns"),
     ReportSpec("stock-valuation", "Stock Valuation", "Quantity on hand x average cost, with units.", "bi-calculator", "Stock", "report_stock_valuation", build_stock_valuation, range_mode="as_of", accent="primary", short_title="Valuation"),
     ReportSpec("stock-card", "Stock Movement Card", "One product: purchases, sales, returns and adjustments with a running balance.", "bi-card-list", "Stock", "report_stock_card", build_stock_card, accent="info", short_title="Movement Card"),
+    ReportSpec("opening-closing-stock", "Opening and Closing Stock", "For a day or a month: each product's opening stock, purchased, sold, returned, adjusted and closing stock, with values.", "bi-box-seam", "Stock", "report_opening_closing_stock", build_opening_closing_stock, range_mode="period", accent="primary", short_title="Opening and Closing", periods=((PERIOD_DAY, "Daily"), (PERIOD_MONTH, "Monthly"))),
+    ReportSpec("stock-day-by-day", "Stock Day by Day", "Opening value, stock in, stock out and closing value for each day of a month or each month of a year.", "bi-calendar3-week", "Stock", "report_stock_day_by_day", build_stock_by_period, range_mode="period", accent="info", short_title="Day by Day", periods=((PERIOD_MONTH, "Each day of a month"), (PERIOD_YEAR, "Each month of a year"))),
+    ReportSpec("order-booking", "Order Booking Summary", "Orders booked by order booker, route or day: booked, invoiced and short.", "bi-clipboard-check", "Distribution", "report_order_booking", _distribution_report("build_order_booking"), accent="primary", short_title="Order Booking"),
+    ReportSpec("load-sheets", "Load Sheet History", "Every load form with its invoices, cartons, bill value, returns and cash.", "bi-truck", "Distribution", "report_load_sheets", _distribution_report("build_load_sheets"), accent="info", short_title="Load Sheets"),
+    ReportSpec("delivery-settlement", "Delivery Man Settlement", "Bills taken out, returns, cash expected and handed in, for each delivery man.", "bi-person-check", "Distribution", "report_delivery_settlement", _distribution_report("build_delivery_settlement"), accent="warning", short_title="Settlements"),
+    ReportSpec("recovery", "Recovery", "Money recovered from customers by route, by person or by day.", "bi-cash-coin", "Distribution", "report_recovery", _distribution_report("build_recovery"), accent="success", short_title="Recovery"),
+    ReportSpec("stock-returns", "Stock Returns", "Market returns and returns to suppliers, line by line, good and damaged.", "bi-box-arrow-in-left", "Distribution", "report_stock_returns", _distribution_report("build_stock_returns"), accent="danger", short_title="Stock Returns"),
+    ReportSpec("damaged-claims", "Damaged Stock and Claims", "Damaged goods taken back from the market, sent back to suppliers, and still held for a claim.", "bi-exclamation-octagon", "Distribution", "report_damaged_claims", _distribution_report("build_damaged_claims"), accent="danger", short_title="Damaged and Claims"),
+    ReportSpec("scheme-usage", "Scheme Usage", "Free goods at cost and discounts given by schemes, by scheme, customer, route, product or day.", "bi-gift", "Pricing", "report_scheme_usage", _pricing_report("build_scheme_usage"), accent="warning", short_title="Scheme Usage"),
+    ReportSpec("price-lists", "Price Lists", "Every trade price on every list beside the product price, cost, margin and MRP.", "bi-card-checklist", "Pricing", "report_price_lists", _pricing_report("build_price_lists"), range_mode="none", accent="info", short_title="Price Lists"),
 )
 REPORTS_BY_SLUG = {spec.slug: spec for spec in REPORTS}
 
@@ -1665,15 +2235,32 @@ def _as_of_shortcuts(today):
     ]
 
 
-def report_shell_context(request, active_slug, *, start=None, end=None, range_mode="range", extra_params=None):
-    """Context every report page needs: switcher, date shortcuts, export link."""
+def report_shell_context(request, active_slug, *, start=None, end=None, range_mode="range", extra_params=None, periods=()):
+    """Context every report page needs: switcher, date shortcuts, export link.
+
+    ``periods`` ((code, label), ...) is for range_mode "period": one day, month or year.
+    """
     extra_params = {key: value for key, value in (extra_params or {}).items() if value not in (None, "")}
     shortcuts = []
     if range_mode == "range":
         shortcuts = quick_ranges()
     elif range_mode == "as_of":
         shortcuts = _as_of_shortcuts(timezone.localdate())
+    period_context = {}
+    if range_mode == "period":
+        codes = tuple(code for code, _ in periods)
+        period, _, _ = parse_report_period(request.GET, codes)
+        period_context = {"period": period, "period_options": list(periods)}
     ranges = []
+    if range_mode == "period":
+        for item in _period_shortcuts(codes, timezone.localdate()):
+            ranges.append(
+                {
+                    "label": item["label"],
+                    "url": f"{request.path}?{urlencode({**extra_params, **item['query']})}",
+                    "active": item["start"] == start and item["end"] == end,
+                }
+            )
     for item in shortcuts:
         query = dict(extra_params)
         if item["start"]:
@@ -1699,9 +2286,12 @@ def report_shell_context(request, active_slug, *, start=None, end=None, range_mo
         label = range_label(start, end)
     elif range_mode == "as_of":
         label = f"As of {(end or timezone.localdate()).strftime('%d %b %Y')}"
+    elif range_mode == "period" and start and end:
+        label = period_label(start, end)
     else:
         label = ""
     return {
+        **period_context,
         "report_groups": report_navigation(active_slug, start, end),
         "report_slug": active_slug,
         "range_mode": range_mode,
@@ -1719,11 +2309,20 @@ def report_shell_context(request, active_slug, *, start=None, end=None, range_mo
 # Table cells and CSV
 # ---------------------------------------------------------------------------
 
+class ReportRowCells(list):
+    """The cells of one table row. ``kind`` is "" for a plain row, "group" for a heading line
+    that names a group ("City : Mirpur A.K") and "subtotal" for the line that closes one.
+    A builder marks such a row with ``"_kind"`` in the row dict."""
+
+    kind = ""
+
+
 def report_table_rows(report, rows=None):
     """Rows as lists of cells the generic template can render without lookups by key."""
     table = []
     for row in report.rows if rows is None else rows:
-        cells = []
+        cells = ReportRowCells()
+        cells.kind = row.get("_kind", "")
         for column in report.columns:
             cells.append(
                 {
@@ -1733,10 +2332,25 @@ def report_table_rows(report, rows=None):
                     "unit": row.get(column.unit_key) if column.unit_key else "",
                     "url": row.get(column.url_key) if column.url_key else "",
                     "note": row.get(column.note_key) if column.note_key else "",
+                    "packs": _packs_text(row, column),
                 }
             )
         table.append(cells)
     return table
+
+
+def _packs_text(row, column):
+    """A quantity cell of a packed product reads in cartons, boxes and pieces."""
+    packer = row.get(column.packs_key) if column.packs_key else None
+    value = row.get(column.key)
+    if packer is None or value is None or value == "":
+        return ""
+    return packer(value)
+
+
+def pack_formatter(product):
+    """The function a report row carries so its quantities read in packs; None for a plain product."""
+    return product.format_quantity if product is not None and product.has_packaging else None
 
 
 def report_total_cells(report):
@@ -1746,7 +2360,7 @@ def report_total_cells(report):
     for index, column in enumerate(report.columns):
         value = report.totals.get(column.key)
         if index == 0 and value is None:
-            cells.append({"value": "Total", "kind": TEXT, "numeric": False, "unit": "", "url": "", "note": ""})
+            cells.append({"value": "Total", "kind": TEXT, "numeric": False, "unit": "", "url": "", "note": "", "packs": ""})
             continue
         cells.append(
             {
@@ -1756,6 +2370,7 @@ def report_total_cells(report):
                 "unit": report.totals.get(column.unit_key, "") if column.unit_key else "",
                 "url": "",
                 "note": "",
+                "packs": _packs_text(report.totals, column) if value is not None else "",
             }
         )
     return cells
@@ -1807,7 +2422,8 @@ def report_csv_response(report, filename):
                 cells.append("Unit" if header else _csv_text(units.get(column.unit_key, "")))
         return cells
 
-    lines = [line(row, row) for row in report.rows]
+    # A group heading only repeats what its rows already carry in a column; subtotal lines are kept.
+    lines = [line(row, row) for row in report.rows if row.get("_kind") != "group"]
     if report.totals:
         total_line = line(report.totals, report.totals)
         if not total_line[0]:

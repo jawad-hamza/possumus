@@ -1,0 +1,122 @@
+{% extends "distribution/_base.html" %}
+{% load currency_tags %}
+{% block title %}Load {{ load.display_number }}{% endblock %}
+{% block page_title %}Load {{ load.display_number }}{% endblock %}
+{% block page_help %}The invoices on this load and what they add up to, product by product. An invoice can ride on one load only.{% endblock %}
+{% block page_actions %}<a href="{% url 'distribution_load_print' load.id %}" class="btn btn-outline-secondary"><i class="bi bi-printer" aria-hidden="true"></i> Load sheet</a>{% if can_manage and not load.is_settled %}<a href="{% url 'distribution_load_edit' load.id %}" class="btn btn-outline-secondary"><i class="bi bi-pencil" aria-hidden="true"></i> Edit</a>{% endif %}{% if not load.is_open %}<a href="{% url 'distribution_load_settle' load.id %}" class="btn btn-primary"><i class="bi bi-clipboard2-check" aria-hidden="true"></i> {% if load.is_settled %}Settlement{% else %}Settle{% endif %}</a>{% endif %}<a href="{% url 'distribution_load_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Loads</a>{% endblock %}
+
+{% block dist_content %}
+<section class="k-section" aria-labelledby="load-facts">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="load-facts">{{ load.load_date|date:"l, d M Y" }}</h2>
+        {% if load.is_open %}<span class="k-badge k-badge--blue">Being loaded</span>{% elif load.is_dispatched %}<span class="k-badge k-badge--amber">Out for delivery</span>{% else %}<span class="k-badge k-badge--green">Settled</span>{% endif %}
+        {% if can_manage %}
+        <div class="k-actions">
+            {% if load.is_open %}<form method="post" action="{% url 'distribution_load_dispatch' load.id %}" data-k-confirm="Mark {{ load.display_number }} out for delivery? Invoices can no longer be added.">{% csrf_token %}<button type="submit" class="btn btn-primary btn-sm"{% if not sheet.invoice_count %} disabled{% endif %}><i class="bi bi-truck" aria-hidden="true"></i> Out for delivery</button></form>{% endif %}
+            {% if load.is_dispatched %}<form method="post" action="{% url 'distribution_load_reopen' load.id %}">{% csrf_token %}<button type="submit" class="btn btn-outline-secondary btn-sm" data-tip="Only while nothing has been settled on it">Back to loading</button></form>{% endif %}
+        </div>
+        {% endif %}
+    </div>
+    <dl class="dist-facts">
+        {% if load.route %}<div><dt>Route</dt><dd>{{ load.route.label }}</dd></div>{% endif %}
+        <div><dt>Delivery man</dt><dd>{{ load.delivery_man.name|default:"Not chosen" }}</dd></div>
+        <div><dt>Vehicle</dt><dd>{{ load.vehicle|default:"Not chosen" }}</dd></div>
+        <div><dt>Invoices</dt><dd>{{ sheet.invoice_count }}</dd></div>
+        <div><dt>Cartons</dt><dd>{{ sheet.total_cartons|qty }}</dd></div>
+        <div><dt>Bill value</dt><dd>{{ sheet.bill_value|money }}</dd></div>
+        {% if load.notes %}<div><dt>Notes</dt><dd>{{ load.notes }}</dd></div>{% endif %}
+    </dl>
+</section>
+
+<section class="k-section" aria-labelledby="load-invoices">
+    <div class="k-section-head"><h2 class="k-section-title" id="load-invoices">Invoices on this load</h2></div>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack">
+            <thead><tr><th scope="col">Invoice</th><th scope="col">Shop</th><th scope="col">Route</th><th scope="col">Type</th><th scope="col" class="k-num">Amount</th>{% if can_manage and load.is_open %}<th scope="col"><span class="visually-hidden">Remove</span></th>{% endif %}</tr></thead>
+            <tbody>
+                {% for row in sheet.invoices %}
+                <tr>
+                    <td><a href="{% url 'invoice' row.sale.id %}">{{ row.sale.display_number }}</a></td>
+                    <td data-label="Shop">{{ row.customer.name }}</td>
+                    <td data-label="Route">{{ row.route.name|default:"-" }}</td>
+                    <td data-label="Type">{{ row.kind }}</td>
+                    <td class="k-num" data-label="Amount">{{ row.amount|money }}</td>
+                    {% if can_manage and load.is_open %}<td class="text-end"><form method="post" action="{% url 'distribution_load_remove_invoice' load.id row.sale.id %}">{% csrf_token %}<button type="submit" class="k-icon-btn" data-tip="Take off this load" aria-label="Take {{ row.sale.display_number }} off this load"><i class="bi bi-x-lg" aria-hidden="true"></i></button></form></td>{% endif %}
+                </tr>
+                {% empty %}
+                <tr><td colspan="6" class="k-empty"><p class="k-empty-title">No invoices on this load yet.</p>{% if load.is_open %}<p>Pick them from the list below.</p>{% endif %}</td></tr>
+                {% endfor %}
+            </tbody>
+            {% if sheet.invoices %}<tfoot><tr class="k-total"><td colspan="4">{{ sheet.invoice_count }} invoice{{ sheet.invoice_count|pluralize }}</td><td class="k-num">{{ sheet.bill_value|money }}</td>{% if can_manage and load.is_open %}<td></td>{% endif %}</tr></tfoot>{% endif %}
+        </table>
+    </div>
+</section>
+
+{% if sheet.lines %}
+<section class="k-section" aria-labelledby="load-products">
+    <div class="k-section-head"><h2 class="k-section-title" id="load-products">Products to load</h2></div>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack">
+            <thead><tr><th scope="col">Product</th><th scope="col">Packing</th><th scope="col" class="k-num">Ctn</th>{% if sheet.show_boxes %}<th scope="col" class="k-num">Box</th>{% endif %}<th scope="col" class="k-num">Pcs</th>{% if sheet.show_free %}<th scope="col" class="k-num">Free</th>{% endif %}<th scope="col" class="k-num">Amount</th></tr></thead>
+            <tbody>
+                {% for line in sheet.lines %}
+                <tr><td>{{ line.product.display_name }}</td><td data-label="Packing">{{ line.packing|default:"-" }}</td><td class="k-num" data-label="Ctn">{{ line.cartons|qty }}</td>{% if sheet.show_boxes %}<td class="k-num" data-label="Box">{{ line.boxes|qty }}</td>{% endif %}<td class="k-num" data-label="Pcs">{{ line.pieces|qty }}</td>{% if sheet.show_free %}<td class="k-num" data-label="Free">{{ line.free|default:"-" }}</td>{% endif %}<td class="k-num" data-label="Amount">{{ line.amount|money }}</td></tr>
+                {% endfor %}
+            </tbody>
+            <tfoot><tr class="k-total"><td colspan="2">Total</td><td class="k-num">{{ sheet.total_cartons|qty }}</td>{% if sheet.show_boxes %}<td class="k-num">{{ sheet.total_boxes|qty }}</td>{% endif %}<td class="k-num">{{ sheet.total_pieces|qty }}</td>{% if sheet.show_free %}<td></td>{% endif %}<td class="k-num">{{ sheet.total_amount|money }}</td></tr></tfoot>
+        </table>
+    </div>
+</section>
+{% endif %}
+
+{% if can_manage and load.is_open %}
+<section class="k-section" aria-labelledby="load-pick">
+    <div class="k-section-head"><h2 class="k-section-title" id="load-pick">Add invoices {% include "pos/partials/_help_tip.html" with tip_id="tipPick" tip_name="Add invoices" tip_text="Invoices for named customers that are not on any load yet. Narrow them by date, route and order booker, or show only the ones made from orders." %}</h2></div>
+    <form method="get" class="dist-filters">
+        <div><label class="form-label" for="p-date">Invoice date</label><input type="date" id="p-date" name="date" class="form-control form-control-sm" value="{{ pick.date|date:'Y-m-d' }}"></div>
+        {% if routes %}<div><label class="form-label" for="p-route">Route</label>
+            <select id="p-route" name="route" class="form-select form-select-sm"><option value="">All routes</option>{% for route in routes %}<option value="{{ route.id }}"{% if route.id == pick.route_id %} selected{% endif %}>{{ route.label }}</option>{% endfor %}</select></div>
+        <div><label class="form-label" for="p-booker">Order booker</label>
+            <select id="p-booker" name="order_booker" class="form-select form-select-sm"><option value="">All order bookers</option>{% for booker in bookers %}<option value="{{ booker.id }}"{% if booker.id == pick.booker_id %} selected{% endif %}>{{ booker.name }}</option>{% endfor %}</select></div>{% endif %}
+        <label class="form-check mb-1"><input type="checkbox" class="form-check-input" name="from_orders" value="1"{% if pick.from_orders %} checked{% endif %}> <span>Made from orders only</span></label>
+        <label class="form-check mb-1"><input type="checkbox" class="form-check-input" name="any_date" value="1"{% if pick.any_date %} checked{% endif %}> <span>Any date</span></label>
+        <button type="submit" class="btn btn-outline-secondary btn-sm">Show</button>
+    </form>
+    <form method="post" action="{% url 'distribution_load_add_invoices' load.id %}" id="pickForm">
+        {% csrf_token %}
+        <div class="table-responsive">
+            <table class="k-table k-ledger--stack">
+                <thead><tr><th scope="col" class="dist-check"><input type="checkbox" class="form-check-input" data-pick-all aria-label="Tick every invoice listed"></th><th scope="col">Invoice</th><th scope="col">Shop</th><th scope="col">Route / booker</th><th scope="col">Type</th><th scope="col" class="k-num">Amount</th></tr></thead>
+                <tbody>
+                    {% for sale in candidates %}
+                    <tr>
+                        <td><input type="checkbox" class="form-check-input" name="sale" value="{{ sale.id }}" data-pick aria-label="Put {{ sale.display_number }} on this load"></td>
+                        <td>{{ sale.display_number }}<span class="b-sub">{{ sale.created_at|date:"d M H:i" }}{% if sale.sales_order %} &middot; {{ sale.sales_order.display_number }}{% endif %}</span></td>
+                        <td data-label="Shop">{{ sale.customer.name }}</td>
+                        <td data-label="Route / booker">{{ sale.customer.route.name|default:"-" }}<span class="b-sub">{{ sale.order_booker.name|default:"" }}</span></td>
+                        <td data-label="Type">{% if sale.is_credit %}Credit{% else %}{{ sale.get_payment_method_display }}{% endif %}</td>
+                        <td class="k-num" data-label="Amount">{{ sale.total_amount|money }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr><td colspan="6" class="k-empty"><p class="k-empty-title">No invoices waiting for a load here.</p><p>Change the date or the route, or invoice the booked orders first.</p></td></tr>
+                    {% endfor %}
+                </tbody>
+                {% if candidates %}<tfoot><tr class="k-total"><td colspan="5">{{ candidates|length }} listed</td><td class="k-num">{{ candidate_total|money }}</td></tr></tfoot>{% endif %}
+            </table>
+        </div>
+        {% if candidates %}<div class="st-actionbar st-actionbar--inline"><button type="submit" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Put ticked invoices on this load</button></div>{% endif %}
+    </form>
+</section>
+{% endif %}
+{% endblock %}
+
+{% block dist_js %}
+<script>
+(function () {
+    var form = document.getElementById('pickForm');
+    if (!form) { return; }
+    var all = form.querySelector('[data-pick-all]');
+    if (all) { all.addEventListener('change', function () { Array.prototype.forEach.call(form.querySelectorAll('[data-pick]'), function (box) { box.checked = all.checked; }); }); }
+})();
+</script>
+{% endblock %}

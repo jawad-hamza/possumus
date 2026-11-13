@@ -19,6 +19,11 @@ from accounts.services.audit import record_audit
 
 logger = logging.getLogger(__name__)
 
+# A snapshot is the database only. Uploaded files (the shop logo and the bank receipts under
+# MEDIA_ROOT/bank_receipts, or in the S3 bucket) are not inside it: the BankReceipt rows (who,
+# when, name, sha256, stored path) travel with the snapshot, the files stay where they are and a
+# restore never deletes them. A receipt row whose file is gone says so on its receipt page.
+
 
 VENDOR_LABELS = {
     "sqlite": "SQLite",

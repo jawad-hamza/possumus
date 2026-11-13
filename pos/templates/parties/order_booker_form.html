@@ -1,0 +1,91 @@
+{% extends "pos/base.html" %}
+{% load static %}
+
+{% block title %}{% if booker %}Edit {{ booker.name }}{% else %}Add order booker{% endif %}{% endblock %}
+{% block page_title %}{% if booker %}Edit order booker{% else %}Add order booker{% endif %}{% endblock %}
+{% block page_help %}An order booker takes orders from your customers. This is a name for customers, sales and reports, not a login.{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/return-flow.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/pages/field-sales.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="{{ back_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>{% endblock %}
+
+{% block content %}
+<div class="k-form">
+    <form method="post" novalidate>
+        {% csrf_token %}
+        {% if next_url %}<input type="hidden" name="next" value="{{ next_url }}">{% endif %}
+
+        {% if form.non_field_errors %}
+        <div class="alert alert-danger">{{ form.non_field_errors }}</div>
+        {% endif %}
+
+        <section class="k-section" aria-labelledby="booker-details-title">
+            <div class="k-section-head"><h2 class="k-section-title" id="booker-details-title">Order booker details</h2></div>
+            <div class="k-form-grid">
+                {% include "pos/partials/_field.html" with field=form.name %}
+                {% include "pos/partials/_field.html" with field=form.phone %}
+                {% include "pos/partials/_field.html" with field=form.is_active %}
+            </div>
+        </section>
+
+        <section class="k-section" aria-labelledby="booker-routes-title">
+            <div class="k-section-head">
+                <h2 class="k-section-title" id="booker-routes-title">{{ form.routes.label }} {% include "pos/partials/_help_tip.html" with tip_id="tipBookerRoutes" tip_name=form.routes.label tip_text=form.routes.help_text %}</h2>
+                <span class="k-section-note">Optional</span>
+                {% if quick_add_kinds.route %}<div class="k-actions"><a class="rf-add" href="{% url 'route_add' %}?next={{ request.get_full_path|urlencode }}" data-rf-quick="route" data-rf-target="fs-new-route"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add route</a></div>{% endif %}
+            </div>
+            <ul class="fs-checks" id="fs-route-checks" role="group" aria-labelledby="booker-routes-title">
+                {% for box in form.routes %}
+                <li><label class="form-check">{{ box.tag }}<span>{{ box.choice_label }}</span></label></li>
+                {% endfor %}
+            </ul>
+            <p class="fs-checks-none" id="fs-route-none" {% if form.routes|length %}hidden{% endif %}>No routes yet. Add one here, or leave this for later.</p>
+            {% if form.routes.errors %}<div class="k-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ form.routes.errors|join:', ' }}</div>{% endif %}
+            {# The side panel hands a new route to this hidden box; the script below turns it into a ticked route. #}
+            <select id="fs-new-route" hidden tabindex="-1" aria-hidden="true"><option value=""></option></select>
+        </section>
+
+        <div class="k-form-actions">
+            <button type="submit" class="btn btn-primary">Save order booker</button>
+            <a href="{{ back_url }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% include "pos/partials/_quick_add_panel.html" %}
+{% for panel in quick_add %}{% if panel.kind == "route" %}{% include "parties/_city_options.html" with cities=panel.form.city_options %}{% endif %}{% endfor %}
+{% endblock %}
+
+{% block extra_js %}
+<script src="{% static 'zehnms/js/return-flow.js' %}"></script>
+<script>
+(function () {
+    var helper = document.getElementById('fs-new-route');
+    var list = document.getElementById('fs-route-checks');
+    var none = document.getElementById('fs-route-none');
+    if (!helper || !list) { return; }
+    helper.addEventListener('change', function () {
+        var option = helper.selectedOptions[0];
+        if (!option || !option.value) { return; }
+        var existing = list.querySelector('input[value="' + option.value + '"]');
+        if (!existing) {
+            var item = document.createElement('li');
+            var label = document.createElement('label');
+            label.className = 'form-check';
+            existing = document.createElement('input');
+            existing.type = 'checkbox';
+            existing.name = '{{ form.routes.html_name|escapejs }}';
+            existing.value = option.value;
+            existing.className = 'form-check-input';
+            var text = document.createElement('span');
+            text.textContent = option.textContent;
+            label.appendChild(existing);
+            label.appendChild(text);
+            item.appendChild(label);
+            list.appendChild(item);
+        }
+        existing.checked = true;
+        if (none) { none.hidden = true; }
+        helper.value = '';
+        existing.focus();
+    });
+})();
+</script>
+{% endblock %}

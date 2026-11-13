@@ -79,6 +79,12 @@ MODULE_DEFINITIONS = (
         "url_name": "parties_home",
     },
     {
+        "key": "distribution",
+        "label": "Distribution",
+        "description": "Sales orders, load forms, settlements, stock returns and recovery.",
+        "url_name": "distribution_home",
+    },
+    {
         "key": "accounts",
         "label": "Accounts",
         "description": "Ledgers, statements, and finance controls.",

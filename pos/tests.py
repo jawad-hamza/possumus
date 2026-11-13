@@ -114,6 +114,8 @@ class PosFlowTests(AuthenticatedAdminTestCase):
         )
 
     def test_cash_checkout_uses_selected_payment_method(self):
+        # The bank receipt rule has its own tests (pos/test_bank_receipts.py); this one is about the posting.
+        SystemSettings.objects.update_or_create(pk=1, defaults={"require_bank_receipt": False})
         product = Product.objects.create(
             name="Tea",
             sku="TEA-1",

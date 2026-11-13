@@ -1,0 +1,51 @@
+{% extends "pos/base.html" %}
+{% load static %}
+{% block title %}Order bookers{% endblock %}
+{% block page_title %}Order bookers{% endblock %}
+{% block page_help %}The people who take orders from your customers. They are names on customers, sales and reports, not logins.{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/return-flow.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/pages/field-sales.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}{% if manage_access.parties %}<a href="{% url 'order_booker_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add order booker</a>{% endif %}<a href="{% url 'route_list' %}" class="btn btn-outline-secondary">Routes</a><a href="{% url 'customer_list' %}" class="btn btn-outline-secondary">Customers</a>{% if nav_access.reports %}<a href="{% url 'report_sales_by_order_booker' %}" class="btn btn-outline-secondary">Sales by order booker</a>{% endif %}{% endblock %}
+
+{% block content %}
+<section class="k-section" aria-labelledby="booker-list-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="booker-list-title">All order bookers</h2>
+        <span class="k-section-note">{{ active_count }} working{% if bookers|length != active_count %}, {{ bookers|length }} in all{% endif %}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack b-index">
+            <thead>
+                <tr>
+                    <th scope="col" data-k="what">Order booker</th>
+                    <th scope="col" data-k="meta">Routes covered</th>
+                    <th scope="col" class="k-num" data-k="amount">Customers</th>
+                    <th scope="col" data-k="flag">Status</th>
+                    <th scope="col" data-k="hide"><span class="visually-hidden">Edit</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for booker in bookers %}
+                <tr data-rf-row="{{ booker.id }}">
+                    <td class="b-stack-title" data-k="what">{% if manage_access.parties %}<a href="{% url 'order_booker_edit' booker.id %}?next={{ request.get_full_path|urlencode }}" class="b-index-name">{{ booker.name }}</a>{% else %}<span class="b-index-name">{{ booker.name }}</span>{% endif %}<span class="b-sub">{{ booker.phone|default:"No phone" }}</span></td>
+                    <td data-label="Routes covered" data-k="meta">{{ booker.route_names|default:"No routes yet" }}</td>
+                    <td class="k-num" data-label="Customers" data-k="amount">{% if booker.customer_count %}<a href="{% url 'customer_list' %}?order_booker={{ booker.id }}" data-tip="Open these customers">{{ booker.customer_count }}</a>{% else %}0{% endif %}</td>
+                    <td data-label="Status" data-k="flag">{% if booker.is_active %}<span class="k-badge k-badge--green">Working</span>{% else %}<span class="k-badge">Left</span>{% endif %}</td>
+                    <td class="text-end" data-k="hide">{% if manage_access.parties %}<span class="k-row-actions"><a href="{% url 'order_booker_edit' booker.id %}?next={{ request.get_full_path|urlencode }}" class="k-icon-btn" aria-label="Edit order booker {{ booker.name }}" data-tip="Edit"><i class="bi bi-pencil" aria-hidden="true"></i></a></span>{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="5" class="k-empty" data-k="note">
+                        <i class="bi bi-person-badge" aria-hidden="true"></i>
+                        <p class="k-empty-title">No order bookers yet.</p>
+                        <p>Add the people who take orders, then choose one on each customer.</p>
+                        {% if manage_access.parties %}<a class="btn btn-primary" href="{% url 'order_booker_add' %}?next={{ request.get_full_path|urlencode }}">Add order booker</a>{% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'zehnms/js/return-flow.js' %}"></script>{% endblock %}

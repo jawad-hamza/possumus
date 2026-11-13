@@ -1,0 +1,54 @@
+{% extends "pos/base.html" %}
+{% load static %}
+{% load currency_tags %}
+
+{% block title %}Builty{% endblock %}
+{% block page_title %}Builty{% endblock %}
+{% block page_help %}Transport (freight) bills paid on goods received. Each one is shared over the purchases it covers and added to the cost of their goods. Press F2 for a new builty.{% endblock %}
+
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/return-flow.css' %}" rel="stylesheet">{% endblock %}
+
+{% block page_actions %}{% if manage_access.purchases %}<a href="{% url 'builty_add' %}?next={{ request.get_full_path|urlencode }}" class="btn btn-primary" data-k-key="F2" data-k-key-label="New builty"><i class="bi bi-plus-lg" aria-hidden="true"></i> New builty</a>{% endif %}<a href="{% url 'purchase_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Purchases</a>{% endblock %}
+
+{% block content %}
+<section class="k-section" aria-labelledby="builty-list-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="builty-list-title">All builties {% include "pos/partials/_help_tip.html" with tip_id="tipBuiltyList" tip_name="Builty" tip_text="A builty is never edited once saved. A wrong one is reversed from its page, which posts a reversing entry and takes its freight back off the cost of the goods." %}</h2>
+        <span class="k-badge">{{ builty_count }} built{{ builty_count|pluralize:"y,ies" }}</span>
+    </div>
+    <table class="k-ledger k-ledger--stack">
+        <thead>
+            <tr>
+                <th scope="col" data-k="meta">Builty</th>
+                <th scope="col" data-k="what">Transporter</th>
+                <th scope="col" data-k="more">Purchases covered</th>
+                <th scope="col" data-k="more">Paid</th>
+                <th scope="col" class="text-end" data-k="amount">Amount</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for builty in builties %}
+            <tr data-rf-row="{{ builty.id }}">
+                <td data-k="meta"><a href="{% url 'builty_detail' builty.id %}" class="st-name">{{ builty.display_number }}</a><span class="st-sub">{{ builty.date|date:"d M Y" }}</span></td>
+                <td data-k="what" class="st-wrap">{{ builty.transporter|default:"No transporter" }}{% if builty.is_reversed %} <span class="k-badge">Reversed</span>{% endif %}</td>
+                <td data-k="more" data-label="Purchases" class="st-wrap">{% for purchase in builty.purchases.all %}<a href="{% url 'purchase_detail' purchase.id %}">#{{ purchase.id }}</a>{% if not forloop.last %}, {% endif %}{% endfor %}</td>
+                <td data-k="more" data-label="Paid">{{ builty.get_payment_method_display }}</td>
+                <td class="k-num text-end" data-k="amount" data-label="Amount">{% if builty.is_reversed %}<s class="st-dim">{{ builty.amount|money }}</s>{% else %}{{ builty.amount|money }}{% endif %}</td>
+            </tr>
+            {% empty %}
+            <tr>
+                <td colspan="5" class="k-empty" data-k="note">
+                    <i class="bi bi-truck-flatbed" aria-hidden="true"></i>
+                    <p class="k-empty-title">No builty recorded yet.</p>
+                    <p>Add the freight paid on a day's purchases and it is shared over the goods, so their cost includes it.</p>
+                    {% if manage_access.purchases %}<a class="btn btn-primary" href="{% url 'builty_add' %}">New builty</a>{% endif %}
+                </td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+    {% include "pos/reports/_pagination.html" with page_obj=page_obj page_querystring="" %}
+</section>
+{% endblock %}
+
+{% block extra_js %}<script src="{% static 'zehnms/js/return-flow.js' %}"></script>{% endblock %}

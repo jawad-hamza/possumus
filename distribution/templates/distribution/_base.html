@@ -1,0 +1,14 @@
+{% extends "pos/base.html" %}
+{% load static %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/pages/stock.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/return-flow.css' %}" rel="stylesheet"><link href="{% static 'distribution/css/distribution.css' %}" rel="stylesheet">{% endblock %}
+{% block content %}
+{% if dist_tabs %}
+<nav class="dist-tabs" aria-label="Distribution">
+    <div class="b-filter-tabs">
+        {% for tab in dist_tabs %}<a href="{{ tab.url }}" class="btn btn-sm"{% if tab.active %} aria-pressed="true" aria-current="page"{% else %} aria-pressed="false"{% endif %}>{{ tab.label }}</a>{% endfor %}
+    </div>
+</nav>
+{% endif %}
+{% block dist_content %}{% endblock %}
+{% endblock %}
+{% block extra_js %}<script src="{% static 'zehnms/js/return-flow.js' %}"></script>{% block dist_js %}{% endblock %}{% endblock %}

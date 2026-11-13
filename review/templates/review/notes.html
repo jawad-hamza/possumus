@@ -1,0 +1,83 @@
+{% extends "pos/base.html" %}
+{% load static %}
+{% block title %}Review notes{% endblock %}
+{% block page_title %}Review notes{% endblock %}
+{% block page_help %}Notes testers pinned on the screens with the Comment button, newest first. Open a note to jump to its spot, then resolve it once it is dealt with. Only admins and the owner see this page.{% endblock %}
+{% block page_actions %}<a href="?status={{ status }}&amp;format=csv" class="btn btn-outline-secondary" download><i class="bi bi-download" aria-hidden="true"></i> Export CSV</a>{% endblock %}
+{% block extra_css %}<link href="{% static 'review/review-page.css' %}" rel="stylesheet">{% endblock %}
+
+{% block content %}
+<section class="k-section rv-switch" aria-labelledby="rv-switch-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="rv-switch-title">Comment tool</h2>
+        <span class="k-badge {% if tool_enabled %}k-badge--green{% endif %}">{% if tool_enabled %}On{% else %}Off{% endif %}</span>
+    </div>
+    <form method="post" class="rv-switch-form">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="switch">
+        <input type="hidden" name="next" value="{{ request.get_full_path }}">
+        <div class="rv-modes" role="radiogroup" aria-label="Comment tool">
+            {% for value, label in mode_choices %}
+            <label class="rv-mode">
+                <input type="radio" class="form-check-input" name="mode" value="{{ value }}"{% if value == tool_mode %} checked{% endif %}>
+                <span>{{ label }}{% if value == "server" %} <span class="rv-muted">(now {% if server_default %}on{% else %}off{% endif %}, ZEHNMS_REVIEW_NOTES)</span>{% endif %}</span>
+            </label>
+            {% endfor %}
+        </div>
+        <button type="submit" class="btn btn-primary btn-sm">Save</button>
+    </form>
+    <p class="rv-muted rv-switch-note">While it is on, every signed-in user sees a Comment button at the bottom right of each screen. It never shows on printouts or the sign-in pages.</p>
+</section>
+
+<section class="k-section" aria-labelledby="rv-list-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title visually-hidden" id="rv-list-title">Notes</h2>
+        <form method="get" class="rv-filters">
+            <div class="b-filter-tabs rv-tabs" role="group" aria-label="Show notes">
+                {% for value, label, count in status_filters %}
+                <button type="submit" name="status" value="{{ value }}" class="btn btn-sm" aria-pressed="{% if value == status %}true{% else %}false{% endif %}">{{ label }} <span class="rv-muted">{{ count }}</span></button>
+                {% endfor %}
+            </div>
+        </form>
+    </div>
+
+    <ol class="rv-list">
+        {% for note in notes %}
+        <li class="rv-item{% if note.resolved %} is-resolved{% endif %}" id="note-{{ note.id }}">
+            <div class="rv-item-top">
+                <span class="rv-author">{{ note.author_name }}</span>
+                <time class="rv-when" datetime="{{ note.created_at|date:'c' }}">{{ note.created_at|date:"d M Y H:i" }}</time>
+                {% if note.resolved %}
+                <span class="k-badge k-badge--green">Resolved</span>
+                {% else %}
+                <span class="k-badge k-badge--amber">Open</span>
+                {% endif %}
+            </div>
+            <p class="rv-text">{{ note.text }}</p>
+            <p class="rv-where"><strong>{{ note.screen_label|default:note.page_path }}</strong> <span class="rv-muted">{{ note.page_url }}</span>{% if note.anchor.hint %} &middot; on &ldquo;{{ note.anchor.hint|truncatechars:80 }}&rdquo;{% endif %}</p>
+            {% if note.resolved %}<p class="rv-muted rv-resolved-by">Resolved{% if note.resolved_by %} by {{ note.resolved_by.get_full_name|default:note.resolved_by.username }}{% endif %}{% if note.resolved_at %} on {{ note.resolved_at|date:"d M Y H:i" }}{% endif %}</p>{% endif %}
+            <div class="rv-row">
+                <a class="btn btn-sm btn-outline-secondary" href="{{ note.page_url }}#fbnote={{ note.id }}" target="_blank" rel="noopener"><i class="bi bi-box-arrow-up-right" aria-hidden="true"></i> Open this spot</a>
+                <form method="post">
+                    {% csrf_token %}
+                    <input type="hidden" name="note" value="{{ note.id }}">
+                    <input type="hidden" name="next" value="{{ request.get_full_path }}">
+                    {% if note.resolved %}
+                    <button type="submit" name="action" value="reopen" class="btn btn-sm btn-link">Reopen</button>
+                    {% else %}
+                    <button type="submit" name="action" value="resolve" class="btn btn-sm btn-primary">Resolve</button>
+                    {% endif %}
+                </form>
+            </div>
+        </li>
+        {% empty %}
+        <li class="k-empty rv-empty">
+            <i class="bi bi-chat-square-text" aria-hidden="true"></i>
+            <p class="k-empty-title">{% if status == "open" %}No open notes.{% elif status == "resolved" %}No resolved notes yet.{% else %}No notes yet.{% endif %}</p>
+            <p>Notes appear here as testers pin them with the Comment button.</p>
+        </li>
+        {% endfor %}
+    </ol>
+    {% include "pos/reports/_pagination.html" %}
+</section>
+{% endblock %}

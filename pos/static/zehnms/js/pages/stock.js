@@ -15,7 +15,9 @@
         if (!form) { return; }
         var queryInput = doc.getElementById('q');
         var sortSelect = doc.getElementById('sort');
-        var liveSelects = Array.prototype.slice.call(form.querySelectorAll('select'));
+        // The "Stock in" choice sits by the table and joins the form through its form attribute.
+        var liveSelects = Array.prototype.slice.call(form.querySelectorAll('select'))
+            .concat(Array.prototype.slice.call(doc.querySelectorAll('select[form="product-filter-form"]')));
         var timer = null;
 
         function submitForm() {
@@ -193,7 +195,145 @@
             return Math.round((value + Number.EPSILON) * 100) / 100;
         }
 
+        /* ---- cartons and boxes (the fields are absent while the module is off) ----
+           Cost, sale price and the fixed markup are typed for the largest pack. The labels, the
+           box / piece hints and the preview follow the packing as it is typed. */
+        var cartonField = byName('boxes_per_carton');
+        var boxField = byName('pieces_per_box');
+        var packLine = form.querySelector('[data-pack-line]');
+        var typedInput = form.querySelector('[data-pack-typed]');
+        var stockUnit = form.getAttribute('data-stock-unit') || 'carton';
+        var packMoneyFields = [costField, priceField, amountField].filter(Boolean);
+        var unitSelects = [byName('opening_stock_unit'), byName('low_stock_unit')].filter(Boolean);
+        var editing = !byName('opening_stock');
+        var LEVELS = ['carton', 'box', 'piece'];
+        var PACK_NAMES = {carton: 'Carton', box: 'Box'};
+        var PACK_LABELS = {carton: 'Ctn', box: 'Box'};
+        // Figures typed over by hand: the server divides those; a figure left alone keeps what is stored.
+        var typedByHand = {};
+        if (typedInput && typedInput.value) {
+            typedInput.value.split(',').forEach(function (name) { if (name) { typedByHand[name] = true; } });
+        }
+
+        function wholeCount(field) {
+            if (!field) { return 1; }
+            var value = parseInt(field.value, 10);
+            return Number.isFinite(value) && value > 1 ? value : 1;
+        }
+
+        function pieceLabel() {
+            return unitField && unitField.value ? unitField.value : (pieceUnit || 'pcs');
+        }
+
+        function pieceName() {
+            var option = unitField && unitField.selectedOptions ? unitField.selectedOptions[0] : null;
+            return option ? option.textContent.trim() : 'Piece';
+        }
+
+        function packing() {
+            var perBox = wholeCount(boxField);
+            var perCarton = wholeCount(cartonField);
+            var levels = [];
+            if (cartonField && perCarton > 1) { levels.push({code: 'carton', name: PACK_NAMES.carton, label: PACK_LABELS.carton, factor: perBox * perCarton}); }
+            if (boxField && perBox > 1) { levels.push({code: 'box', name: PACK_NAMES.box, label: PACK_LABELS.box, factor: perBox}); }
+            levels.push({code: 'piece', name: pieceName(), label: pieceLabel(), factor: 1});
+            return {levels: levels, top: levels[0], packed: levels.length > 1};
+        }
+
+        function levelOf(pack, code) {
+            for (var i = 0; i < pack.levels.length; i += 1) {
+                if (pack.levels[i].code === code) { return pack.levels[i]; }
+            }
+            return null;
+        }
+
+        // The preferred level when the packing has it, otherwise the next smaller one.
+        function resolveLevel(pack, preferred) {
+            var start = Math.max(LEVELS.indexOf(preferred), 0);
+            for (var i = start; i < LEVELS.length; i += 1) {
+                if (levelOf(pack, LEVELS[i])) { return LEVELS[i]; }
+            }
+            return 'piece';
+        }
+
+        function setLabel(field, text) {
+            var label = field && field.id ? form.querySelector('label[for="' + field.id + '"]') : null;
+            if (label && label.firstChild && label.firstChild.nodeType === 3) { label.firstChild.nodeValue = text; }
+        }
+
+        var lastPack = packing();
+
+        function refreshPacking() {
+            if (!cartonField && !boxField) { return; }
+            var pack = packing();
+            if (packLine) {
+                packLine.textContent = pack.packed
+                    ? pack.levels.map(function (level) { return (pack.top.factor / level.factor) + ' ' + level.label; }).join(' = ')
+                    : 'No cartons or boxes';
+                packLine.classList.toggle('is-empty', !pack.packed);
+            }
+            packMoneyFields.forEach(function (field) {
+                var packWord = field.getAttribute('data-pack-label');
+                var plainWord = field.getAttribute('data-plain-label');
+                if (packWord && plainWord) {
+                    setLabel(field, pack.packed ? packWord + ' per ' + pack.top.name.toLowerCase() : plainWord);
+                }
+                // A stored figure nobody typed over shows for the new pack size, so what is saved is what is seen.
+                var base = parseFloat(field.getAttribute('data-base'));
+                if (!typedByHand[field.name] && Number.isFinite(base) && pack.top.factor !== lastPack.top.factor) {
+                    field.value = roundMoney(base * pack.top.factor).toFixed(2);
+                }
+            });
+            refreshUnitSelects(pack);
+            lastPack = pack;
+        }
+
+        // Opening stock and the alert level offer the units the packing gives.
+        function refreshUnitSelects(pack) {
+            unitSelects.forEach(function (select) {
+                var before = select.value;
+                Array.prototype.forEach.call(select.options, function (option) {
+                    var allowed = !!levelOf(pack, option.value);
+                    option.hidden = !allowed;
+                    option.disabled = !allowed;
+                    if (option.value === 'piece') { option.textContent = pieceLabel() === pieceUnit ? 'Pieces' : pieceLabel(); }
+                });
+                if (!levelOf(pack, before)) {
+                    var quantityField = select.parentNode ? select.parentNode.querySelector('input') : null;
+                    var gone = levelOf(lastPack, before);
+                    if (editing && quantityField && gone && quantityField.value !== '' && Number.isFinite(parseFloat(quantityField.value))) {
+                        // A unit that is no longer there: the same quantity, said in pieces.
+                        quantityField.value = String(parseFloat(quantityField.value) * gone.factor);
+                        select.value = 'piece';
+                    } else {
+                        select.value = resolveLevel(pack, stockUnit);
+                    }
+                } else if (!editing && !select.hasAttribute('data-touched')) {
+                    // A new product starts in the shop's stock unit as soon as the packing gives it.
+                    select.value = resolveLevel(pack, stockUnit);
+                }
+            });
+        }
+
+        function packSplit(field) {
+            var hint = form.querySelector('[data-pack-split="' + field.name + '"]');
+            if (!hint) { return; }
+            var pack = packing();
+            var value = numberFrom(field);
+            if (!pack.packed || value === null || value <= 0) {
+                hint.hidden = true;
+                hint.textContent = '';
+                return;
+            }
+            hint.textContent = pack.levels.slice(1).map(function (level) {
+                return level.name + ' ' + roundMoney(value * level.factor / pack.top.factor).toFixed(2);
+            }).join(' · ');
+            hint.hidden = false;
+        }
+
         function unitSuffix() {
+            var pack = packing();
+            if (pack.packed) { return ' / ' + pack.top.label; }
             return unitField && unitField.value && unitField.value !== pieceUnit ? ' / ' + unitField.value : '';
         }
 
@@ -204,7 +344,10 @@
         function refreshQuantitySteps() {
             var fractional = unitField && fractionalUnits.indexOf(unitField.value) !== -1;
             quantityFields.forEach(function (field) {
-                field.step = fractional ? '0.001' : '1';
+                // Cartons and boxes are counted whole; weights may be split.
+                var unitSelect = byName(field.name === 'opening_stock' ? 'opening_stock_unit' : 'low_stock_unit');
+                var inPacks = unitSelect && unitSelect.value && unitSelect.value !== 'piece';
+                field.step = fractional && !inPacks ? '0.001' : '1';
                 field.min = '0';
             });
         }
@@ -258,6 +401,8 @@
             }
 
             var price = numberFrom(priceField);
+            packSplit(costField);
+            packSplit(priceField);
             refreshSum(cost, markup, price, minimumMargin);
             if (price === null) {
                 previewPrice.textContent = priceByField ? 'Enter the cost, then the sale price or a markup.' : 'Enter the cost and the sale price.';
@@ -297,10 +442,34 @@
         }
         if (unitField) {
             unitField.addEventListener('change', function () {
+                refreshPacking();
                 refreshQuantitySteps();
                 refreshPricing();
             });
         }
+        [cartonField, boxField].forEach(function (field) {
+            if (!field) { return; }
+            field.addEventListener('input', function () {
+                refreshPacking();
+                refreshQuantitySteps();
+                refreshPricing();
+            });
+        });
+        packMoneyFields.forEach(function (field) {
+            field.addEventListener('input', function () {
+                typedByHand[field.name] = true;
+                if (typedInput) { typedInput.value = Object.keys(typedByHand).join(','); }
+            });
+        });
+        unitSelects.forEach(function (select) {
+            // Sent back with a mistake: the units on the page are the ones chosen.
+            if (form.hasAttribute('data-rf-bound')) { select.setAttribute('data-touched', ''); }
+            select.addEventListener('change', function () {
+                select.setAttribute('data-touched', '');
+                refreshQuantitySteps();
+            });
+        });
+        refreshPacking();
         // Stored quantities arrive as 5.000; show them the way they are typed.
         quantityFields.forEach(function (field) {
             if (field.value !== '' && Number.isFinite(parseFloat(field.value))) { field.value = String(parseFloat(field.value)); }
@@ -324,12 +493,48 @@
         var quantityFields = [form.querySelector('[name="quantity_delta"]'), form.querySelector('[name="quantity_after"]')].filter(Boolean);
         var stockHint = doc.getElementById('stock-on-hand-hint');
         var productUnits = window.ZehnStockUnits || {};
+        var stockUnit = form.getAttribute('data-stock-unit') || 'carton';
+        var LEVELS = ['carton', 'box', 'piece'];
 
-        // Weighed products take decimals (0.5 kg); counted products take whole numbers.
+        function unitSelectFor(field) {
+            return form.querySelector('[name="' + field.name + '_unit"]');
+        }
+
+        // A packed product is adjusted in cartons, boxes or pieces; a plain one in its own unit only.
+        function syncUnitSelect(select, info) {
+            if (!select) { return; }
+            var codes = info && info.units ? info.units.map(function (unit) { return unit[0]; }) : [];
+            select.hidden = !codes.length;
+            Array.prototype.forEach.call(select.options, function (option) {
+                var allowed = codes.indexOf(option.value) !== -1;
+                option.hidden = !allowed;
+                option.disabled = !allowed;
+                if (allowed && option.value === 'piece') {
+                    var own = info.units[codes.indexOf('piece')][1];
+                    option.textContent = own === 'pcs' ? 'Pieces' : own;
+                }
+            });
+            if (!codes.length) {
+                select.value = 'piece';
+                return;
+            }
+            if (select.hasAttribute('data-touched') && codes.indexOf(select.value) !== -1) { return; }
+            for (var i = Math.max(LEVELS.indexOf(stockUnit), 0); i < LEVELS.length; i += 1) {
+                if (codes.indexOf(LEVELS[i]) !== -1) {
+                    select.value = LEVELS[i];
+                    return;
+                }
+            }
+        }
+
+        // Weighed products take decimals (0.5 kg); counted products and packs take whole numbers.
         function syncProductUnit() {
             var info = productField ? productUnits[productField.value] : null;
             quantityFields.forEach(function (field) {
-                field.step = info ? info.step : '0.001';
+                var select = unitSelectFor(field);
+                syncUnitSelect(select, info);
+                var inPacks = select && !select.hidden && select.value !== 'piece';
+                field.step = inPacks ? '1' : (info ? info.step : '0.001');
             });
             if (stockHint) {
                 stockHint.textContent = info ? 'On hand now: ' + info.stock : '';
@@ -355,6 +560,16 @@
         if (modeField) { modeField.addEventListener('change', syncStockAdjustmentUi); }
         if (reasonField) { reasonField.addEventListener('change', syncStockAdjustmentUi); }
         if (productField) { productField.addEventListener('change', syncProductUnit); }
+        quantityFields.forEach(function (field) {
+            var select = unitSelectFor(field);
+            if (!select) { return; }
+            // Sent back with a mistake: keep the unit that was chosen.
+            if (form.hasAttribute('data-bound')) { select.setAttribute('data-touched', ''); }
+            select.addEventListener('change', function () {
+                select.setAttribute('data-touched', '');
+                syncProductUnit();
+            });
+        });
         syncStockAdjustmentUi();
         syncProductUnit();
     })();
@@ -398,9 +613,27 @@
             }
         }
 
+        // A packed line can come back in a smaller unit: the box's limit and step follow the unit chosen.
+        function followUnit(select) {
+            var row = select.closest('tr');
+            var input = row ? row.querySelector('input[name^="qty_"]') : null;
+            var option = select.selectedOptions[0];
+            if (!input || !option) { return; }
+            input.max = option.getAttribute('data-max') || '0';
+            input.step = option.getAttribute('data-step') || '1';
+            input.setAttribute('data-returnable', input.max + ' ' + option.textContent.trim());
+        }
+
         inputs.forEach(function (input) {
             input.addEventListener('input', check);
             input.addEventListener('focus', function () { input.select(); });
+        });
+        Array.prototype.slice.call(ledger.querySelectorAll('select[data-return-unit]')).forEach(function (select) {
+            followUnit(select);
+            select.addEventListener('change', function () {
+                followUnit(select);
+                check();
+            });
         });
         check();
     })();

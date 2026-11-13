@@ -1,0 +1,26 @@
+{% comment %}
+Under the till's customer box: how much of the customer's credit limit is left, and the order
+booker this sale is recorded against (the customer's own, changeable for this one sale).
+Needs: till_customer (pos_views._till_customer) and, for the new-customer panel, till_customer_form.
+{% endcomment %}
+{% load static field_sales_tags %}
+<link href="{% static 'zehnms/css/pages/field-sales.css' %}" rel="stylesheet">
+<p class="t-customer-note" id="till-credit-limit" aria-live="polite" {% if not till_customer.credit_note %}hidden{% endif %}><span class="k-state {% if till_customer.credit_over %}k-state--out{% else %}k-state--none{% endif %}">{{ till_customer.credit_note }}</span></p>
+{% till_order_bookers as till_bookers %}
+{% if till_bookers %}
+<div class="fs-till-booker">
+    <label for="order_booker_id" class="form-label">Order booker</label>
+    <select name="order_booker_id" id="order_booker_id" class="form-select form-select-sm" data-tip="Who took this order. It follows the customer and can be changed for this sale.">
+        <option value="">No order booker</option>
+        {% for booker in till_bookers %}
+        <option value="{{ booker.id }}" {% if till_customer.order_booker_id == booker.id|stringformat:'s' %}selected{% endif %}>{{ booker.name }}</option>
+        {% endfor %}
+    </select>
+</div>
+{% endif %}
+{% if till_customer_form %}
+{% include "parties/_city_options.html" with cities=till_customer_form.city_options %}
+{% if till_customer_form.route %}{% route_defaults as fs_route_defaults %}{{ fs_route_defaults|json_script:"fs-route-defaults" }}{% endif %}
+<script src="{% static 'zehnms/js/pages/customer-form.js' %}"></script>
+{% endif %}
+<script src="{% static 'zehnms/js/pages/till-customer.js' %}"></script>

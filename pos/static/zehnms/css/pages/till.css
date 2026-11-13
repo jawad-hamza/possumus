@@ -229,7 +229,7 @@ body.k-till .k-head-actions {
 }
 
 .t-ledger th.t-idx { width: 44px; }
-.t-ledger th.t-qty { width: 124px; }
+.t-ledger th.t-qty { width: 140px; }
 .t-ledger th.t-rate { width: 104px; }
 .t-ledger th.t-disc { width: 80px; }
 .t-ledger th.t-amount { width: 124px; }
@@ -433,6 +433,37 @@ td.t-qty .t-cell-input {
     text-align: left;
 }
 
+/* a packed product: the unit is a choice (carton, box, piece), set beside the quantity */
+td.t-qty--units .t-cell-input {
+    width: calc(100% - 66px);
+}
+
+.t-unit-select {
+    width: 62px;
+    height: 34px;
+    margin-left: 4px;
+    padding: 0 2px 0 6px;
+    border: var(--k-hair) solid var(--k-border);
+    border-radius: var(--k-radius-sm);
+    background-color: var(--k-panel);
+    color: var(--k-ink-title);
+    font: inherit;
+    font-size: var(--k-text-sm);
+    vertical-align: top;
+    cursor: pointer;
+    transition: border-color var(--k-dur) var(--k-ease-out), box-shadow var(--k-dur) var(--k-ease-out);
+}
+
+.t-unit-select:hover {
+    border-color: var(--k-border-field);
+}
+
+.t-unit-select:focus {
+    outline: 0;
+    border-color: var(--k-accent);
+    box-shadow: var(--k-focus-halo);
+}
+
 td.t-amount {
     color: var(--k-ink-title);
     font-size: var(--k-text-lg);
@@ -491,6 +522,24 @@ td.t-x {
 
 .t-line.has-issue > tr > td.t-idx {
     color: var(--k-out);
+}
+
+/* a scheme's name on a line, and the free goods it earned */
+.t-meta-bit--free {
+    color: var(--k-in-ink, #166534);
+    font-weight: 600;
+}
+
+.t-line--free .t-item-name {
+    font-weight: 500;
+}
+
+.t-ledger > tbody.t-line--free > tr.t-line-note > td {
+    color: var(--k-due-ink, #92400e);
+}
+
+.t-line--free .t-line-note .bi {
+    color: var(--k-due, #b45309);
 }
 
 .t-line.has-issue td.t-amount {
@@ -1291,7 +1340,7 @@ td.t-x {
 
 @container t-bill (min-width: 441px) and (max-width: 720px) {
     .t-ledger th.t-idx { width: 28px; }
-    .t-ledger th.t-qty { width: 84px; }
+    .t-ledger th.t-qty { width: 96px; }
     .t-ledger th.t-rate { width: 70px; }
     .t-ledger th.t-disc { width: 54px; }
     .t-ledger th.t-amount { width: 90px; }
@@ -1336,6 +1385,16 @@ td.t-x {
     .t-unit {
         width: 22px;
         margin-left: 2px;
+    }
+
+    td.t-qty--units .t-cell-input {
+        width: calc(100% - 50px);
+    }
+
+    .t-unit-select {
+        width: 48px;
+        margin-left: 2px;
+        padding-left: 3px;
     }
 
     td.t-amount {
@@ -1495,6 +1554,15 @@ td.t-x {
 
     .t-unit {
         width: 22px;
+    }
+
+    td.t-qty--units .t-cell-input {
+        width: calc(100% - 52px);
+    }
+
+    .t-unit-select {
+        width: 48px;
+        padding-left: 3px;
     }
 
     .t-ledger > tbody.t-line > tr.t-line-note > td {

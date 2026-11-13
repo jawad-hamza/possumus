@@ -4,7 +4,7 @@
 {% block page_title %}Parties{% endblock %}
 {% block page_help %}Customers and suppliers used by sales, purchases and statements. Each one has a ledger leaf with its running balance.{% endblock %}
 {% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
-{% block page_actions %}<a href="{% url 'customer_add' %}" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add customer</a><a href="{% url 'supplier_add' %}" class="btn btn-outline-secondary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add supplier</a><a href="{% url 'party_statement_page' %}" class="btn btn-outline-secondary">Combined statement</a>{% endblock %}
+{% block page_actions %}<a href="{% url 'customer_add' %}" class="btn btn-primary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add customer</a><a href="{% url 'supplier_add' %}" class="btn btn-outline-secondary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add supplier</a><a href="{% url 'party_statement_page' %}" class="btn btn-outline-secondary">Combined statement</a>{% if feature_modules.field_sales %}<a href="{% url 'route_list' %}" class="btn btn-outline-secondary" data-goto="Routes" data-goto-keys="beat area round">Routes</a><a href="{% url 'order_booker_list' %}" class="btn btn-outline-secondary" data-goto="Order bookers" data-goto-keys="salesman booker field">Order bookers</a>{% endif %}{% endblock %}
 
 {% block content %}
 <div class="b-grid b-grid--even">

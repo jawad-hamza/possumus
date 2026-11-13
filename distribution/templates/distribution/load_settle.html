@@ -1,0 +1,177 @@
+{% extends "distribution/_base.html" %}
+{% load currency_tags %}
+{% block title %}Settle {{ load.display_number }}{% endblock %}
+{% block page_title %}Settlement of load {{ load.display_number }}{% endblock %}
+{% block page_help %}When the van comes back: post what came back on each invoice, record the money collected on the run, count the cash the delivery man hands in, then close the load. Everything posts to stock, the customers' accounts and the cash book as it is saved.{% endblock %}
+{% block page_actions %}<a href="{% url 'distribution_load_detail' load.id %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back to load</a>{% endblock %}
+
+{% block dist_content %}
+<div class="row g-4">
+<div class="col-xl-8">
+
+<section class="k-section" aria-labelledby="settle-facts">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="settle-facts">{{ load.load_date|date:"d M Y" }}{% if load.route %} &middot; {{ load.route.label }}{% endif %}</h2>
+        {% if load.is_settled %}<span class="k-badge k-badge--green">Settled</span>{% else %}<span class="k-badge k-badge--amber">Out for delivery</span>{% endif %}
+    </div>
+    <dl class="dist-facts">
+        <div><dt>Delivery man</dt><dd>{{ load.delivery_man.name|default:"Not chosen" }}</dd></div>
+        <div><dt>Vehicle</dt><dd>{{ load.vehicle|default:"Not chosen" }}</dd></div>
+        <div><dt>Bill value</dt><dd>{{ figures.bill_value|money }}</dd></div>
+        <div><dt>Came back</dt><dd>{{ figures.returns_total|money }}</dd></div>
+        <div><dt>Delivered</dt><dd>{{ figures.delivered|money }}</dd></div>
+        <div><dt>Recovered</dt><dd>{{ figures.recovered|money }}</dd></div>
+    </dl>
+</section>
+
+<section class="k-section" aria-labelledby="settle-returns">
+    <div class="k-section-head"><h2 class="k-section-title" id="settle-returns">What came back {% include "pos/partials/_help_tip.html" with tip_id="tipCameBack" tip_name="What came back" tip_text="Enter goods that came back on the van against their invoice, in any unit. A credit invoice is reduced on the customer's account; goods back on a cash bill come off the cash the delivery man owes. Stock goes back on the shelf." %}</h2></div>
+    {% if load.is_dispatched and can_manage %}
+    <form method="post">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="returns">
+        {% for row in invoice_rows %}
+        <div class="dist-invoice">
+            <div class="dist-invoice-head">
+                <h3><a href="{% url 'invoice' row.sale.id %}">{{ row.sale.display_number }}</a> {{ row.sale.customer.name }}</h3>
+                <span class="dist-muted">{{ row.kind }} &middot; {{ row.total|money }}{% if row.returned %} &middot; came back {{ row.returned|money }}{% endif %}</span>
+            </div>
+            <div class="table-responsive">
+                <table class="k-table k-table--dense k-ledger--stack">
+                    <thead><tr><th scope="col">Product</th><th scope="col" class="k-num">Sold</th><th scope="col" class="k-num">Can come back</th><th scope="col">Came back</th></tr></thead>
+                    <tbody>
+                        {% for line in row.lines %}
+                        <tr>
+                            <td>{{ line.item.product.display_name }}</td>
+                            <td class="k-num" data-label="Sold">{{ line.quantity_display }}</td>
+                            <td class="k-num" data-label="Can come back">{{ line.returnable_display }}</td>
+                            <td data-label="Came back">
+                                {% if line.returnable_qty > 0 %}
+                                <div class="dist-return-qty">
+                                    <input type="number" name="ret_{{ line.item.id }}" class="form-control form-control-sm" min="0" step="{{ line.unit.step }}" inputmode="decimal" placeholder="0" aria-label="Quantity of {{ line.item.product.display_name }} that came back">
+                                    {% if line.unit_choices|length > 1 %}
+                                    <select name="unit_{{ line.item.id }}" class="form-select form-select-sm" aria-label="Unit">
+                                        {% for choice in line.unit_choices %}<option value="{{ choice.code }}"{% if choice.code == line.unit.code %} selected{% endif %}>{{ choice.label }}</option>{% endfor %}
+                                    </select>
+                                    {% else %}<input type="hidden" name="unit_{{ line.item.id }}" value="{{ line.unit.code }}"><span class="dist-muted align-self-center">{{ line.unit.label }}</span>{% endif %}
+                                </div>
+                                {% else %}<span class="dist-muted">All back</span>{% endif %}
+                            </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        {% endfor %}
+        <div class="d-flex flex-wrap gap-2 align-items-end">
+            <div class="flex-grow-1">
+                <label class="form-label" for="returnReason">Why it came back</label>
+                <input type="text" id="returnReason" name="reason" class="form-control" maxlength="150" list="returnReasons" placeholder="Shop closed, refused, short of cash, damaged in transit" required>
+                <datalist id="returnReasons"><option value="Not delivered: shop closed"><option value="Refused by the shop"><option value="Shop short of cash"><option value="Damaged in transit"><option value="Wrong item loaded"></datalist>
+            </div>
+            <button type="submit" class="btn btn-primary">Post returns</button>
+        </div>
+    </form>
+    {% endif %}
+    {% if figures.returns %}
+    <div class="table-responsive mt-3">
+        <table class="k-table k-ledger--stack">
+            <thead><tr><th scope="col">Return</th><th scope="col">Invoice</th><th scope="col">Settled by</th><th scope="col">Reason</th><th scope="col" class="k-num">Amount</th></tr></thead>
+            <tbody>
+                {% for sale_return in figures.returns %}
+                <tr><td>#{{ sale_return.id }}</td><td data-label="Invoice">{{ sale_return.sale.display_number }}</td><td data-label="Settled by">{{ sale_return.get_refund_method_display }}</td><td data-label="Reason">{{ sale_return.reason }}</td><td class="k-num" data-label="Amount">{{ sale_return.total_amount|money }}</td></tr>
+                {% endfor %}
+            </tbody>
+            <tfoot><tr class="k-total"><td colspan="4">Came back</td><td class="k-num">{{ figures.returns_total|money }}</td></tr></tfoot>
+        </table>
+    </div>
+    {% elif not load.is_dispatched %}
+    <p class="dist-muted">Nothing came back on this load.</p>
+    {% endif %}
+    {% if load.is_dispatched and can_manage %}<p class="dist-muted mt-3 mb-0"><a href="{% url 'distribution_return_add' 'customer' %}?load={{ load.id }}">Record a market return that came back on this van</a> (goods a shop gave back without an invoice).</p>{% endif %}
+</section>
+
+<section class="k-section" aria-labelledby="settle-recovery">
+    <div class="k-section-head"><h2 class="k-section-title" id="settle-recovery">Money recovered on the run {% include "pos/partials/_help_tip.html" with tip_id="tipRunRecovery" tip_name="Money recovered" tip_text="Old balances the delivery man collected from shops on this run. Each one is a customer receipt: it reduces what the shop owes and goes into cash or the bank." %}</h2></div>
+    {% if figures.recoveries %}
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack">
+            <thead><tr><th scope="col">Shop</th><th scope="col">Against</th><th scope="col">Paid by</th><th scope="col" class="k-num">Amount</th></tr></thead>
+            <tbody>
+                {% for recovery in figures.recoveries %}
+                <tr><td>{{ recovery.customer.name }}</td><td data-label="Against">{{ recovery.sale.display_number|default:"Account" }}</td><td data-label="Paid by">{{ recovery.get_payment_method_display }}</td><td class="k-num" data-label="Amount">{{ recovery.amount|money }}</td></tr>
+                {% endfor %}
+            </tbody>
+            <tfoot><tr class="k-total"><td colspan="3">Recovered</td><td class="k-num">{{ figures.recovered|money }}</td></tr></tfoot>
+        </table>
+    </div>
+    {% endif %}
+    {% if load.is_dispatched and can_manage %}
+    <form method="post" enctype="multipart/form-data" class="k-form-grid mt-3">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="recovery">
+        <div class="k-form-field">
+            <label class="form-label" for="r-customer">Shop</label>
+            <select id="r-customer" name="customer" class="form-select" required><option value="">Choose a shop</option>{% for customer in customers %}<option value="{{ customer.id }}">{{ customer.name }}</option>{% endfor %}</select>
+        </div>
+        <div class="k-form-field">
+            <label class="form-label" for="r-sale">Against invoice</label>
+            <select id="r-sale" name="sale" class="form-select"><option value="">On account</option>{% for row in invoice_rows %}<option value="{{ row.sale.id }}">{{ row.sale.display_number }} {{ row.sale.customer.name }}</option>{% endfor %}</select>
+        </div>
+        <div class="k-form-field">
+            <label class="form-label" for="r-amount">Amount</label>
+            <input type="number" id="r-amount" name="amount" class="form-control" min="0.01" step="0.01" inputmode="decimal" required>
+        </div>
+        <div class="k-form-field">
+            <label class="form-label" for="r-method">Paid by</label>
+            <select id="r-method" name="payment_method" class="form-select"><option value="cash">Cash</option>{% if bank_accounts %}<option value="bank">Bank</option>{% endif %}</select>
+        </div>
+        {% if bank_accounts %}
+        <div class="k-form-field">
+            <label class="form-label" for="r-bank">Bank account</label>
+            <select id="r-bank" name="bank_account" class="form-select">{% for account in bank_accounts %}<option value="{{ account.id }}">{{ account.display_name }}</option>{% endfor %}</select>
+        </div>
+        <div class="k-form-field">
+            <label class="form-label" for="r-receipt">Bank receipt{% if receipt_required %}<span class="st-req" title="Required for bank payments">*</span>{% endif %}</label>
+            <input type="file" id="r-receipt" name="bank_receipt" class="form-control" accept="{{ receipt_accept }}">
+        </div>
+        {% endif %}
+        <div class="k-span-2"><button type="submit" class="btn btn-outline-secondary"><i class="bi bi-plus-lg" aria-hidden="true"></i> Record recovery</button></div>
+    </form>
+    {% elif not figures.recoveries %}
+    <p class="dist-muted">No money recovered on this run.</p>
+    {% endif %}
+</section>
+
+</div>
+<div class="col-xl-4">
+<section class="k-section" aria-labelledby="settle-cash">
+    <div class="k-section-head"><h2 class="k-section-title" id="settle-cash">Cash from the delivery man</h2></div>
+    <dl class="dist-cash">
+        <div><dt>Cash bills</dt><dd>{{ figures.cash_bills|money }}</dd></div>
+        <div><dt>Less goods back on cash bills</dt><dd>{{ figures.cash_refunds|money }}</dd></div>
+        <div><dt>Plus cash recovered</dt><dd>{{ figures.cash_recovered|money }}</dd></div>
+        <div class="dist-cash-total"><dt>Cash expected</dt><dd>{{ figures.cash_expected|money }}</dd></div>
+        {% if load.is_settled %}
+        <div><dt>Cash handed in</dt><dd>{{ load.cash_received|money }}</dd></div>
+        <div class="dist-cash-total{% if load.cash_variance %} dist-short{% endif %}"><dt>{% if load.cash_variance < 0 %}Short{% elif load.cash_variance > 0 %}Over{% else %}Difference{% endif %}</dt><dd>{{ load.cash_variance|money }}</dd></div>
+        {% endif %}
+        <div><dt>Credit bills on account</dt><dd>{{ figures.credit_bills|money }}</dd></div>
+        {% if figures.bank_recovered %}<div><dt>Recovered into the bank</dt><dd>{{ figures.bank_recovered|money }}</dd></div>{% endif %}
+    </dl>
+    {% if load.is_settled %}
+    <p class="dist-muted mt-3 mb-0">Settled {{ load.settled_at|date:"d M Y H:i" }}{% if load.settled_by %} by {{ load.settled_by.get_full_name|default:load.settled_by.username }}{% endif %}.{% if load.settlement_notes %} {{ load.settlement_notes }}{% endif %}</p>
+    {% elif can_manage %}
+    <form method="post" class="mt-3" data-k-confirm="Close {{ load.display_number }}? Returns and recoveries can no longer be added to it.">
+        {% csrf_token %}
+        <input type="hidden" name="action" value="close">
+        {% include "pos/partials/_entry_field.html" with field=close_form.cash_received %}
+        {% include "pos/partials/_entry_field.html" with field=close_form.notes %}
+        <button type="submit" class="btn btn-primary w-100">Close the load</button>
+    </form>
+    {% endif %}
+</section>
+</div>
+</div>
+{% endblock %}

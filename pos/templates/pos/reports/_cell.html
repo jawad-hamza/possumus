@@ -4,7 +4,7 @@
 {% elif cell.kind == "money" %}
 {{ cell.value|money }}
 {% elif cell.kind == "qty" %}
-{{ cell.value|qty_unit:cell.unit }}
+{% if cell.packs %}{{ cell.packs }}{% else %}{{ cell.value|qty_unit:cell.unit }}{% endif %}
 {% elif cell.kind == "percent" %}
 {{ cell.value|floatformat:2 }}%
 {% elif cell.kind == "datetime" %}

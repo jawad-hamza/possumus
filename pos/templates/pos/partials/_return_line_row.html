@@ -1,0 +1,37 @@
+{% load currency_tags %}
+{% comment %}
+One line of a sale or purchase return. Pass row (pos.services.returns.return_row), kind ("sale" or
+"purchase"), form_id and taken_label ("Sold" / "Received"). A packed line words its quantities in
+cartons, boxes and pieces and lets the goods come back in a smaller unit than the line was written in.
+{% endcomment %}
+<tr>
+    <td class="st-wrap" data-k="what">
+        <span class="st-name">{{ row.item.product.display_name }}</span>
+        <span class="st-sub">{% if kind == "purchase" %}Cost {{ row.item.cost_price|money }}{% if row.packed %} / {{ row.item.unit_label }}{% endif %} &middot; In stock {{ row.item.product.stock_display }}{% else %}Unit {{ row.item.discounted_unit_price|money }}{% if row.packed %} / {{ row.item.unit_label }}{% endif %}{% endif %}</span>
+    </td>
+    {% if row.packed %}
+    <td class="k-num text-end" data-k="more" data-label="{{ taken_label }}">{{ row.quantity_display }}</td>
+    <td class="k-num text-end" data-k="more" data-label="Already returned">{% if row.returned_qty %}{{ row.returned_display }}{% else %}<span class="st-dim">0</span>{% endif %}</td>
+    <td class="k-num text-end" data-k="flag" data-label="Available">{% if row.returnable_qty > 0 %}{{ row.returnable_display }}{% else %}<span class="k-badge">Returned</span>{% endif %}</td>
+    <td class="text-end" data-k="field" data-label="Return now">
+        <div class="input-group st-return-input st-return-input--unit">
+            <input class="form-control text-end" type="number" min="0" max="{{ row.unit.max }}" step="{{ row.unit.step }}" inputmode="decimal" name="qty_{{ row.item.id }}" value="0" form="{{ form_id }}" data-returnable="{{ row.unit.max }} {{ row.unit.label }}" aria-label="Quantity of {{ row.item.product.display_name }} to return"{% if row.returnable_qty <= 0 %} readonly{% endif %}>
+            <select class="form-select" name="unit_{{ row.item.id }}" form="{{ form_id }}" data-return-unit aria-label="Unit of {{ row.item.product.display_name }} to return" data-tip="Goods can come back in a smaller unit than they were {% if kind == 'purchase' %}bought{% else %}sold{% endif %} in."{% if row.returnable_qty <= 0 %} disabled{% endif %}>
+                {% for choice in row.unit_choices %}<option value="{{ choice.code }}" data-max="{{ choice.max }}" data-step="{{ choice.step }}"{% if choice.code == row.unit.code %} selected{% endif %}>{{ choice.label }}</option>{% endfor %}
+            </select>
+        </div>
+        <div class="st-over-note" data-over-note hidden></div>
+    </td>
+    {% else %}
+    <td class="k-num text-end" data-k="more" data-label="{{ taken_label }}">{{ row.item.quantity|qty_short:row.item.product.unit }}</td>
+    <td class="k-num text-end" data-k="more" data-label="Already returned">{% if row.returned_qty %}{{ row.returned_qty|qty }}{% else %}<span class="st-dim">{{ row.returned_qty|qty }}</span>{% endif %}</td>
+    <td class="k-num text-end" data-k="flag" data-label="Available">{% if row.returnable_qty > 0 %}{{ row.returnable_qty|qty_short:row.item.product.unit }}{% else %}<span class="k-badge">Returned</span>{% endif %}</td>
+    <td class="text-end" data-k="field" data-label="Return now">
+        <div class="input-group st-return-input">
+            <input class="form-control text-end" type="number" min="0" max="{{ row.returnable_qty|qty }}" step="{{ row.item.product|qty_step }}" inputmode="decimal" name="qty_{{ row.item.id }}" value="0" form="{{ form_id }}" data-returnable="{{ row.returnable_qty|qty_short:row.item.product.unit }}" aria-label="Quantity of {{ row.item.product.display_name }} to return"{% if row.returnable_qty <= 0 %} readonly{% endif %}>
+            <span class="input-group-text">{{ row.item.product.unit }}</span>
+        </div>
+        <div class="st-over-note" data-over-note hidden></div>
+    </td>
+    {% endif %}
+</tr>

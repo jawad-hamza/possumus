@@ -3,10 +3,15 @@
 {% block title %}{{ customer.name }}{% endblock %}
 {% block page_title %}{{ customer.name }}{% endblock %}
 {% block page_help %}Customer ledger: balance, every entry and payments received.{% endblock %}
-{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
-{% block page_actions %}<a href="#settle" class="btn btn-primary k-only-phone" onclick="openSettlement(); return false;" data-tip="Receive payment (F2)"><i class="bi bi-cash-coin" aria-hidden="true"></i> Receive payment</a><a href="{% url 'customer_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Customers</a>{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet"><link href="{% static 'zehnms/css/pages/field-sales.css' %}" rel="stylesheet">{% endblock %}
+{% block page_actions %}<a href="#settle" class="btn btn-primary k-only-phone" onclick="openSettlement(); return false;" data-tip="Receive payment (F2)"><i class="bi bi-cash-coin" aria-hidden="true"></i> Receive payment</a>{% if manage_access.parties %}<a href="{% url 'customer_edit' customer.id %}" class="btn btn-outline-secondary" data-tip="Change details, route and credit limit"><i class="bi bi-pencil" aria-hidden="true"></i> Edit</a>{% endif %}<a href="{% url 'customer_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Customers</a>{% endblock %}
 
 {% block content %}
+{# Printed on paper only: the shop, the customer and the dates of the ledger below. #}
+<header class="b-print-head">
+    <h2>{{ active_company.name|default:brand_name }}</h2>
+    <p>Customer ledger: {{ customer.name }}. <span id="ledger_period">All entries</span>.</p>
+</header>
 {% include "parties/_party_leaf.html" with party=customer role="customer" turnover=total_sales turnover_label="Total sales" returned=total_returns settle_title="Receive payment" settle_button="Record payment received" bank_help="Select which bank ledger received this customer payment." %}
 
 {% if sales %}
@@ -42,8 +47,18 @@ var leafLedger = ZehnBooks.ledger({
     body: document.getElementById('ledger'),
     foot: document.getElementById('ledger_total'),
     pager: document.getElementById('ledger_pager'),
-    empty: 'Nothing is written on this leaf yet. Credit sales, payments and an opening balance appear here.'
+    empty: 'Nothing is written on this leaf yet. Credit sales, payments and an opening balance appear here.',
+    // Laid out as a statement: date order, quantity beside the money, signed running balance.
+    statement: true,
+    quantityLabel: '{{ quantity_label|default:"Qty"|escapejs }}'
 });
+
+function showLedgerPeriod(from, to) {
+    const label = document.getElementById('ledger_period');
+    if (!label) return;
+    const day = function (iso) { return iso.split('-').reverse().join('/'); };
+    label.textContent = from && to ? day(from) + ' to ' + day(to) : from ? 'From ' + day(from) : to ? 'Up to ' + day(to) : 'All entries';
+}
 
 function buildStatementUrl() {
     const from = document.getElementById('from_date').value;
@@ -57,6 +72,7 @@ function buildStatementUrl() {
 function loadStatement() {
     ZehnBooks.load(buildStatementUrl(), leafLedger).then(function (data) {
         if (!data) return;
+        showLedgerPeriod(data.from_date || '', data.to_date || '');
         ZehnBooks.paintBalance({
             figure: document.getElementById('closing_balance'),
             words: document.getElementById('balance_badge'),

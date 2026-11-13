@@ -1,4 +1,5 @@
 """Purchases (list/add/detail/edit/return) and supplier creation."""
+import json
 from decimal import Decimal
 from urllib.parse import urlencode
 
@@ -13,6 +14,7 @@ from django.urls import reverse
 from django.utils import timezone
 
 from accounts.services.audit import record_audit
+from accounts.services.bank_receipts import UPLOAD_FIELD as RECEIPT_FIELD, attach_optional_receipt, attach_receipt
 from accounts.services.pos_posting import post_purchase_from_pos
 from ..forms import (
     PurchaseForm,
@@ -22,13 +24,20 @@ from ..forms import (
     QuickCategoryForm,
     QuickProductForm,
     SupplierForm,
+    default_stock_unit,
 )
 from ..models import (
+    PACK_BOX,
+    PACK_CARTON,
+    PACK_NAMES,
+    PACK_PIECE,
+    PACK_SHORT_LABELS,
     Product,
     Purchase,
     PurchaseEditLog,
     PurchaseItem,
     PurchaseReturn,
+    packaging_enabled,
 )
 from ..services.access import (
     ACCESS_MANAGE,
@@ -37,13 +46,36 @@ from ..services.access import (
     module_access_required,
 )
 from ..services.navigation import get_safe_next_url, return_context, with_query, with_touched_row
-from ..services.purchase_balances import annotate_purchase_balances, outstanding_purchase_total
-from ..services.returns import create_purchase_return
+from ..services.purchase_balances import (
+    annotate_purchase_balances,
+    outstanding_purchase_total,
+    running_purchase_balances,
+)
+from ..services.builty import freight_by_builty, freight_by_item, freight_by_purchase, landed_costs
+from ..services.modules import module_enabled
+from ..services.returns import create_purchase_return, return_row
 from ._shared import _party_opening_form, _save_party_opening
+
+
+def _packaging_config():
+    """What purchase.js needs to know about cartons and boxes, as JSON for the page's config block."""
+    enabled = packaging_enabled()
+    return json.dumps(
+        {
+            "enabled": enabled,
+            # The unit a line starts in; a product without it starts in the next smaller one it has.
+            "defaultUnit": default_stock_unit() if enabled else PACK_PIECE,
+            "levels": [
+                {"code": code, "name": PACK_NAMES[code], "label": PACK_SHORT_LABELS[code]}
+                for code in (PACK_CARTON, PACK_BOX)
+            ],
+        }
+    )
 
 
 def _purchase_setup_context(next_url):
     return {
+        "purchase_packaging": _packaging_config(),
         "supplier_add_url": f"{reverse('supplier_add')}?{urlencode({'next': next_url})}",
         "quick_brand_form": QuickBrandForm(prefix="quick_brand"),
         "quick_category_form": QuickCategoryForm(prefix="quick_category"),
@@ -139,7 +171,7 @@ _FRIENDLY_LINE_ERRORS = {
 
 def _line_error_reasons(exc):
     if isinstance(exc, ProtectedError):
-        return ["Other records (such as supplier returns) still point at this line, so it cannot be removed."]
+        return ["Other records (such as supplier returns or a builty) still point at this line, so it cannot be removed."]
     reasons = exc.messages if isinstance(exc, ValidationError) else [str(exc)]
     return [_FRIENDLY_LINE_ERRORS.get(reason, reason) for reason in reasons]
 
@@ -155,16 +187,60 @@ def _remove_purchase_lines(formset):
             raise _PurchaseLineError(form, item, _line_error_reasons(exc)) from exc
 
 
+def _packing_words(product):
+    return product.packing_display or "no cartons or boxes"
+
+
+def _apply_line_packing(form, product):
+    """Write the packing typed on a purchase line to its product.
+
+    ``product`` is the row just re-read from the database: the form only changed its own copy
+    to validate the line. Returns (product, packing before, packing after), or None when the
+    line left the packing alone.
+    """
+    change = getattr(form, "packing_change", None)
+    if not change:
+        return None
+    pieces_per_box, boxes_per_carton = change
+    if (product.pieces_per_box, product.boxes_per_carton) == (pieces_per_box, boxes_per_carton):
+        return None
+    before = _packing_words(product)
+    product.pieces_per_box, product.boxes_per_carton = pieces_per_box, boxes_per_carton
+    product.save(update_fields=["pieces_per_box", "boxes_per_carton"])
+    return product, before, _packing_words(product)
+
+
 def _save_purchase_lines(purchase, lines):
+    """Save the kept lines. Returns the packing changes the lines made to their products."""
+    repacked = []
     for form, item in lines:
         item.purchase = purchase
         # The same product may sit on two lines: reload it so the second line averages its cost
         # against what the first line just wrote, not against the value loaded with the form.
         item.product = Product.objects.get(pk=item.product_id)
+        # The line's unit is sized from the product, so packing typed on the line is written first.
+        change = _apply_line_packing(form, item.product)
+        if change:
+            repacked.append(change)
         try:
             item.save()
         except ValidationError as exc:
             raise _PurchaseLineError(form, item, _line_error_reasons(exc)) from exc
+    return repacked
+
+
+def _record_packing_changes(request, purchase, repacked):
+    """A purchase that changed a product's packing leaves that on the audit trail."""
+    for product, before, after in repacked:
+        record_audit(
+            action="product_packing_updated",
+            description=(
+                f"Packing of {product.display_name} changed from {before} to {after} on purchase #{purchase.id}."
+            ),
+            actor=request.user,
+            target=product,
+            metadata={"purchase_id": purchase.id, "before": before, "after": after},
+        )
 
 
 def _show_purchase_line_error(purchase_form, exc):
@@ -190,6 +266,11 @@ def purchase_list(request):
     # Only the visible page gets per-bill balances; the headline figure comes from totals.
     page_obj = Paginator(purchases_queryset, PURCHASES_PER_PAGE).get_page(request.GET.get("page"))
     purchases = annotate_purchase_balances(page_obj.object_list)
+    running = running_purchase_balances()
+    freight = freight_by_purchase([purchase.id for purchase in purchases]) if module_enabled("builty") else {}
+    for purchase in purchases:
+        purchase.running_balance = running.get(purchase.id, purchase.report_balance_due)
+        purchase.freight_total = freight.get(purchase.id)
     outstanding_total = outstanding_purchase_total()
 
     return render(
@@ -212,7 +293,7 @@ def purchase_add(request):
     returned_supplier = (request.GET.get("supplier_id") or "").strip()
     if request.method != "POST" and returned_supplier.isdigit():
         initial["supplier"] = int(returned_supplier)
-    purchase_form = PurchaseForm(request.POST or None, initial=initial)
+    purchase_form = PurchaseForm(request.POST or None, request.FILES or None, initial=initial)
     back = return_context(request, reverse("purchase_list"))
     formset = PurchaseItemFormSet(
         request.POST or None,
@@ -236,7 +317,7 @@ def purchase_add(request):
                     # user gets the form back with the reason instead of an error page.
                     with transaction.atomic():
                         purchase = purchase_form.save()
-                        _save_purchase_lines(purchase, lines)
+                        repacked = _save_purchase_lines(purchase, lines)
                         purchase.refresh_from_db()
                         post_purchase_from_pos(
                             purchase_id=purchase.id,
@@ -247,6 +328,7 @@ def purchase_add(request):
                             bank_account=purchase.bank_account,
                             purchase_date=timezone.localtime(purchase.created_at).date(),
                         )
+                        attach_receipt(purchase, purchase_form.cleaned_data.get(RECEIPT_FIELD), actor=request.user, audit=False)
                 except _PurchaseLineError as exc:
                     _show_purchase_line_error(purchase_form, exc)
                 except (ValidationError, ValueError) as exc:
@@ -261,6 +343,7 @@ def purchase_add(request):
                     target=purchase,
                     metadata={"total_amount": str(purchase.total_amount), "payment_method": purchase.payment_method},
                 )
+                _record_packing_changes(request, purchase, repacked)
                 if back["next_url"]:
                     return redirect(with_touched_row(back["next_url"], purchase.id))
                 return redirect("purchase_detail", pk=purchase.id)
@@ -278,11 +361,38 @@ def purchase_add(request):
 @module_access_required("purchases")
 def purchase_detail(request, pk):
     purchase = get_object_or_404(
-        Purchase.objects.select_related("supplier").prefetch_related("items__product", "edit_logs"),
+        Purchase.objects.select_related("supplier").prefetch_related(
+            "items__product", "edit_logs", "returns__items__product"
+        ),
         pk=pk,
     )
     purchase = annotate_purchase_balances([purchase])[0]
-    return render(request, "pos/purchase_detail.html", {"purchase": purchase})
+    items = list(purchase.items.all())
+    # Freight from builties still in force: each line's share and what one unit landed at.
+    freight = freight_by_item([item.id for item in items])
+    for item in items:
+        item.freight = freight.get(item.id)
+        if item.freight:
+            item.landed_unit_cost, item.landed_piece_cost = landed_costs(item, item.freight)
+    builties = []
+    if module_enabled("builty"):
+        builties = list(purchase.builties.select_related("transporter").order_by("-date", "-id"))
+        shares = freight_by_builty(purchase.id)
+        for builty in builties:
+            builty.share_here = shares.get(builty.id, Decimal("0"))
+    freight_total = sum(freight.values(), Decimal("0"))
+    return render(
+        request,
+        "pos/purchase_detail.html",
+        {
+            "purchase": purchase,
+            "items": items,
+            "freight_total": freight_total,
+            "landed_total": Decimal(purchase.total_amount or 0) + freight_total,
+            "has_freight": bool(freight),
+            "builties": builties,
+        },
+    )
 
 
 @module_access_required("purchases", minimum=ACCESS_MANAGE)
@@ -293,7 +403,7 @@ def purchase_edit(request, pk):
     returned_supplier = (request.GET.get("supplier_id") or "").strip()
     if request.method != "POST" and returned_supplier.isdigit():
         initial["supplier"] = int(returned_supplier)
-    purchase_form = PurchaseForm(request.POST or None, instance=purchase, initial=initial)
+    purchase_form = PurchaseForm(request.POST or None, request.FILES or None, instance=purchase, initial=initial)
     back = return_context(request, reverse("purchase_detail", args=[purchase.id]))
     formset = PurchaseItemFormSet(
         request.POST or None,
@@ -328,7 +438,7 @@ def purchase_edit(request, pk):
                         purchase.save()
 
                         _remove_purchase_lines(formset)
-                        _save_purchase_lines(purchase, lines)
+                        repacked = _save_purchase_lines(purchase, lines)
 
                         purchase.refresh_from_db()
                         post_purchase_from_pos(
@@ -340,6 +450,7 @@ def purchase_edit(request, pk):
                             bank_account=purchase.bank_account,
                             purchase_date=timezone.localtime(purchase.created_at).date(),
                         )
+                        attach_receipt(purchase, purchase_form.cleaned_data.get(RECEIPT_FIELD), actor=request.user)
                 except _PurchaseLineError as exc:
                     _show_purchase_line_error(purchase_form, exc)
                 except (ValidationError, ValueError) as exc:
@@ -357,6 +468,7 @@ def purchase_edit(request, pk):
                     target=purchase,
                     metadata={"old_total": str(old_total), "new_total": str(purchase.total_amount)},
                 )
+                _record_packing_changes(request, purchase, repacked)
                 PurchaseEditLog.objects.create(
                     purchase=purchase,
                     edited_by=purchase.last_edited_by,
@@ -391,31 +503,25 @@ def purchase_return_view(request, pk):
     )
     purchase = annotate_purchase_balances([purchase])[0]
     initial = {"settlement_method": PurchaseReturn.PAYABLE if purchase.supplier else PurchaseReturn.CASH}
-    form = PurchaseReturnForm(request.POST or None, initial=initial)
+    form = PurchaseReturnForm(request.POST or None, request.FILES or None, initial=initial)
 
-    item_rows = []
-    for item in purchase.items.all():
-        returned_qty = sum(return_item.quantity for return_item in item.return_items.all())
-        item_rows.append(
-            {
-                "item": item,
-                "returned_qty": returned_qty,
-                "returnable_qty": max(item.quantity - returned_qty, 0),
-            }
-        )
+    item_rows = [return_row(item) for item in purchase.items.all()]
 
     if request.method == "POST" and form.is_valid():
         quantities = {row["item"].id: request.POST.get(f"qty_{row['item'].id}", "0") for row in item_rows}
+        units = {row["item"].id: request.POST.get(f"unit_{row['item'].id}", "") for row in item_rows}
         try:
             purchase_return = create_purchase_return(
                 purchase=purchase,
                 quantities=quantities,
+                units=units,
                 settlement_method=form.cleaned_data["settlement_method"],
                 bank_account=form.cleaned_data.get("bank_account"),
                 reason=form.cleaned_data["reason"],
                 notes=form.cleaned_data.get("notes") or "",
                 actor=request.user,
             )
+            attach_optional_receipt(request, purchase_return, form.cleaned_data.get(RECEIPT_FIELD))
             messages.success(request, f"Purchase return #{purchase_return.id} recorded.")
             return redirect("purchase_detail", pk=purchase.id)
         except (ValueError, ValidationError) as exc:

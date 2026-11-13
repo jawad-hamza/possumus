@@ -1,0 +1,35 @@
+<tr data-unit="{{ line.unit }}"{% if line.error %} class="has-error"{% endif %}>
+    <td data-label="Product">
+        <select name="line_product" class="form-select" aria-label="Product">
+            <option value="">Choose a product</option>
+            {% for product in products %}<option value="{{ product.id }}"{% if line.product_id == product.id|stringformat:"s" %} selected{% endif %}>{{ product.display_name }}{% if product.sku %} ({{ product.sku }}){% endif %}</option>{% endfor %}
+        </select>
+        <div class="dist-line-hint" data-line-hint hidden></div>
+        {% if line.error %}<div class="dist-line-error"><i class="bi bi-exclamation-circle" aria-hidden="true"></i> {{ line.error }}</div>{% endif %}
+    </td>
+    <td data-label="Quantity">
+        <div class="input-group">
+            <input type="number" name="line_quantity" class="form-control" value="{{ line.quantity }}" min="0" step="any" inputmode="decimal" aria-label="Quantity">
+            <select name="line_unit" class="form-select" aria-label="Unit"><option value="{{ line.unit }}">{{ line.unit|default:"-" }}</option></select>
+        </div>
+    </td>
+    <td data-label="Rate">
+        <input type="number" name="line_rate" class="form-control" value="{{ line.rate }}" min="0" step="0.01" inputmode="decimal" aria-label="Rate of one unit"{% if lock_rate %} readonly data-tip="Settings do not allow changing the price list rate"{% endif %}>
+    </td>
+    {% if with_discount %}
+    <td data-label="Discount %">
+        <input type="number" name="line_discount" class="form-control" value="{{ line.discount|default:'0' }}" min="0" max="100" step="0.01" inputmode="decimal" aria-label="Line discount percent"{% if lock_discount %} readonly{% endif %}>
+    </td>
+    {% endif %}
+    {% if with_condition %}
+    <td data-label="Condition">
+        <select name="line_condition" class="form-select" aria-label="Condition">
+            {% for value, label in conditions %}<option value="{{ value }}"{% if line.condition == value %} selected{% endif %}>{{ label }}</option>{% endfor %}
+        </select>
+    </td>
+    {% endif %}
+    <td class="k-num text-end st-line-amount" data-label="Amount" data-amount></td>
+    <td class="text-end st-line-x">
+        <button type="button" class="k-icon-btn st-line-remove" data-remove-line data-tip="Remove this line" aria-label="Remove this line"><i class="bi bi-x-lg" aria-hidden="true"></i></button>
+    </td>
+</tr>

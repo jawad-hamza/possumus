@@ -81,7 +81,7 @@
             <span class="k-badge k-badge--blue">Using saved rule</span>
             {% endif %}
         </div>
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="action" value="add_expense">
             <div class="k-form-grid">
@@ -95,6 +95,7 @@
                 {% include "pos/partials/_field.html" with field=expense_form.paid_amount %}
                 {% include "pos/partials/_field.html" with field=expense_form.payment_method %}
                 <div>{% include "pos/partials/_field.html" with field=expense_form.bank_account %}{% if quick_add_kinds.bank %}<div class="rf-add-row mt-2 mb-0"><button type="button" class="rf-add" data-rf-quick="bank" data-rf-target="{{ expense_form.bank_account.id_for_label }}" data-rf-also="{{ expense_payment_form.bank_account.id_for_label }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add bank account</button></div>{% endif %}</div>
+                <div class="k-span-2">{% include "pos/partials/_field.html" with field=expense_form.bank_receipt %}</div>
                 <div class="k-span-2">{% include "pos/partials/_field.html" with field=expense_form.notes %}</div>
             </div>
             {% if expense_form.non_field_errors %}<div class="k-error mt-3" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ expense_form.non_field_errors|join:', ' }}</div>{% endif %}
@@ -114,7 +115,7 @@
             <span class="b-sub">Due {{ selected_expense.balance_due|money }} &middot; {{ selected_expense.category.name }}{% if selected_expense.employee %} &middot; {{ selected_expense.employee.get_full_name|default:selected_expense.employee.username }}{% endif %}</span>
         </div>
         {% endif %}
-        <form method="post">
+        <form method="post" enctype="multipart/form-data">
             {% csrf_token %}
             <input type="hidden" name="action" value="pay_expense">
             <div class="k-form-grid">
@@ -123,6 +124,7 @@
                 {% include "pos/partials/_field.html" with field=expense_payment_form.date %}
                 {% include "pos/partials/_field.html" with field=expense_payment_form.payment_method %}
                 <div>{% include "pos/partials/_field.html" with field=expense_payment_form.bank_account %}{% if quick_add_kinds.bank %}<div class="rf-add-row mt-2 mb-0"><button type="button" class="rf-add" data-rf-quick="bank" data-rf-target="{{ expense_payment_form.bank_account.id_for_label }}" data-rf-also="{{ expense_form.bank_account.id_for_label }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add bank account</button></div>{% endif %}</div>
+                <div class="k-span-2">{% include "pos/partials/_field.html" with field=expense_payment_form.bank_receipt %}</div>
                 <div class="k-span-2">{% include "pos/partials/_field.html" with field=expense_payment_form.notes %}</div>
             </div>
             {% if expense_payment_form.non_field_errors %}<div class="k-error mt-3" role="alert"><i class="bi bi-exclamation-circle" aria-hidden="true"></i>{{ expense_payment_form.non_field_errors|join:', ' }}</div>{% endif %}
@@ -169,10 +171,11 @@
                 </tr>
             </thead>
             <tbody>
+                {% load bank_receipt_tags %}{% mark_bank_receipts expenses %}
                 {% for expense in expenses %}
                 <tr>
                     <td data-label="Date">{{ expense.date|date:"d M Y" }}</td>
-                    <td class="b-stack-title">{{ expense.display_title }}<span class="b-sub">{{ expense.category.name }}{% if expense.voucher_id %} &middot; #{{ expense.voucher_id }}{% endif %}</span></td>
+                    <td class="b-stack-title">{{ expense.display_title }}<span class="b-sub">{{ expense.category.name }}{% if expense.voucher_id %} &middot; #{{ expense.voucher_id }}{% endif %}</span>{% bank_receipt_link expense.bank_receipt_mark %}</td>
                     <td data-label="Party">{% if expense.employee %}{{ expense.employee.get_full_name|default:expense.employee.username }}{% else %}{{ expense.vendor|default:"-" }}{% endif %}</td>
                     <td class="k-num b-bal" data-label="Total">{{ expense.amount|money }}</td>
                     <td class="k-num" data-label="Paid">{{ expense.paid_amount|money }}</td>
@@ -246,10 +249,11 @@
                 <table class="k-table k-table--dense">
                     <thead><tr><th scope="col">Bill</th><th scope="col">From</th><th scope="col" class="k-num">Amount</th></tr></thead>
                     <tbody>
+                        {% mark_bank_receipts recent_expense_payments %}
                         {% for payment in recent_expense_payments %}
                         <tr>
                             <td>{{ payment.expense.display_title }}<span class="b-sub">{{ payment.expense.category.name }}</span></td>
-                            <td>{{ payment.from_account_title }}<span class="b-sub">{% if payment.voucher_id %}#{{ payment.voucher_id }}{% else %}-{% endif %}</span></td>
+                            <td>{{ payment.from_account_title }}<span class="b-sub">{% if payment.voucher_id %}#{{ payment.voucher_id }}{% else %}-{% endif %}</span>{% bank_receipt_link payment.bank_receipt_mark %}</td>
                             <td class="k-num k-out">{{ payment.amount|money }}</td>
                         </tr>
                         {% empty %}

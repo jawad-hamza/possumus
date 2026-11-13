@@ -21,6 +21,11 @@ def _ensure_account(title: str, account_type: str) -> Account:
     return account
 
 
+def _in_packs(product, quantity):
+    """A base quantity as the shop counts this product: "12 Ctn 3 Box 5 pcs", or the plain number."""
+    return product.format_quantity(quantity) if product.has_packaging else format_qty(quantity)
+
+
 @transaction.atomic
 def create_stock_adjustment(*, product, adjustment_mode, reason, quantity_after=None, quantity_delta=None, notes="", actor=None):
     product_obj = Product.objects.select_for_update().get(pk=getattr(product, "pk", product))
@@ -44,6 +49,10 @@ def create_stock_adjustment(*, product, adjustment_mode, reason, quantity_after=
         quantity_delta = quantize_qty(quantity_delta)
         quantity_after = quantity_before + quantity_delta
         if quantity_after < 0:
+            if product_obj.has_packaging:
+                raise ValueError(
+                    f"Adjustment would reduce stock below zero. Only {_in_packs(product_obj, quantity_before)} on hand."
+                )
             raise ValueError("Adjustment would reduce stock below zero.")
 
     if not product_obj.allows_fractional_quantity and quantity_after != quantity_after.to_integral_value():
@@ -93,7 +102,10 @@ def create_stock_adjustment(*, product, adjustment_mode, reason, quantity_after=
 
     record_audit(
         action="stock_adjusted",
-        description=f"Stock for '{product_obj.name}' changed from {format_qty(quantity_before)} to {format_qty(quantity_after)}.",
+        description=(
+            f"Stock for '{product_obj.name}' changed from {_in_packs(product_obj, quantity_before)} "
+            f"to {_in_packs(product_obj, quantity_after)}."
+        ),
         actor=actor,
         target=adjustment,
         metadata={"quantity_delta": str(quantity_delta), "adjustment_mode": adjustment_mode},

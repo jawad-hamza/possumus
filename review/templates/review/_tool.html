@@ -1,0 +1,3 @@
+{% load static %}{% comment %}The comment tool. pos/base.html includes it only while review notes are switched on.{% endcomment %}
+{{ review_config|json_script:"rv-config" }}
+<script src="{% static 'review/review.js' %}"></script>

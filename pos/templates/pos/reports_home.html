@@ -120,7 +120,7 @@
                 {% for item in best_selling_month %}
                 <tr>
                     <td>{{ item.product__name }}</td>
-                    <td class="k-num">{{ item.total_qty|qty_short:item.product__unit }}</td>
+                    <td class="k-num">{% if item.qty_display %}{{ item.qty_display }}{% else %}{{ item.total_qty|qty_short:item.product__unit }}{% endif %}</td>
                 </tr>
                 {% empty %}
                 <tr><td colspan="2" class="k-empty"><p class="k-empty-title">No sales this month yet</p><p>The products that sell most this month are ranked here.</p></td></tr>

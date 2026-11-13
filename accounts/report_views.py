@@ -19,6 +19,7 @@ from django.utils.http import url_has_allowed_host_and_scheme
 
 from accounts.forms import BooksLockForm, PartyOpeningBalanceForm
 from accounts.models import Account
+from accounts.services import customer_statement
 from accounts.services.aging import BUCKETS, PAYABLE, RECEIVABLE, get_aging
 from accounts.services.audit import record_audit
 from accounts.services.balance_sheet import get_balance_sheet
@@ -296,6 +297,9 @@ def party_statement(request, model, pk):
     data = get_party_ledger(party, start, end)
 
     if _wants_csv(request):
+        if kind == "customer":
+            # The customer statement has its own layout: quantity beside the money, signed balance.
+            return customer_statement.statement_csv(party, data, _period_label(start, end), f"customer-{party.pk}-statement")
         return _ledger_csv(f"{kind}-{party.pk}-statement", data)
 
     page = _paginate(request, data["entries"], LEDGER_PAGE_SIZE)
@@ -314,6 +318,10 @@ def party_statement(request, model, pk):
         "opening_action": reverse("party_opening_balance", args=[kind, party.pk]),
         "opening_next": request.get_full_path(),
     }
+    if kind == "customer":
+        context.update(
+            customer_statement.statement_context(party, data, customer_statement.statement_rows(page.object_list, data["opening"]))
+        )
     return render(request, "accounts/party_ledger.html", context)
 
 

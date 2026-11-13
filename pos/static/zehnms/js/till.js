@@ -124,6 +124,8 @@
             payment_method: method(),
             bank_account_id: bankSelect && method() === 'bank' && !isCredit() ? bankSelect.value : '',
             discount_rate: discountInput ? discountInput.value : '0',
+            discount_type: window.ZehnTillDiscount ? window.ZehnTillDiscount.kind() : 'percent',
+            discount_value: discountInput ? discountInput.value : '0',
             tax_rate: taxInput ? taxInput.value : '0'
         };
     }
@@ -170,11 +172,13 @@
             cashRadio.checked = context.payment_method !== 'bank';
         }
         if (bankSelect && doc.activeElement !== bankSelect) { bankSelect.value = context.bank_account_id || ''; }
-        if (discountInput && doc.activeElement !== discountInput) { discountInput.value = Number(context.discount_rate || 0).toFixed(2); }
+        if (discountInput && doc.activeElement !== discountInput) { discountInput.value = Number(context.discount_value || context.discount_rate || 0).toFixed(2); }
         if (taxInput && taxInput.type !== 'hidden' && doc.activeElement !== taxInput) { taxInput.value = Number(context.tax_rate || 0).toFixed(2); }
     }
 
     function applyCustomer(customer) {
+        // pages/till-customer.js listens: the credit limit note and the sale's order booker follow the customer.
+        doc.dispatchEvent(new CustomEvent('till:customer', { detail: customer || null }));
         var note = doc.getElementById('till-customer-note');
         if (!note) { return; }
         note.textContent = '';
@@ -291,6 +295,7 @@
         lineCount = (data.lines || []).length;
         applyTotals(data.totals);
         applyContext(data.context);
+        if (window.ZehnTillDiscount) { window.ZehnTillDiscount.apply(data); }
         applyCustomer(data.customer);
         showMode();
 
@@ -351,7 +356,11 @@
     var hits = [];
     var cursor = 0;
     var picking = null; // the family whose sizes the list shows, with the typed quantity
-    var UNITS = { kg: 'kg', g: 'g', gm: 'g', gram: 'g', grams: 'g', l: 'l', ltr: 'l', litre: 'l', liter: 'l', ml: 'ml', m: 'm', ft: 'ft' };
+    var UNITS = {
+        kg: 'kg', g: 'g', gm: 'g', gram: 'g', grams: 'g', l: 'l', ltr: 'l', litre: 'l', liter: 'l', ml: 'ml', m: 'm', ft: 'ft',
+        ctn: 'ctn', ctns: 'ctn', carton: 'ctn', cartons: 'ctn', box: 'box', boxes: 'box', bx: 'box',
+        pc: 'pcs', pcs: 'pcs', piece: 'pcs', pieces: 'pcs'
+    };
 
     fetch(root.dataset.catalogueUrl, { credentials: 'same-origin', headers: { 'X-Requested-With': 'XMLHttpRequest' } })
         .then(function (response) { return response.ok ? response.json() : { products: [] }; })
@@ -413,6 +422,8 @@
 
     function unitFits(product, unit) {
         if (!unit || unit === product.unit) { return true; }
+        // a pack word fits a product packed that way ("5 ctn" of something sold by the carton)
+        if (product.packs && product.packs.indexOf(unit) !== -1) { return true; }
         return (unit === 'g' && product.unit === 'kg') || (unit === 'kg' && product.unit === 'g') ||
             (unit === 'ml' && product.unit === 'l') || (unit === 'l' && product.unit === 'ml');
     }
@@ -679,7 +690,24 @@
         return next ? { focusLine: next.dataset.line, focusField: 'qty' } : {};
     }
 
+    function unitSelectOf(line) {
+        return line ? $('[data-unit-select]', line) : null;
+    }
+
+    /* Carton, box or piece for a line. A quantity still being typed goes with the change. */
+    function changeUnit(line, unit, quantityInput) {
+        var id = line.dataset.line;
+        var params = { product_id: id, unit: unit, selected: id };
+        if (quantityInput && quantityInput.value !== '' && quantityInput.value !== quantityInput.defaultValue) {
+            params.quantity = quantityInput.value;
+            quantityInput.dataset.sent = quantityInput.value;
+        }
+        send('unit', params, { focusLine: id, focusField: 'qty', stay: true, noScroll: true });
+    }
+
     ledger.addEventListener('focusin', function (event) {
+        var unitSelect = event.target.closest('[data-unit-select]');
+        if (unitSelect) { select(unitSelect.closest('.t-line').dataset.line, false); return; }
         var input = event.target.closest('.t-cell-input');
         if (!input) { return; }
         select(input.closest('.t-line').dataset.line, false);
@@ -687,8 +715,25 @@
     });
 
     ledger.addEventListener('keydown', function (event) {
+        var unitChoice = event.target.closest('[data-unit-select]');
+        if (unitChoice) {
+            if (event.key === 'Escape') { event.preventDefault(); event.stopPropagation(); focusScan(true); }
+            return;
+        }
         var input = event.target.closest('.t-cell-input');
         if (!input) { return; }
+        if (input.dataset.field === 'qty' && event.key.length === 1 && !event.ctrlKey && !event.altKey && !event.metaKey) {
+            // C, B or P in the quantity box picks the unit: "5" then "c" is five cartons.
+            var packs = unitSelectOf(input.closest('.t-line'));
+            var wanted = packs ? $('option[data-key="' + event.key.toLowerCase() + '"]', packs) : null;
+            if (wanted) {
+                event.preventDefault();
+                if (wanted.value !== packs.value || input.value !== input.defaultValue) {
+                    changeUnit(input.closest('.t-line'), wanted.value, input);
+                }
+                return;
+            }
+        }
         if (event.key === 'Enter') {
             event.preventDefault();
             if (!commit(input, {})) { focusScan(true); }
@@ -710,6 +755,12 @@
     });
 
     ledger.addEventListener('change', function (event) {
+        var unitSelect = event.target.closest('[data-unit-select]');
+        if (unitSelect) {
+            var unitLine = unitSelect.closest('.t-line');
+            changeUnit(unitLine, unitSelect.value, $('[data-field="qty"]', unitLine));
+            return;
+        }
         var input = event.target.closest('.t-cell-input');
         if (input) { commit(input, { stay: true, noScroll: true }); }
     });
@@ -721,7 +772,7 @@
             send('quantity', { product_id: line.dataset.line, quantity: chip.dataset.quantityChip, selected: line.dataset.line });
             return;
         }
-        if (line && !event.target.closest('input, button, a')) {
+        if (line && !event.target.closest('input, button, a, select')) {
             select(line.dataset.line, false);
             focusScan();
         }
@@ -820,6 +871,8 @@
 
     doc.getElementById('till-disc-key').addEventListener('click', function () {
         var active = doc.activeElement;
+        // a third press, with the bill discount box in hand, flips it between percent and cash
+        if (active && active === discountInput && window.ZehnTillDiscount) { window.ZehnTillDiscount.toggle(); return; }
         var onLineDiscount = active && active.dataset && active.dataset.field === 'disc';
         if (!onLineDiscount && editSelected('disc')) { return; }
         if (discountInput) { discountInput.focus(); discountInput.select(); }
@@ -1066,13 +1119,15 @@
             customerSelect.focus();
             return;
         }
+        /* a bank payment carries its receipt: till-receipt.js says what is missing, beside the field */
+        if (window.ZehnTillReceipt && !window.ZehnTillReceipt.ready()) { return; }
         closing = true;
         setClosable(false);
         window.clearTimeout(contextTimer);
         queue = queue.then(function () {
             var body = new URLSearchParams(new FormData(checkoutForm));
             body.set('respond', 'json');
-            return window.tillSend(checkoutForm.getAttribute('action') || window.location.pathname, body.toString())
+            return (window.ZehnTillReceipt ? window.ZehnTillReceipt.send : window.tillSend)(checkoutForm.getAttribute('action') || window.location.pathname, body.toString())
                 .then(function (response) {
                     return response.json().catch(function () { return null; }).then(function (data) {
                         return { response: response, data: data };

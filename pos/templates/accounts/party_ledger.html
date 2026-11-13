@@ -3,13 +3,20 @@
 
 {% block title %}Statement - {{ party }}{% endblock %}
 {% block page_title %}{{ party_kind|title }} statement{% endblock %}
-{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% endblock %}
+{% block extra_css %}<link href="{% static 'zehnms/css/pages/books.css' %}" rel="stylesheet">{% if customer_statement %}<link href="{% static 'zehnms/css/pages/field-sales.css' %}" rel="stylesheet">{% endif %}{% endblock %}
 {% block page_actions %}{% include "accounts/_report_actions.html" %}<button class="btn btn-outline-secondary" type="button" data-bs-toggle="collapse" data-bs-target="#opening-balance-panel" aria-expanded="false" aria-controls="opening-balance-panel"><i class="bi bi-flag" aria-hidden="true"></i> {% if party_opening %}Edit opening balance{% else %}Add opening balance{% endif %}</button>{% endblock %}
 
 {% block content %}
 <header class="b-print-head">
     <h2>{{ active_company.name|default:brand_name }}</h2>
     <p>{{ party_kind|title }} statement: {{ party }}. {{ period_label }}.</p>
+    {% if customer_statement %}
+    <ul class="fs-statement-meta">
+        {% if statement_header.city %}<li>City : {{ statement_header.city }}</li>{% endif %}
+        {% if statement_header.route %}<li>Route : {{ statement_header.route }}</li>{% endif %}
+        {% if statement_header.order_booker %}<li>Order booker : {{ statement_header.order_booker }}</li>{% endif %}
+    </ul>
+    {% endif %}
 </header>
 
 {% include "accounts/_report_header.html" %}
@@ -17,7 +24,7 @@
 <section class="k-section b-leaf">
     <div>
         <h2 class="b-leaf-name"><a href="{{ party_detail_url }}">{{ party }}</a></h2>
-        <ul class="b-leaf-meta"><li>{{ party_kind|title }} sub-ledger</li><li>{{ period_label }}</li></ul>
+        <ul class="b-leaf-meta"><li>{{ party_kind|title }} sub-ledger</li><li>{{ period_label }}</li>{% if customer_statement %}{% if statement_header.city %}<li>City {{ statement_header.city }}</li>{% endif %}{% if statement_header.route %}<li>Route {{ statement_header.route }}</li>{% endif %}{% if statement_header.order_booker %}<li>Order booker {{ statement_header.order_booker }}</li>{% endif %}{% endif %}</ul>
     </div>
     <div class="b-leaf-balance">
         <div class="b-leaf-label">Closing balance</div>
@@ -52,6 +59,9 @@
     <div class="k-section-head">
         <h2 class="k-section-title" id="party-ledger-title">Entries</h2>
     </div>
+    {% if customer_statement %}
+    {% include "accounts/_customer_statement_table.html" %}
+    {% else %}
     <div class="table-responsive">
         <table class="k-table k-ledger--stack b-bahi">
             <thead>
@@ -71,10 +81,11 @@
                     <td class="k-num b-bal" data-label="Balance">{{ opening_balance|money }} <span class="b-drcr">{{ opening_side }}</span></td>
                 </tr>
                 {% endif %}
+                {% load bank_receipt_tags %}{% mark_ledger_receipts rows %}
                 {% for row in rows %}
                 <tr>
                     <td data-label="Date">{{ row.date }}</td>
-                    <td data-label="Voucher">#{{ row.voucher.id }} &middot; {{ row.voucher.get_voucher_type_display }}</td>
+                    <td data-label="Voucher">#{{ row.voucher.id }} &middot; {{ row.voucher.get_voucher_type_display }}{% bank_receipt_link row.receipt %}</td>
                     <td data-label="Narration">{{ row.narration|default:"-" }}</td>
                     <td class="k-num" data-label="Debit">{% if row.debit %}{{ row.debit|money }}{% endif %}</td>
                     <td class="k-num" data-label="Credit">{% if row.credit %}{{ row.credit|money }}{% endif %}</td>
@@ -98,6 +109,7 @@
             {% endif %}
         </table>
     </div>
+    {% endif %}
     {% include "accounts/_pagination.html" %}
 </section>
 {% endblock %}

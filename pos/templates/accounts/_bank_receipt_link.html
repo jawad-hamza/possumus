@@ -1,0 +1,1 @@
+{% if mark %}<a class="k-receipt-link" href="{{ mark.url }}?next={{ next|urlencode }}"><i class="bi bi-paperclip" aria-hidden="true"></i>{% if mark.attached %}Bank receipt{% else %}Attach bank receipt{% endif %}<span class="visually-hidden"> for {{ mark.label }}</span></a>{% endif %}

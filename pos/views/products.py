@@ -20,6 +20,7 @@ from ..forms import (
     QuickProductForm,
     StockAdjustmentForm,
     SupplierForm,
+    purchase_option_attrs,
 )
 from ..models import (
     Brand,
@@ -39,10 +40,10 @@ from ..services.access import (
     module_access_required,
 )
 from ..services.catalog_io import (
-    COLUMN_GUIDE,
     MAX_IMPORT_BYTES,
     CatalogImportError,
     apply_catalog,
+    column_guide,
     export_catalog_csv_text,
     parse_catalog,
     template_csv_text,
@@ -52,6 +53,11 @@ from ..services.quick_add import quick_add_context
 from ..services.stock_control import create_stock_adjustment
 from ..services.business_rules import get_system_settings
 from ..services.modules import module_enabled
+
+# Cartons and boxes on the product screens.
+from django.db.models import DecimalField, ExpressionWrapper, OuterRef, Subquery
+from ..forms import PACK_UNIT_WORDS, default_stock_unit, quantity_in_largest_unit
+from ..models import PACK_BOX, PACK_CARTON, PACK_PIECE, normalize_pack_level, packaging_enabled, quantize_money
 
 
 PRODUCT_SORT_OPTIONS = [
@@ -148,12 +154,22 @@ def _filtered_products(request):
     }
 
 
-def _family_summary(group_id, name, variants, expanded):
+def _family_summary(group_id, name, variants, expanded, stock_unit=None):
     """The one row a family of sizes shows in the list: how many sizes, price range, stock altogether."""
-    prices = [variant.price for variant in variants]
+    # Each size is priced per its own largest pack, as its row shows it.
+    prices = [variant.top_pack_price for variant in variants]
+    price_units = {variant.top_pack_label if variant.has_packaging else "" for variant in variants}
     tracked = [variant for variant in variants if variant.track_stock]
     units = {variant.unit for variant in tracked}
     total_stock = sum((variant.stock for variant in tracked), ZERO_QTY)
+    stock_total_display = ""
+    if len(units) == 1:
+        packings = {(variant.pieces_per_box, variant.boxes_per_carton) for variant in tracked}
+        if len(packings) == 1:
+            # Every size is packed the same way, so the total reads in those packs.
+            stock_total_display = tracked[0].format_quantity(total_stock, stock_unit)
+        else:
+            stock_total_display = f"{format_qty(total_stock)} {next(iter(units))}"
     return {
         "is_family": True,
         "group_id": group_id,
@@ -162,16 +178,38 @@ def _family_summary(group_id, name, variants, expanded):
         "size_count": len(variants),
         "price_low": min(prices),
         "price_high": max(prices),
+        # Named only when every size is priced by the same pack.
+        "price_unit": next(iter(price_units)) if len(price_units) == 1 else "",
         # One figure only when every size is counted in the same unit.
         "stock_total": total_stock if len(units) == 1 else None,
         "stock_unit": next(iter(units)) if len(units) == 1 else "",
+        "stock_total_display": stock_total_display,
         "low_count": sum(1 for variant in tracked if variant.is_active and variant.stock <= variant.low_stock_threshold),
         "active_count": sum(1 for variant in variants if variant.is_active),
         "expanded": expanded,
     }
 
 
-def _paginate_with_families(queryset, page_number, expanded=False):
+def _latest_purchase_line(product_ref):
+    """Subquery: the newest purchase line of the product in the outer row."""
+    return Subquery(
+        PurchaseItem.objects.filter(product_id=product_ref).order_by("-purchase__created_at", "-id").values("pk")[:1]
+    )
+
+
+def _attach_last_purchases(products):
+    """Give each product its newest purchase line as .last_purchase: one query for the whole page."""
+    line_ids = [product.last_purchase_item_id for product in products if getattr(product, "last_purchase_item_id", None)]
+    lines = PurchaseItem.objects.select_related("purchase", "purchase__supplier").in_bulk(line_ids) if line_ids else {}
+    for product in products:
+        line = lines.get(getattr(product, "last_purchase_item_id", None))
+        if line is not None:
+            # The line names its unit through the product; reuse the row already loaded.
+            line.product = product
+        product.last_purchase = line
+
+
+def _paginate_with_families(queryset, page_number, expanded=False, stock_unit=None, with_last_purchase=False):
     """Page through the list with the sizes of one item folded into a single family entry.
 
     Returns (page, rows). page.object_list holds the products on the page in list order;
@@ -191,7 +229,12 @@ def _paginate_with_families(queryset, page_number, expanded=False):
     page = Paginator(entries, 20).get_page(page_number)
     page_entries = list(page.object_list)
     wanted = [product_id for _group_id, ids in page_entries for product_id in ids]
-    loaded = Product.objects.select_related("category", "supplier", "brand").in_bulk(wanted)
+    page_products = Product.objects.select_related("category", "supplier", "brand")
+    if with_last_purchase:
+        page_products = page_products.annotate(last_purchase_item_id=_latest_purchase_line(OuterRef("pk")))
+    loaded = page_products.in_bulk(wanted)
+    if with_last_purchase:
+        _attach_last_purchases(loaded.values())
 
     rows = []
     flat = []
@@ -201,11 +244,21 @@ def _paginate_with_families(queryset, page_number, expanded=False):
             continue
         flat.extend(members)
         if group_id:
-            rows.append(_family_summary(group_id, members[0].name, members, expanded))
+            rows.append(_family_summary(group_id, members[0].name, members, expanded, stock_unit))
         else:
             rows.append({"is_family": False, "product": members[0]})
     page.object_list = flat
     return page, rows
+
+
+def _stock_unit_choice(request, settings_obj):
+    """The unit the list counts stock from: the "Stock in" choice, else the shop's stock unit."""
+    if not packaging_enabled():
+        return PACK_PIECE
+    return normalize_pack_level(
+        request.GET.get("stock_unit"),
+        default=normalize_pack_level(settings_obj.stock_default_unit, default=PACK_CARTON),
+    )
 
 
 @module_access_required("products")
@@ -233,9 +286,35 @@ def product_list(request):
     if selected_sort not in sort_map:
         selected_sort = "name_asc"
 
+    packaging = packaging_enabled()
+    stock_unit = _stock_unit_choice(request, settings_obj)
+    if packaging:
+        # The price column shows the largest pack's price, so "lowest price" sorts by that figure.
+        queryset = queryset.annotate(
+            list_price=ExpressionWrapper(
+                F("price") * F("pieces_per_box") * F("boxes_per_carton"),
+                output_field=DecimalField(max_digits=24, decimal_places=6),
+            )
+        )
+        sort_map["price_low"] = ("list_price", "name")
+        sort_map["price_high"] = ("-list_price", "name")
+
     queryset = queryset.order_by(*sort_map[selected_sort], "variant_label", "id")
 
-    products, product_rows = _paginate_with_families(queryset, request.GET.get("page"), expanded=bool(selected["search_query"]))
+    show_purchases = module_enabled("purchases")
+    products, product_rows = _paginate_with_families(
+        queryset,
+        request.GET.get("page"),
+        expanded=bool(selected["search_query"]),
+        stock_unit=stock_unit,
+        with_last_purchase=show_purchases,
+    )
+    recent_purchase_lines = []
+    if show_purchases:
+        recent_purchase_lines = list(
+            PurchaseItem.objects.select_related("product", "purchase", "purchase__supplier")
+            .order_by("-purchase__created_at", "-id")[:8]
+        )
 
     if settings_obj.enable_product_expiry:
         for product in products.object_list:
@@ -269,6 +348,16 @@ def product_list(request):
         "summary_low_stock": summary_queryset.filter(is_active=True, track_stock=True, stock__lte=F("low_stock_threshold")).count(),
         "summary_inactive": summary_queryset.filter(is_active=False).count(),
         "expiry_tracking_enabled": settings_obj.enable_product_expiry,
+        "stock_unit": stock_unit,
+        "stock_unit_options": [
+            (PACK_CARTON, PACK_UNIT_WORDS[PACK_CARTON]),
+            (PACK_BOX, PACK_UNIT_WORDS[PACK_BOX]),
+            (PACK_PIECE, "Pieces"),
+        ],
+        "show_purchases": show_purchases,
+        "recent_purchase_lines": recent_purchase_lines,
+        # Every column of the table, shown or not, for the row that spans it when the list is empty.
+        "column_count": 10 + int(bool(settings_obj.enable_product_expiry)) + int(show_purchases),
     }
     return render(request, "pos/product_list.html", context)
 
@@ -293,6 +382,13 @@ def _next_free_sku(base_sku):
 
 def _initial_for_another_size(source):
     """Everything the sizes of one item share. Cost, price, barcode and stock are typed fresh."""
+    # The form reads the fixed markup per the largest pack and the alert level with its unit.
+    markup_amount = source.markup_amount
+    if markup_amount is not None:
+        markup_amount = quantize_money(markup_amount * source.pack_factor(source.top_pack_level))
+    alert_quantity, alert_unit = quantity_in_largest_unit(
+        source, source.low_stock_threshold, default_stock_unit() if packaging_enabled() else PACK_PIECE
+    )
     return {
         "name": source.name,
         "sku": _next_free_sku(source.sku),
@@ -300,10 +396,13 @@ def _initial_for_another_size(source):
         "category": source.category_id,
         "supplier": source.supplier_id,
         "unit": source.unit,
+        "pieces_per_box": source.pieces_per_box,
+        "boxes_per_carton": source.boxes_per_carton,
         "markup_percent": source.markup_percent,
-        "markup_amount": source.markup_amount,
+        "markup_amount": markup_amount,
         "minimum_margin_percent": source.minimum_margin_percent,
-        "low_stock_threshold": format_qty(source.low_stock_threshold),
+        "low_stock_threshold": format_qty(alert_quantity),
+        "low_stock_unit": alert_unit,
         "location": source.location,
     }
 
@@ -450,7 +549,7 @@ def product_import(request):
             "plan": plan,
             "checked_only": checked_only and plan is not None and plan.is_valid,
             "update_existing": update_existing,
-            "column_guide": COLUMN_GUIDE,
+            "column_guide": column_guide(),
             "max_size_mb": MAX_IMPORT_BYTES // (1024 * 1024),
         },
     )
@@ -459,14 +558,20 @@ def product_import(request):
 @module_access_required("products")
 def product_view(request, pk):
     product = get_object_or_404(Product.objects.select_related("category", "supplier", "brand"), id=pk)
-    total_sold = SaleItem.objects.filter(product=product).aggregate(total=Sum("quantity"))["total"] or ZERO_QTY
-    total_purchased = PurchaseItem.objects.filter(product=product).aggregate(total=Sum("quantity"))["total"] or ZERO_QTY
-    recent_sales = SaleItem.objects.filter(product=product).select_related("sale").order_by("-sale__created_at")[:10]
-    recent_purchases = (
+    # Lines are kept in the unit they were sold or bought in; totals are in the base unit.
+    total_sold = SaleItem.objects.filter(product=product).aggregate(total=Sum(F("quantity") * F("unit_factor")))["total"] or ZERO_QTY
+    total_purchased = (
+        PurchaseItem.objects.filter(product=product).aggregate(total=Sum(F("quantity") * F("unit_factor")))["total"] or ZERO_QTY
+    )
+    recent_sales = list(SaleItem.objects.filter(product=product).select_related("sale").order_by("-sale__created_at")[:10])
+    recent_purchases = list(
         PurchaseItem.objects.filter(product=product)
         .select_related("purchase", "purchase__supplier")
         .order_by("-purchase__created_at")[:10]
     )
+    for line in (*recent_sales, *recent_purchases):
+        # Each line names its own unit ("10 Ctn") through the product: reuse the one already loaded.
+        line.product = product
     return render(
         request,
         "pos/product_view.html",
@@ -646,11 +751,17 @@ def quick_create_product(request):
                     "markup_percent": str(product.markup_percent) if product.markup_percent is not None else "",
                     "markup_amount": str(product.markup_amount) if product.markup_amount is not None else "",
                     "minimum_margin_percent": str(product.minimum_margin_percent),
+                    "pieces_per_box": product.pieces_per_box,
+                    "boxes_per_carton": product.boxes_per_carton,
                     "brand_id": product.brand_id,
                     "category_id": product.category_id,
                     "supplier_id": product.supplier_id,
                     "location": product.location,
                     "expiry_date": product.expiry_date.isoformat() if product.expiry_date else "",
+                    # What a server-rendered option of the purchase line dropdown carries, so the
+                    # new product behaves on a line like any other. Price and markup amount are
+                    # per base unit here, whatever pack they were typed for.
+                    "option_attrs": purchase_option_attrs(product),
                 },
             }
         )
@@ -676,7 +787,14 @@ def stock_adjustments(request):
                 notes=form.cleaned_data.get("notes") or "",
                 actor=request.user,
             )
-            messages.success(request, f"Stock updated for {adjustment.product.display_name}.")
+            adjusted = adjustment.product
+            if adjusted.has_packaging:
+                messages.success(
+                    request,
+                    f"Stock updated for {adjusted.display_name}: {adjusted.format_quantity(adjustment.quantity_after)} on hand.",
+                )
+            else:
+                messages.success(request, f"Stock updated for {adjusted.display_name}.")
             next_url = return_context(request, "")["next_url"]
             if next_url:
                 return redirect(with_touched_row(next_url, adjustment.product_id))

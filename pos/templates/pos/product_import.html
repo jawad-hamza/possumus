@@ -69,11 +69,11 @@
                 {% csrf_token %}
                 <ol class="st-steps">
                     <li>
-                        <h3>Get the spreadsheet layout {% include "pos/partials/_help_tip.html" with tip_id="tipImportStep1" tip_name="the template" tip_text="Opens in Excel, Google Sheets or LibreOffice. The two example rows are skipped automatically, so you can leave or delete them." %}</h3>
+                        <h3>Get the spreadsheet layout {% include "pos/partials/_help_tip.html" with tip_id="tipImportStep1" tip_name="the template" tip_text="Opens in Excel, Google Sheets or LibreOffice. The example rows are skipped automatically, so you can leave or delete them." %}</h3>
                         <a href="{% url 'product_import_template' %}" class="btn btn-outline-secondary btn-sm"><i class="bi bi-file-earmark-spreadsheet" aria-hidden="true"></i> Download template</a>
                     </li>
                     <li>
-                        <h3>Fill one row per product {% include "pos/partials/_help_tip.html" with tip_id="tipImportStep2" tip_name="filling rows" tip_text="Only the name and a price (or a markup) are needed. Save the sheet as CSV when you are done." %}</h3>
+                        <h3>Fill one row per product {% if feature_modules.packaging %}{% include "pos/partials/_help_tip.html" with tip_id="tipImportStep2" tip_name="filling rows" tip_text="Only the name and a price (or a markup) are needed. For a product kept in cartons or boxes, fill pieces_per_box and boxes_per_carton and give the cost and price of one carton; stock quantities stay in pieces. Save the sheet as CSV when you are done." %}{% else %}{% include "pos/partials/_help_tip.html" with tip_id="tipImportStep2" tip_name="filling rows" tip_text="Only the name and a price (or a markup) are needed. Save the sheet as CSV when you are done." %}{% endif %}</h3>
                     </li>
                     <li>
                         <h3><label for="catalog_file">Upload the CSV file</label> {% include "pos/partials/_help_tip.html" with tip_id="tipImportStep3" tip_name="uploading" tip_text="Every row is checked first; if any row has a problem nothing is imported and you get the full list of fixes." %}</h3>

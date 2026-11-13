@@ -1,0 +1,38 @@
+{% extends "distribution/_base.html" %}
+{% load currency_tags %}
+{% block title %}Stock returns{% endblock %}
+{% block page_title %}Stock returns{% endblock %}
+{% block page_help %}Goods a shop gives back without one invoice (market returns), and goods sent back to the company. Good stock goes back on the shelf; damaged or expired stock is held apart for a claim on the company.{% endblock %}
+{% block page_actions %}{% if can_manage %}<a href="{% url 'distribution_return_add' 'customer' %}" class="btn btn-primary"><i class="bi bi-box-arrow-in-left" aria-hidden="true"></i> Market return</a><a href="{% url 'distribution_return_add' 'supplier' %}" class="btn btn-outline-secondary"><i class="bi bi-box-arrow-right" aria-hidden="true"></i> Return to supplier</a>{% endif %}<a href="{% url 'report_damaged_claims' %}" class="btn btn-outline-secondary">Damaged and claims</a>{% endblock %}
+
+{% block dist_content %}
+<section class="k-section" aria-label="Stock returns">
+    <form method="get" class="dist-filters">
+        <div><label class="form-label" for="f-kind">Show</label>
+            <select id="f-kind" name="kind" class="form-select form-select-sm">{% for value, label in kind_filters %}<option value="{{ value }}"{% if value == kind %} selected{% endif %}>{{ label }}</option>{% endfor %}</select></div>
+        <div><label class="form-label" for="f-start">From</label><input type="date" id="f-start" name="start" class="form-control form-control-sm" value="{{ start|date:'Y-m-d' }}"></div>
+        <div><label class="form-label" for="f-end">To</label><input type="date" id="f-end" name="end" class="form-control form-control-sm" value="{{ end|date:'Y-m-d' }}"></div>
+        <button type="submit" class="btn btn-outline-secondary btn-sm">Show</button>
+        {% if kind or start or end %}<a class="dist-filters-clear" href="?">Clear filters</a>{% endif %}
+    </form>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack b-index">
+            <thead><tr><th scope="col" data-k="meta">Return</th><th scope="col" data-k="what">Party</th><th scope="col" data-k="more">Type</th><th scope="col" data-k="more">Settled by</th><th scope="col" class="k-num" data-k="amount">Amount</th></tr></thead>
+            <tbody>
+                {% for row in returns %}
+                <tr>
+                    <td data-k="meta"><a href="{% url 'distribution_return_detail' row.id %}" class="b-index-name">{{ row.display_number }}</a><span class="b-sub">{{ row.return_date|date:"d M Y" }}</span></td>
+                    <td data-k="what" class="b-stack-title">{{ row.party_name }}<span class="b-sub">{{ row.reason }}{% if row.load_form %} &middot; {{ row.load_form.display_number }}{% endif %}</span></td>
+                    <td data-k="more" data-label="Type">{% if row.kind == "customer" %}Market return{% else %}To supplier{% endif %}<span class="b-sub">{{ row.line_count }} line{{ row.line_count|pluralize }}</span></td>
+                    <td data-k="more" data-label="Settled by">{{ row.get_settlement_display }}</td>
+                    <td class="k-num" data-k="amount" data-label="Amount">{{ row.total_amount|money }}</td>
+                </tr>
+                {% empty %}
+                <tr><td colspan="5" class="k-empty" data-k="note"><i class="bi bi-box-arrow-in-left" aria-hidden="true"></i><p class="k-empty-title">No stock returns here.</p></td></tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% include "pos/reports/_pagination.html" %}
+</section>
+{% endblock %}

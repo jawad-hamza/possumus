@@ -414,7 +414,8 @@ class OwnerSwitchTests(TestCase):
         )
         flour = Product.objects.create(name="Old Flour", sku="FL-0", unit="kg", cost_price=Decimal("10"), price=Decimal("15"))
 
-        self.assertEqual(set(choices), {"pcs", "box", "pack", "dozen"})
+        # Box is not a counting unit while cartons and boxes are on: it is set under Packing.
+        self.assertEqual(set(choices), {"pcs", "pack", "dozen"})
         self.assertFalse(form.is_valid())
         self.assertIn("unit", form.errors)
         # A product that is already sold by weight stays editable.

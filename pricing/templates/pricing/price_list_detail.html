@@ -1,0 +1,97 @@
+{% extends "pricing/_base.html" %}
+{% load currency_tags %}
+{% block title %}{{ price_list.name }}{% endblock %}
+{% block page_title %}{{ price_list.name }}{% if not price_list.is_active %} <span class="k-badge">Switched off</span>{% endif %}{% endblock %}
+{% block page_help %}Prices are per carton, or the largest pack a product has; box and piece follow from the packing. A product not on this list sells at its own price. The list cannot go below a product's minimum margin.{% endblock %}
+{% block page_actions %}{% if can_manage %}<a href="{% url 'pricing_price_list_edit' price_list.id %}?next={{ request.get_full_path|urlencode }}" class="btn btn-outline-secondary"><i class="bi bi-pencil" aria-hidden="true"></i> Rename</a>{% endif %}<a href="{% url 'pricing_price_list_list' %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> All price lists</a>{% endblock %}
+
+{% block pricing_content %}
+{% if can_manage %}
+<div class="pr-grid pr-grid--two">
+    <section class="k-section" aria-labelledby="set-price-title">
+        <div class="k-section-head"><h2 class="k-section-title" id="set-price-title">Add or change a price</h2></div>
+        <form method="post" class="pr-inline-form" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="action" value="set_price">
+            <div>{% include "pos/partials/_field.html" with field=item_form.product %}</div>
+            <div>{% include "pos/partials/_field.html" with field=item_form.price %}</div>
+            <div class="pr-inline-actions"><button type="submit" class="btn btn-primary">Save price</button></div>
+        </form>
+    </section>
+    <section class="k-section" aria-labelledby="fill-title">
+        <div class="k-section-head"><h2 class="k-section-title" id="fill-title">Fill from product prices</h2></div>
+        <form method="post" class="pr-inline-form" novalidate>
+            {% csrf_token %}
+            <input type="hidden" name="action" value="fill">
+            <div>{% include "pos/partials/_field.html" with field=fill_form.category %}</div>
+            <div>{% include "pos/partials/_field.html" with field=fill_form.adjust_percent %}</div>
+            <div>{% include "pos/partials/_field.html" with field=fill_form.replace %}</div>
+            <div class="pr-inline-actions"><button type="submit" class="btn btn-outline-secondary">Fill list</button></div>
+        </form>
+    </section>
+</div>
+{% endif %}
+
+<section class="k-section" aria-labelledby="items-title">
+    <div class="k-section-head">
+        <h2 class="k-section-title" id="items-title">Prices on this list</h2>
+        <span class="k-section-note">{{ rows|length }} product{{ rows|length|pluralize }}</span>
+    </div>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack b-index">
+            <thead>
+                <tr>
+                    <th scope="col" data-k="what">Product</th>
+                    <th scope="col" class="k-num" data-k="more">Product price</th>
+                    <th scope="col" class="k-num" data-k="amount">List price</th>
+                    <th scope="col" class="k-num" data-k="meta">Change</th>
+                    <th scope="col" class="k-num" data-k="more">Margin on cost</th>
+                    <th scope="col" class="k-num" data-k="more">MRP</th>
+                    <th scope="col" data-k="hide"><span class="visually-hidden">Remove</span></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for row in rows %}
+                <tr id="touched-{{ row.product.id }}">
+                    <td class="b-stack-title" data-k="what"><span class="b-index-name">{{ row.product.display_name }}</span><span class="st-sub">{{ row.product.sku }}{% if row.product.packing_display %} &middot; {{ row.product.packing_display }}{% endif %}</span></td>
+                    <td class="k-num" data-label="Product price" data-k="more">{{ row.product_price|money }} <span class="pr-dim">/ {{ row.unit }}</span></td>
+                    <td class="k-num" data-label="List price" data-k="amount"><strong>{{ row.list_price|money }}</strong> <span class="pr-dim">/ {{ row.unit }}</span></td>
+                    <td class="k-num" data-label="Change" data-k="meta">{% if row.difference_percent is not None %}<span class="{% if row.difference < 0 %}pr-low{% elif row.difference > 0 %}pr-up{% else %}pr-dim{% endif %}">{{ row.difference_percent }}%</span>{% else %}-{% endif %}</td>
+                    <td class="k-num" data-label="Margin on cost" data-k="more">{% if row.below_minimum %}<span class="pr-low" data-tip="Below the minimum margin at today's cost: sales at this rate are refused until it is raised.">{{ row.margin_percent }}%</span>{% elif row.margin_percent is not None %}{{ row.margin_percent }}%{% else %}-{% endif %}</td>
+                    <td class="k-num" data-label="MRP" data-k="more">{% if row.retail_price is not None %}{{ row.retail_price|money }}{% else %}<span class="pr-dim">-</span>{% endif %}</td>
+                    <td class="text-end" data-k="hide">{% if can_manage %}<form method="post" class="d-inline" data-k-confirm="Take {{ row.product.display_name }} off this list? It sells at its own price to these customers.">{% csrf_token %}<input type="hidden" name="action" value="remove"><input type="hidden" name="item" value="{{ row.item.id }}"><button type="submit" class="k-icon-btn" aria-label="Take {{ row.product.display_name }} off the list" data-tip="Take off the list"><i class="bi bi-x-lg" aria-hidden="true"></i></button></form>{% endif %}</td>
+                </tr>
+                {% empty %}
+                <tr>
+                    <td colspan="7" class="k-empty" data-k="note">
+                        <i class="bi bi-card-checklist" aria-hidden="true"></i>
+                        <p class="k-empty-title">No prices on this list yet.</p>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</section>
+
+<section class="k-section" aria-labelledby="who-title">
+    <div class="k-section-head"><h2 class="k-section-title" id="who-title">Who buys at this list</h2></div>
+    {% if customers or routes %}
+    <ul class="pr-party-list" aria-label="Customers and routes on this list">
+        {% for customer in customers %}<li>{{ customer.name }}</li>{% endfor %}
+        {% for route in routes %}<li>Route {{ route.label }}</li>{% endfor %}
+    </ul>
+    {% else %}
+    <p class="pr-dim">Nobody yet. Choose customers, or routes whose customers buy at this list unless they have their own.</p>
+    {% endif %}
+    {% if can_manage %}
+    <form method="post" class="pr-inline-form pr-multi mt-3" novalidate>
+        {% csrf_token %}
+        <input type="hidden" name="action" value="assign">
+        <div>{% include "pos/partials/_field.html" with field=assign_form.customers %}</div>
+        {% if assign_form.routes %}<div>{% include "pos/partials/_field.html" with field=assign_form.routes %}</div>{% endif %}
+        <div class="pr-inline-actions"><button type="submit" class="btn btn-outline-secondary" data-tip="Hold Ctrl to pick several">Save customers and routes</button></div>
+    </form>
+    {% endif %}
+</section>
+{% endblock %}

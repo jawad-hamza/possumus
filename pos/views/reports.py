@@ -33,6 +33,7 @@ from ..services.reporting import (
     employee_session_totals,
     employee_wage_totals,
     empty_sales_totals,
+    pack_formatter,
     parse_report_range,
     range_q,
     report_csv_response,
@@ -451,7 +452,7 @@ def employee_report_detail(request, user_id):
 
 def _sales_csv(sales, tax_label, start, end):
     header = [
-        "Invoice", "Date", "Customer", "Sold By", "Payment", "Subtotal", "Discount", tax_label or "Tax",
+        "Invoice", "Date", "Customer", "Sold By", "Payment", "Subtotal", "Discount", "Discount %", tax_label or "Tax",
         "Total", "Cost", "Gross Profit", "Paid", "Due", "Returned",
     ]
     lines = []
@@ -465,6 +466,7 @@ def _sales_csv(sales, tax_label, start, end):
                 "Credit" if sale.is_credit else sale.get_payment_method_display(),
                 f"{sale.report_subtotal:.2f}",
                 f"{sale.report_discount_amount:.2f}",
+                f"{quantize_money(sale.discount_rate):.2f}",
                 f"{sale.report_tax_amount:.2f}",
                 f"{quantize_money(sale.total_amount):.2f}",
                 f"{sale.report_cost_total:.2f}",
@@ -540,6 +542,8 @@ def _low_stock_report():
                 "threshold": product.low_stock_threshold,
                 "shortfall": shortfall,
                 "unit": product.unit,
+                # A packed product reads in cartons and boxes on the page; the CSV keeps pieces.
+                "packer": pack_formatter(product),
                 "location": product.location,
             }
         )
@@ -549,9 +553,9 @@ def _low_stock_report():
             Column("product", "Product", url_key="product_url", note_key="sku"),
             Column("category", "Category"),
             Column("supplier", "Supplier"),
-            Column("stock", "On Hand", QTY, unit_key="unit"),
-            Column("threshold", "Reorder Level", QTY, unit_key="unit"),
-            Column("shortfall", "Short By", QTY, unit_key="unit"),
+            Column("stock", "On Hand", QTY, unit_key="unit", packs_key="packer"),
+            Column("threshold", "Reorder Level", QTY, unit_key="unit", packs_key="packer"),
+            Column("shortfall", "Short By", QTY, unit_key="unit", packs_key="packer"),
             Column("location", "Location"),
         ],
         rows=rows,

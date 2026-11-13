@@ -11,23 +11,24 @@ from django.http import HttpResponse, JsonResponse
 from django.shortcuts import get_object_or_404, redirect, render
 from django.template.loader import render_to_string
 from django.urls import reverse
-from django.utils import timezone
 from django.views.decorators.http import require_GET, require_POST
 from reportlab.lib.pagesizes import mm
 from reportlab.pdfgen import canvas
 
+from accounts.services.bank_receipts import attach_optional_receipt, attach_receipt, request_upload
 from accounts.services.cash_bank import bank_account_queryset
 from accounts.services.party_badges import get_customer_badge
 from accounts.services.pos_posting import post_sale_from_pos
 from ..forms import CustomerForm, SaleReturnForm
 from ..models import (
+    PACK_PIECE,
     Category,
     Customer,
     Product,
     Sale,
-    SaleItem,
     SaleReturn,
     format_qty,
+    normalize_pack_level,
     quantize_money,
 )
 from ..services.access import (
@@ -43,24 +44,41 @@ from ..services.access import (
 )
 from ..services.modules import module_enabled
 from ..services.cart_pricing import (
+    cart_level,
     cart_quantity,
+    default_sale_level,
     effective_unit_price,
     line_total as cart_line_total,
+    line_unit_cost,
     normalize_cart_item,
+    sale_level_in_stock,
     seed_cart_item,
     stock_shortfall,
     to_decimal,
     tracks_stock,
     validate_cart_line,
 )
+from ..services import discounts as bill_discounts
 from ..services.held_carts import hold_cart, list_held_carts, pop_held_cart
+from ..services.field_sales import sale_order_booker, till_customer_terms
 from ..services.navigation import (
     build_customer_add_url,
     get_safe_next_url,
     pop_customer_for_pos,
     remember_customer_for_pos,
 )
-from ..services.returns import create_sale_return
+from ..services.returns import create_sale_return, return_row
+from ..services.sale_payment_change import PaymentChangeRefused, can_change_to_credit, change_sale_to_credit
+from ..services.sale_recording import SaleRefused, record_sale
+from pricing.services.till import (
+    apply_terms,
+    decline_free_goods,
+    free_line_refusal,
+    free_product_ids,
+    is_free_line_id,
+    line_scheme_fields,
+    with_free_goods,
+)
 from ..services.business_rules import (
     category_tax_rate_for_product,
     default_brand_name,
@@ -78,8 +96,8 @@ from ._shared import _normalized_rate, _party_opening_form, _save_party_opening,
 logger = logging.getLogger(__name__)
 
 
-class CheckoutRefused(Exception):
-    """Raised inside the checkout savepoint so the half-built sale rolls back with a cashier-readable reason."""
+# Raised inside the checkout savepoint so the half-built sale rolls back with a cashier-readable reason.
+CheckoutRefused = SaleRefused
 
 
 def _build_pos_url(
@@ -90,6 +108,8 @@ def _build_pos_url(
     payment_method=None,
     bank_account_id=None,
     discount_rate=None,
+    discount_type=None,
+    discount_value=None,
     tax_rate=None,
 ):
     params = {}
@@ -103,6 +123,12 @@ def _build_pos_url(
         params["payment_method"] = payment_method
     if bank_account_id and payment_method == Sale.BANK:
         params["bank_account_id"] = bank_account_id
+    if discount_type == bill_discounts.AMOUNT:
+        # A discount typed as cash travels as its amount; its rate is worked out on the bill.
+        discount_rate = None
+        if safe_decimal(discount_value) > 0:
+            params["discount_type"] = discount_type
+            params["discount_value"] = str(bill_discounts.clean_cash_discount(discount_value))
     if discount_rate and safe_decimal(discount_rate) > 0:
         params["discount_rate"] = str(_normalized_rate(discount_rate))
     if tax_rate and safe_decimal(tax_rate) > 0:
@@ -134,7 +160,7 @@ def _add_product_to_cart(cart, product):
     if product_id in cart:
         line = normalize_cart_item(cart[product_id])
         new_quantity = cart_quantity(line["quantity"]) + Decimal("1")
-        if stock_shortfall(product, new_quantity):
+        if stock_shortfall(product, new_quantity, cart_level(product, line)):
             return False
         line["quantity"] = format_qty(new_quantity)
         cart[product_id] = line
@@ -148,12 +174,14 @@ def _add_product_to_cart(cart, product):
         return False
     if product.stock < Decimal("1"):
         # Less than one unit left of a weighed item: offer what remains.
-        line = seed_cart_item(product)
+        line = seed_cart_item(product, PACK_PIECE)
         line["quantity"] = format_qty(product.stock)
         cart[product_id] = line
         return True
 
-    cart[product_id] = seed_cart_item(product)
+    # A product goes on the bill in the till's default unit (the box); when less than one of
+    # those is left it goes on in the largest smaller unit the shelf can still cover.
+    cart[product_id] = seed_cart_item(product, sale_level_in_stock(product, default_sale_level(product)))
     return True
 
 
@@ -185,13 +213,58 @@ def _set_line_quantity(cart, product, requested):
     if requested <= 0:
         cart.pop(product_id, None)
         return ""
-    quantity_error = product.validate_quantity(requested)
+    level = cart_level(product, cart[product_id])
+    quantity_error = product.validate_quantity(requested, level)
     if quantity_error:
         return quantity_error
-    shortfall = stock_shortfall(product, requested)
+    shortfall = stock_shortfall(product, requested, level)
     if shortfall:
         return f"{product.display_name}: {shortfall}"
     cart[product_id]["quantity"] = format_qty(requested)
+    return ""
+
+
+def _set_line_unit(cart, product, requested_level, quantity=None):
+    """Switch a bill line between carton, box and piece. Returns the reason it was refused, or ''.
+
+    The number on the line stays as typed (2 boxes become 2 cartons) unless a new ``quantity``
+    comes with the change; the rate follows the unit. A rate the cashier typed by hand is
+    carried over in proportion.
+    """
+    product_id = str(product.id)
+    if product_id not in cart:
+        return "Cart line no longer exists."
+    line = normalize_cart_item(cart[product_id])
+    old_level = cart_level(product, line)
+    new_level = normalize_pack_level(requested_level, default="")
+    if new_level not in product.pack_level_codes:
+        return f"{product.display_name} is not sold in that unit."
+    if new_level == old_level and quantity is None:
+        return ""
+
+    if quantity is None or quantity <= 0:
+        quantity = cart_quantity(line["quantity"])
+    else:
+        line["quantity"] = format_qty(quantity)
+    quantity_error = product.validate_quantity(quantity, new_level)
+    if quantity_error:
+        return quantity_error
+    shortfall = stock_shortfall(product, quantity, new_level)
+    if shortfall:
+        return f"{product.display_name}: {shortfall}"
+
+    old_standard = product.pack_price(old_level)
+    new_standard = product.pack_price(new_level)
+    price = to_decimal(line["price"])
+    scheme_price = to_decimal(line.get("scheme_price"), None)
+    if price != to_decimal(line.get("original_price"), old_standard) and price != scheme_price:
+        new_price = quantize_money(price * product.pack_factor(new_level) / product.pack_factor(old_level))
+    else:
+        new_price = new_standard
+    line.update({"unit": new_level, "price": str(new_price), "original_price": str(new_standard)})
+    # A customer's price list rates the new unit afresh (pricing.services.till.apply_terms).
+    line.pop("rate_key", None)
+    cart[product_id] = line
     return ""
 
 
@@ -219,13 +292,14 @@ def _update_line_pricing(cart, product, posted_price, posted_discount, system_se
             settings_messages.append("Line discount is disabled in Settings.")
         line_discount = "0"
 
+    level = cart_level(product, updated_line)
     try:
-        validated = validate_cart_line(product, custom_price, line_discount)
+        validated = validate_cart_line(product, custom_price, line_discount, level)
     except ValidationError as exc:
         return False, [("error", " ".join(exc.messages))]
 
     updated_line["price"] = str(validated["price"])
-    updated_line["original_price"] = str(to_decimal(updated_line.get("original_price"), product.price))
+    updated_line["original_price"] = str(to_decimal(updated_line.get("original_price"), product.pack_price(level)))
     updated_line["discount_percent"] = str(validated["discount_percent"])
     cart[product_id] = updated_line
     if settings_messages:
@@ -267,16 +341,25 @@ def _cart_state(cart, payment_method=Sale.CASH):
                     "has_line_discount": False,
                     "pricing_error": "This product is no longer available.",
                     "stock_error": "This product is no longer available.",
+                    "line_id": str(product_id),
+                    "is_free": False,
                 }
             )
             continue
 
         quantity = cart_quantity(item["quantity"])
+        level = cart_level(product, item)
         unit_price = to_decimal(item["price"])
         original_price = to_decimal(item["original_price"], unit_price)
+        if level != normalize_pack_level(item.get("unit")):
+            # The product's packing changed under a line already on the bill: the line falls to
+            # a unit the product still has, at that unit's own price.
+            unit_price = original_price = product.pack_price(level)
+        unit_factor = product.pack_factor(level)
+        pack_levels = product.pack_levels
         discount_percent = to_decimal(item["discount_percent"])
         final_unit_price = effective_unit_price(unit_price, discount_percent)
-        minimum_price = product.minimum_sale_price_for_cost(product.cost_price)
+        minimum_price = product.minimum_sale_price_for_cost(line_unit_cost(product, level))
         line_total = cart_line_total(quantity, unit_price, discount_percent)
         gross_line_total = quantize_money(unit_price * quantity)
         line_discount_amount = quantize_money(gross_line_total - line_total)
@@ -287,34 +370,52 @@ def _cart_state(cart, payment_method=Sale.CASH):
         pricing_error = ""
         stock_error = ""
         try:
-            validation = validate_cart_line(product, unit_price, discount_percent)
+            validation = validate_cart_line(product, unit_price, discount_percent, level)
             final_unit_price = validation["final_unit_price"]
             minimum_price = validation["minimum_price"]
         except ValidationError as exc:
             pricing_error = " ".join(exc.messages)
             checkout_disabled = True
 
-        quantity_error = product.validate_quantity(quantity)
+        quantity_error = product.validate_quantity(quantity, level)
         if quantity_error:
             stock_error = quantity_error
             checkout_disabled = True
-        shortfall = stock_shortfall(product, quantity)
+        shortfall = stock_shortfall(product, quantity, level)
         if shortfall:
             stock_error = shortfall
             checkout_disabled = True
 
         cart_total += line_total
         stock_map[product_id] = product.stock
+        by_piece = level == PACK_PIECE
+        # Price lists and schemes (pricing app): the scheme a line earned, and a rate it set.
+        scheme = line_scheme_fields(item, unit_price, original_price)
         rows.append(
             {
+                **scheme,
+                "line_id": str(product_id),
                 "product_id": product_id,
                 "product": product,
                 "name": product.display_name,
                 "quantity": quantity,
                 "quantity_display": format_qty(quantity),
-                "unit": product.unit,
-                "allows_fraction": product.allows_fractional_quantity,
-                "quantity_step": product.quantity_step,
+                # The unit the line is in: "Ctn", "Box", or the product's own unit.
+                "unit": product.pack_label(level),
+                "unit_level": level,
+                "unit_factor": unit_factor,
+                "base_quantity": product.to_base_quantity(quantity, level),
+                # Offered in the line's unit dropdown; a plain product has only its own unit.
+                "unit_options": pack_levels if len(pack_levels) > 1 else [],
+                "per_unit": _per_unit(product, level),
+                # The most of this unit the shelf can cover; None = no shelf limit.
+                "max_quantity": (
+                    None
+                    if not tracks_stock(product)
+                    else (product.stock if by_piece else (product.stock // unit_factor))
+                ),
+                "allows_fraction": product.allows_fractional_quantity and by_piece,
+                "quantity_step": product.quantity_step if by_piece else "1",
                 "unit_price": unit_price,
                 "original_price": original_price,
                 "discount_percent": discount_percent,
@@ -327,13 +428,15 @@ def _cart_state(cart, payment_method=Sale.CASH):
                 "bank_category_tax_rate": bank_category_tax_rate,
                 # None = no shelf limit (services and other untracked items).
                 "stock": product.stock if tracks_stock(product) else None,
-                "has_custom_price": unit_price != original_price,
+                "has_custom_price": unit_price != original_price and scheme["scheme_price"] is None,
                 "has_line_discount": discount_percent > 0,
                 "pricing_error": pricing_error,
                 "stock_error": stock_error,
             }
         )
 
+    # Free goods of a scheme follow the line that earned them, at zero, as rows of their own.
+    rows = with_free_goods(cart, rows)
     return {
         "cart": cart,
         "rows": rows,
@@ -399,84 +502,32 @@ def _record_sale(
     payment_method,
     bank_account,
     discount_rate,
+    typed_discount=None,
     tax_rate,
 ):
-    """Create the sale, its lines and its voucher. Callers wrap this in a savepoint."""
-    sale = Sale(
+    """Create the sale, its lines and its voucher. Callers wrap this in a savepoint.
+
+    The rules live in pos.services.sale_recording.record_sale, which orders turned into
+    invoices use too; the till adds who is selling and its own order booker choice.
+    """
+    return record_sale(
+        user=request.user,
+        system_settings=system_settings,
+        rows=rows,
+        locked_products=locked_products,
         customer=customer,
-        sold_by=request.user,
         is_credit=is_credit,
         payment_method=payment_method,
         bank_account=bank_account,
-        paid_amount=Decimal("0"),
         discount_rate=discount_rate,
-        tax_rate=(
-            system_settings.gst_rate_for_payment_method(payment_method)
-            if system_settings.uses_payment_method_gst
-            else tax_rate
-        ),
-        tax_mode=Sale.TAX_MODE_CATEGORY if system_settings.uses_category_gst else Sale.TAX_MODE_MANUAL,
-        tax_label=system_settings.tax_label,
-        cash_tax_rate_snapshot=system_settings.gst_rate_for_payment_method(Sale.CASH),
-        bank_tax_rate_snapshot=system_settings.gst_rate_for_payment_method(Sale.BANK),
+        typed_discount=typed_discount,
+        tax_rate=tax_rate,
+        # The order booker of this sale: the customer's own unless the till chose another for this bill.
+        order_booker=sale_order_booker(request, customer),
+        warn=lambda text: messages.warning(request, text),
+        # The till's own name for the posting service, looked up now (tests replace it to make posting fail).
+        post=post_sale_from_pos,
     )
-    sale.full_clean()
-    sale.save()
-
-    settings_adjusted_lines = False
-    for row in rows:
-        product = locked_products.get(int(row["product_id"]))
-        original_price = to_decimal(row["original_price"], product.price)
-        price = row["unit_price"] if system_settings.allow_price_override else original_price
-        discount_percent = row["discount_percent"] if system_settings.allow_line_discount else Decimal("0")
-        validated = validate_cart_line(product, price, discount_percent)
-
-        if (
-            (not system_settings.allow_price_override and row["unit_price"] != original_price)
-            or (not system_settings.allow_line_discount and row["discount_percent"] > 0)
-        ):
-            settings_adjusted_lines = True
-
-        SaleItem.objects.create(
-            sale=sale,
-            product=product,
-            quantity=row["quantity"],
-            original_price=original_price,
-            price=validated["price"],
-            discount_percent=validated["discount_percent"],
-            cost_price=product.cost_price,
-            cash_tax_rate_snapshot=row.get("cash_category_tax_rate", Decimal("0")),
-            bank_tax_rate_snapshot=row.get("bank_category_tax_rate", Decimal("0")),
-        )
-
-    sale.refresh_from_db()
-    zero_total = Decimal(sale.total_amount or 0) <= 0
-    if zero_total and not system_settings.allow_zero_total_sales:
-        # A 100% order discount (or a weight too small to price) is a giveaway; the owner must allow those.
-        raise CheckoutRefused(
-            "This sale adds up to zero. Lower the discount or check the quantities, "
-            "or ask the owner to allow zero-total sales in Settings."
-        )
-    if zero_total and is_credit:
-        raise CheckoutRefused("A zero-total sale has nothing to put on credit. Complete it as cash.")
-
-    sale.paid_amount = Decimal("0") if is_credit else Decimal(sale.total_amount or 0)
-    sale.bank_account = bank_account if payment_method == Sale.BANK and not is_credit else None
-    sale.full_clean()
-    sale.save(update_fields=["paid_amount", "bank_account"])
-
-    post_sale_from_pos(
-        sale_id=sale.id,
-        customer=sale.customer,
-        total_amount=sale.total_amount,
-        paid_amount=sale.paid_amount,
-        payment_method=sale.payment_method,
-        bank_account=sale.bank_account,
-        sale_date=timezone.localtime(sale.created_at).date(),
-        tax_amount=sale.tax_amount,
-        allow_zero_total=zero_total,
-    )
-    return sale, settings_adjusted_lines
 
 
 @pos_access_required
@@ -517,6 +568,7 @@ def pos_screen(request):
         payment_method = default_payment_method if default_payment_method in valid_payment_methods else Sale.CASH
 
     discount_rate = request.GET.get("discount_rate", request.POST.get("discount_rate", stored.get("discount_rate", "0")))
+    discount_type, discount_value = bill_discounts.typed_discount(request.GET, request.POST, stored)
     tax_rate = (
         request.GET.get("tax_rate", request.POST.get("tax_rate", stored.get("tax_rate", "0")))
         if system_settings.allows_manual_tax
@@ -539,6 +591,8 @@ def pos_screen(request):
             payment_method=payment_method,
             bank_account_id=selected_bank_account_id,
             discount_rate=discount_rate,
+            discount_type=discount_type,
+            discount_value=discount_value,
             tax_rate=tax_rate,
         )
 
@@ -549,6 +603,8 @@ def pos_screen(request):
             "payment_method": payment_method,
             "bank_account_id": selected_bank_account_id,
             "discount_rate": str(discount_rate or ""),
+            "discount_type": discount_type,
+            "discount_value": str(discount_value or ""),
             "tax_rate": str(tax_rate or ""),
         }
 
@@ -562,12 +618,14 @@ def pos_screen(request):
                 "payment_method": payment_method,
                 "bank_account_id": selected_bank_account_id,
                 "discount_rate": discount_rate,
+                "discount_type": discount_type,
+                "discount_value": discount_value,
                 "tax_rate": tax_rate,
             },
             system_settings,
         )
 
-    def _json_refusal():
+    def _json_refusal(**extra):
         # A refused checkout: the reasons queued so far go back with the bill as it now stands.
         refusals = [str(message) for message in messages.get_messages(request)]
         payload = _till_payload(
@@ -579,6 +637,7 @@ def pos_screen(request):
             status="refused",
             notice={"kind": "out", "text": " ".join(refusals) or "The sale was not saved."},
         )
+        payload.update(extra)
         return JsonResponse(payload)
 
     if request.method == "POST":
@@ -595,6 +654,7 @@ def pos_screen(request):
         if payment_method not in valid_payment_methods:
             payment_method = default_payment_method if default_payment_method in valid_payment_methods else Sale.CASH
         discount_rate = request.POST.get("preserve_discount_rate", request.POST.get("discount_rate", discount_rate))
+        discount_type, discount_value = bill_discounts.typed_discount(request.POST, request.GET, stored)
         tax_rate = request.POST.get("preserve_tax_rate", request.POST.get("tax_rate", tax_rate)) if system_settings.allows_manual_tax else "0"
         selected_category = request.POST.get("selected_category", selected_category).strip()
 
@@ -685,6 +745,8 @@ def pos_screen(request):
                     payment_method=context.get("payment_method") if context.get("payment_method") in valid_payment_methods else None,
                     bank_account_id=context.get("bank_account_id") if context.get("bank_account_id") in active_bank_accounts else None,
                     discount_rate=context.get("discount_rate"),
+                    discount_type=context.get("discount_type"),
+                    discount_value=context.get("discount_value"),
                     tax_rate=context.get("tax_rate") if system_settings.allows_manual_tax else None,
                 )
             )
@@ -701,7 +763,9 @@ def pos_screen(request):
             if not cart:
                 messages.error(request, "Add at least one item before checkout.")
             else:
-                product_ids = [int(pid) for pid in cart.keys()]
+                # The bill is priced for the customer it is sold to, and its schemes worked out, before it is read.
+                apply_terms(cart, selected_customer_id)
+                product_ids = [int(pid) for pid in cart.keys()] + free_product_ids(cart)
                 locked_products = Product.objects.select_for_update().in_bulk(product_ids)
                 cart_snapshot = _cart_state(cart, payment_method=payment_method)
 
@@ -709,8 +773,11 @@ def pos_screen(request):
                     messages.error(request, "Review the cart lines with stock or pricing issues before checkout.")
                 else:
                     for row in cart_snapshot["rows"]:
+                        if row.get("is_free"):
+                            # Free goods were fitted to the shelf left after the paid lines.
+                            continue
                         product = locked_products.get(int(row["product_id"]))
-                        if product is None or stock_shortfall(product, row["quantity"]):
+                        if product is None or stock_shortfall(product, row["quantity"], row.get("unit_level") or PACK_PIECE):
                             messages.error(request, f"Stock changed for {row['name']}. Please review the cart.")
                             if wants_till_json:
                                 return _json_refusal()
@@ -728,11 +795,19 @@ def pos_screen(request):
                     if payment_method_value not in valid_payment_methods:
                         payment_method_value = default_payment_method if default_payment_method in valid_payment_methods else Sale.CASH
                     bank_account = active_bank_accounts.get(selected_bank_account_id) if payment_method_value == Sale.BANK else None
+                    # The proof of a bank payment travels with the checkout; cash and credit sales carry none.
+                    bank_receipt, bank_receipt_problem = request_upload(
+                        request, bank_payment=payment_method_value == Sale.BANK and not is_credit
+                    )
 
                     if is_credit and not system_settings.allow_credit_sales:
                         messages.error(request, "Credit sale is disabled in Settings.")
                     elif is_credit and customer is None:
                         messages.error(request, "Credit sale requires an active customer.")
+                    elif bank_receipt_problem:
+                        messages.error(request, bank_receipt_problem)
+                        if wants_till_json:
+                            return _json_refusal(receipt_error=bank_receipt_problem)
                     else:
                         try:
                             # Savepoint: a failure below must undo the sale, its stock movement and
@@ -748,8 +823,10 @@ def pos_screen(request):
                                     payment_method=payment_method_value,
                                     bank_account=bank_account,
                                     discount_rate=discount_rate_value,
+                                    typed_discount=bill_discounts.typed_discount(request.POST),
                                     tax_rate=tax_rate_value,
                                 )
+                                attach_receipt(sale, bank_receipt, actor=request.user, audit=False)
                         except CheckoutRefused as exc:
                             messages.error(request, str(exc))
                         except ValidationError as exc:
@@ -779,21 +856,31 @@ def pos_screen(request):
                                 )
                             return redirect("invoice", sale_id=sale.id)
 
-    _save_cart(request, cart)
     till_context = _current_till_context()
+    apply_terms(cart, till_context["customer_id"])
+    _save_cart(request, cart)
     if wants_till_json:
         return _json_refusal()
     if request.method == "GET":
         _store_till_context(request, till_context if cart else None)
 
     cart_state = _cart_state(cart, payment_method=payment_method)
+    bill_discount = _bill_discount(till_context, cart_state)
+    discount_rate = bill_discount.rate
     sale_preview = sale_totals_from_rows(cart_state["rows"], discount_rate, tax_rate, system_settings, payment_method=payment_method)
 
     products_queryset = Product.objects.filter(is_active=True)
     if selected_category:
         products_queryset = products_queryset.filter(category_id=selected_category)
 
-    products = products_queryset.select_related("category", "brand").order_by("name")
+    products = list(products_queryset.select_related("category", "brand").order_by("name"))
+    for product in products:
+        # The browse list prices a product in the unit it goes on the bill in.
+        till_level = (
+            product.resolve_pack_level(system_settings.till_default_unit) if product.has_packaging else PACK_PIECE
+        )
+        product.till_price = product.pack_price(till_level)
+        product.till_per_unit = _per_unit(product, till_level)
     categories = Category.objects.filter(is_active=True).order_by("name")
     customers = Customer.objects.filter(is_active=True).order_by("name")
 
@@ -816,6 +903,7 @@ def pos_screen(request):
             "prefill_credit_sale": prefill_credit_sale,
             "payment_method_value": payment_method,
             "discount_rate_value": _normalized_rate(discount_rate),
+            "bill_discount": bill_discount,
             "tax_rate_value": _normalized_rate(tax_rate) if system_settings.allows_manual_tax else Decimal("0"),
             "tax_label_value": system_settings.tax_label,
             "manual_tax_enabled": system_settings.allows_manual_tax,
@@ -830,7 +918,7 @@ def pos_screen(request):
             "sale_preview": sale_preview,
             "pos_customer_add_url": build_customer_add_url(),
             "held_carts": list_held_carts(request.session) if module_enabled("hold_sale") else [],
-            "selected_line_id": str(cart_state["rows"][-1]["product_id"]) if cart_state["rows"] else "",
+            "selected_line_id": _last_paid_line(cart_state["rows"]),
             "till_customer": _till_customer(till_context["customer_id"]),
             "tax_summary_label": _tax_summary_label(system_settings, payment_method),
             "till_customer_form": CustomerForm(prefix=None) if module_enabled("parties") else None,
@@ -845,6 +933,7 @@ def pos_screen(request):
 
 TILL_CONTEXT_KEY = "till_context"
 TILL_CONTEXT_PARAMS = ("customer_id", "credit", "payment_method", "bank_account_id", "discount_rate", "tax_rate")
+TILL_CONTEXT_PARAMS += ("discount_type", "discount_value")
 TILL_UNIT_FACTORS = {
     ("g", "kg"): Decimal("0.001"),
     ("kg", "g"): Decimal("1000"),
@@ -868,6 +957,8 @@ def _blank_till_context(system_settings):
         "payment_method": _valid_payment_method(None, system_settings),
         "bank_account_id": "",
         "discount_rate": "0",
+        "discount_type": bill_discounts.PERCENT,
+        "discount_value": "0",
         "tax_rate": "0",
     }
 
@@ -889,6 +980,7 @@ def _clean_till_context(values, system_settings):
     ):
         context["bank_account_id"] = bank_account_id
     context["discount_rate"] = str(_normalized_rate(values.get("discount_rate")))
+    context.update(bill_discounts.clean_discount_context(values))
     if system_settings.allows_manual_tax:
         context["tax_rate"] = str(_normalized_rate(values.get("tax_rate")))
     return context
@@ -902,6 +994,9 @@ def _read_till_context(request, system_settings):
             values[key] = request.POST.get(key, "")
     if "credit" in request.POST:
         values["credit"] = request.POST.get("credit") in {"1", "on", "true"}
+    if "discount_rate" in request.POST and "discount_type" not in request.POST:
+        # A caller that posts only a rate means a percentage, as it always has.
+        values["discount_type"] = bill_discounts.PERCENT
     return _clean_till_context(values, system_settings)
 
 
@@ -925,14 +1020,24 @@ def _till_customer(customer_id):
         "name": customer.name,
         "balance_type": badge["balance_type"],
         "balance": format_money(badge["amount"]),
+        # Credit limit line and the customer's usual order booker.
+        **till_customer_terms(customer, badge),
     }
+
+
+def _last_paid_line(rows):
+    """The line the till selects by default: the last one added, never a scheme's free goods."""
+    for row in reversed(rows):
+        if not row.get("is_free"):
+            return str(row["line_id"])
+    return str(rows[-1]["line_id"]) if rows else ""
 
 
 def _bill_context(request, system_settings, cart_state, sale_preview, context, selected_line_id=""):
     """What the bill, held-bill and totals partials read; pos_screen renders the same names."""
     rows = cart_state["rows"]
-    if not selected_line_id or not any(str(row["product_id"]) == str(selected_line_id) for row in rows):
-        selected_line_id = str(rows[-1]["product_id"]) if rows else ""
+    if not selected_line_id or not any(str(row["line_id"]) == str(selected_line_id) for row in rows):
+        selected_line_id = _last_paid_line(rows)
     return {
         "cart_rows": rows,
         "cart_total": cart_state["cart_total"],
@@ -965,8 +1070,28 @@ def _tax_summary_label(system_settings, payment_method):
     return system_settings.tax_label
 
 
+def _bill_discount(context, cart_state):
+    """The bill's discount worked out on the lines now on it.
+
+    Writes the rate it comes to into the context, which is what the totals are calculated with.
+    A cash discount that no longer fits the bill is not trimmed: it blocks checkout until it is changed.
+    """
+    rows = cart_state["rows"]
+    subtotal = sum((Decimal(row["line_total"]) for row in rows), Decimal("0"))
+    kind = context.get("discount_type")
+    typed = context.get("discount_value") if kind == bill_discounts.AMOUNT else context.get("discount_rate")
+    discount = bill_discounts.resolve_bill_discount(kind, typed, subtotal, has_lines=bool(rows))
+    context["discount_rate"] = str(discount.rate)
+    if discount.error:
+        cart_state["checkout_disabled"] = True
+    return discount
+
+
 def _till_payload(request, system_settings, cart, context, *, ok=True, status="ok", notice=None, touched=""):
     cart_state = _cart_state(cart, payment_method=context["payment_method"])
+    bill_discount = _bill_discount(context, cart_state)
+    if bill_discount.error and not notice:
+        notice = {"kind": "out", "text": bill_discount.error}
     preview = sale_totals_from_rows(
         cart_state["rows"],
         context["discount_rate"],
@@ -982,10 +1107,17 @@ def _till_payload(request, system_settings, cart, context, *, ok=True, status="o
         "selected": bill["selected_line_id"],
         "lines": [
             {
-                "product_id": str(row["product_id"]),
+                "product_id": str(row["line_id"]),
+                "is_free": bool(row.get("is_free")),
+                "scheme": row.get("scheme_name", ""),
                 "name": row["name"],
                 "quantity": format_qty(row["quantity"]),
                 "unit": row.get("unit", ""),
+                "unit_level": row.get("unit_level", PACK_PIECE),
+                "units": [
+                    {"code": option["code"], "label": option["label"], "factor": format_qty(option["factor"])}
+                    for option in row.get("unit_options", [])
+                ],
                 "rate": str(quantize_money(row["unit_price"])),
                 "discount_percent": str(quantize_money(row["discount_percent"])),
                 "amount": str(quantize_money(row["line_total"])),
@@ -1017,6 +1149,7 @@ def _till_payload(request, system_settings, cart, context, *, ok=True, status="o
             ],
         },
         "checkout_disabled": cart_state["checkout_disabled"],
+        "discount": bill_discounts.till_discount_payload(bill_discount),
         "held": [
             {"id": held["id"], "label": held["label"], "total": str(held["total"]), "line_count": held["line_count"]}
             for held in bill["held_carts"]
@@ -1042,6 +1175,31 @@ def _quantity_in_product_unit(product, quantity, typed_unit):
     return cart_quantity(quantity * factor), ""
 
 
+# A quantity typed with a pack word on the scan line: "5 ctn", "2 box", "12 pcs".
+TILL_PACK_WORDS = {
+    "ctn": "carton",
+    "ctns": "carton",
+    "carton": "carton",
+    "cartons": "carton",
+    "box": "box",
+    "boxes": "box",
+    "bx": "box",
+    "pc": PACK_PIECE,
+    "pcs": PACK_PIECE,
+    "piece": PACK_PIECE,
+    "pieces": PACK_PIECE,
+}
+
+
+def _typed_pack_level(product, typed_unit):
+    """The pack level a typed unit word names for this product, or None when it is not a pack word."""
+    typed_unit = (typed_unit or "").strip().lower()
+    level = TILL_PACK_WORDS.get(typed_unit)
+    if level is None or not product.has_packaging:
+        return None
+    return level
+
+
 def _till_add(request, cart, product, typed_quantity):
     """One more of the product, or the typed quantity on top of what the line already holds."""
     product_id = str(product.id)
@@ -1059,11 +1217,37 @@ def _till_add(request, cart, product, typed_quantity):
     quantity = cart_quantity(typed_quantity)
     if quantity <= 0:
         return {"ok": False, "status": "invalid", "notice": {"kind": "out", "text": "Quantity must be greater than zero."}}
-    quantity, unit_error = _quantity_in_product_unit(product, quantity, request.POST.get("quantity_unit"))
-    if unit_error:
-        return {"ok": False, "status": "invalid", "notice": {"kind": "out", "text": unit_error}}
 
     was_on_bill = product_id in cart
+    typed_unit = request.POST.get("quantity_unit")
+    typed_level = _typed_pack_level(product, typed_unit)
+    if typed_level is not None:
+        # "5 ctn": the line is put in that unit; a line already on the bill in another unit is refused
+        # rather than silently converted.
+        if typed_level not in product.pack_level_codes:
+            return {
+                "ok": False,
+                "status": "invalid",
+                "notice": {"kind": "out", "text": f"{product.display_name} is not sold in that unit."},
+            }
+        if was_on_bill and cart_level(product, cart[product_id]) != typed_level:
+            return {
+                "ok": False,
+                "status": "invalid",
+                "touched": product_id,
+                "notice": {
+                    "kind": "out",
+                    "text": f"{product.display_name} is already on the bill in another unit. Change the unit on its line first.",
+                },
+            }
+        if not was_on_bill:
+            cart[product_id] = seed_cart_item(product, typed_level)
+            cart[product_id]["quantity"] = "0"
+    else:
+        quantity, unit_error = _quantity_in_product_unit(product, quantity, typed_unit)
+        if unit_error:
+            return {"ok": False, "status": "invalid", "notice": {"kind": "out", "text": unit_error}}
+
     already = cart_quantity(cart[product_id]["quantity"]) if was_on_bill else Decimal("0")
     error = _set_line_quantity(cart, product, already + quantity)
     if error:
@@ -1145,6 +1329,23 @@ def _till_do_quantity(request, system_settings, cart, context):
     return result
 
 
+def _till_do_unit(request, system_settings, cart, context):
+    """The unit dropdown on a bill line: carton, box or piece."""
+    product = _till_product(request)
+    if product is None:
+        return _product_gone()
+    product_id = str(product.id)
+    # "5" typed in the quantity box, then the unit chosen: both arrive together.
+    typed_quantity = (request.POST.get("quantity") or "").strip()
+    error = _set_line_unit(
+        cart, product, request.POST.get("unit"), cart_quantity(typed_quantity) if typed_quantity else None
+    )
+    result = {"touched": product_id if product_id in cart else ""}
+    if error:
+        result.update({"ok": False, "status": "invalid", "notice": {"kind": "out", "text": error}})
+    return result
+
+
 def _till_do_price(request, system_settings, cart, context):
     product = _till_product(request)
     if product is None:
@@ -1166,7 +1367,13 @@ def _till_do_price(request, system_settings, cart, context):
 
 
 def _till_do_remove(request, system_settings, cart, context):
-    cart.pop((request.POST.get("product_id") or "").strip(), None)
+    line_id = (request.POST.get("product_id") or "").strip()
+    if is_free_line_id(line_id):
+        refusal = decline_free_goods(cart, line_id)
+        if refusal:
+            return {"ok": False, "status": "invalid", "touched": line_id, "notice": {"kind": "out", "text": refusal}}
+        return {}
+    cart.pop(line_id, None)
     return {}
 
 
@@ -1222,6 +1429,7 @@ TILL_ACTIONS = {
     "increase": _till_do_increase,
     "decrease": _till_do_decrease,
     "quantity": _till_do_quantity,
+    "unit": _till_do_unit,
     "price": _till_do_price,
     "remove": _till_do_remove,
     "clear": _till_do_clear,
@@ -1246,10 +1454,21 @@ def till_action(request, action):
     system_settings = get_system_settings()
     cart = _normalize_cart(request.session.get("cart", {}))
     context = _read_till_context(request, system_settings)
-    result = handler(request, system_settings, cart, context)
+    if is_free_line_id(request.POST.get("product_id")) and action not in ("remove", "context"):
+        # A free-goods line follows its scheme: only taking it off (when Settings allow) applies to it.
+        result = {
+            "ok": False,
+            "status": "invalid",
+            "touched": request.POST.get("product_id"),
+            "notice": {"kind": "out", "text": free_line_refusal()},
+        }
+    else:
+        result = handler(request, system_settings, cart, context)
 
     cart = _normalize_cart(result.get("cart", cart))
     context = result.get("context", context)
+    # Re-price for the sale's customer and work out the schemes after every change to the bill.
+    apply_terms(cart, context["customer_id"])
     _save_cart(request, cart)
     # An empty bill keeps no customer or discount: the next sale starts clean.
     _store_till_context(request, context if cart else None)
@@ -1263,11 +1482,14 @@ def till_action(request, action):
         notice=result.get("notice"),
         touched=result.get("touched", ""),
     )
+    if action == "context" and payload["discount"]["error"]:
+        # The typed discount is kept so the cashier can see and correct it; the bill cannot close meanwhile.
+        payload.update({"ok": False, "status": "invalid"})
     return JsonResponse(payload, status=result.get("http_status", 200))
 
 
-def _per_unit(product):
-    unit = product.unit or ""
+def _per_unit(product, level=PACK_PIECE):
+    unit = product.pack_label(level) or ""
     return "" if not unit or unit == Product.UNIT_PIECE else f" / {unit}"
 
 
@@ -1289,6 +1511,11 @@ def till_catalogue(request):
                     product.variant_group_id, {"id": product.variant_group_id, "name": product.name, "sizes": []}
                 )
                 family["sizes"].append(product.id)
+    # Prices in the suggestions are per the unit the product goes on the bill in.
+    till_unit = get_system_settings().till_default_unit
+    sale_levels = {
+        product.id: product.resolve_pack_level(till_unit) if product.has_packaging else PACK_PIECE for product in products
+    }
     return JsonResponse(
         {
             "families": list(families.values()),
@@ -1302,7 +1529,11 @@ def till_catalogue(request):
                     "barcode": product.barcode or "",
                     "unit": product.unit or "",
                     "fraction": product.allows_fractional_quantity,
-                    "price": f"{format_money(product.price)}{_per_unit(product)}",
+                    "price": (
+                        f"{format_money(product.pack_price(sale_levels[product.id]))}"
+                        f"{_per_unit(product, sale_levels[product.id])}"
+                    ),
+                    "packs": [level["label"].lower() for level in product.pack_levels] if product.has_packaging else [],
                     "stock": product.stock_display,
                     "out": bool(tracks_stock(product) and product.stock <= 0),
                     "low": bool(
@@ -1400,7 +1631,8 @@ def invoice(request, sale_id):
     items = list(sale.items.select_related("product", "product__category"))
     subtotal = sum((item.line_total for item in items), Decimal("0"))
     line_discount_total = sum((item.line_discount_amount for item in items), Decimal("0"))
-    discount_amount = quantize_money(subtotal * (_normalized_rate(sale.discount_rate) / Decimal("100")))
+    bill_discount = bill_discounts.sale_bill_discount(sale, subtotal)
+    discount_amount = bill_discount.amount
     tax_amount = sale_tax_amount(sale, subtotal=subtotal, items=items)
     settings_obj = get_system_settings()
     tax_label_value = sale_tax_label(sale, settings_obj.tax_label)
@@ -1419,6 +1651,7 @@ def invoice(request, sale_id):
         "subtotal": subtotal,
         "line_discount_total": line_discount_total,
         "discount_amount": discount_amount,
+        "bill_discount": bill_discount,
         "tax_amount": tax_amount,
         "tax_label_value": tax_label_value,
         "grand_total": quantize_money(sale.total_amount or 0),
@@ -1430,8 +1663,59 @@ def invoice(request, sale_id):
         "show_payment_method_totals": bool(payment_method_totals),
         "previous_balance": previous_balance,
         "new_balance": new_balance,
+        # The retail price (MRP) column shows when the price lists module is on and a product has one.
+        "show_mrp": module_enabled("price_lists") and any(item.product.retail_price is not None for item in items),
     }
+    # "Did not pay": a manager can put a paid sale (or part of it) on the customer's account.
+    can_put_on_credit = (
+        system_settings_allows_credit(settings_obj)
+        and user_can_access_module(request.user, "pos", ACCESS_MANAGE)
+        and not can_change_to_credit(sale)
+    )
+    context["can_put_on_credit"] = can_put_on_credit
+    if can_put_on_credit and not sale.customer_id:
+        context["credit_customers"] = Customer.objects.filter(is_active=True).order_by("name")
     return render(request, "pos/invoice.html", context)
+
+
+def system_settings_allows_credit(settings_obj):
+    return bool(settings_obj.allow_credit_sales) and module_enabled("parties")
+
+
+@module_access_required("pos", minimum=ACCESS_MANAGE)
+@require_POST
+def sale_change_to_credit(request, sale_id):
+    """The invoice page's "Put on credit": what the shop did not pay goes on its account."""
+    sale = get_object_or_404(Sale, id=sale_id)
+    if not user_can_access_sale(request.user, sale):
+        messages.error(request, "Cashiers can only change their own sales.")
+        return redirect("pos_screen")
+    if not system_settings_allows_credit(get_system_settings()):
+        messages.error(request, "Credit sales are switched off in Settings.")
+        return redirect("invoice", sale_id=sale.id)
+    customer = None
+    customer_id = (request.POST.get("customer_id") or "").strip()
+    if customer_id.isdigit():
+        customer = Customer.objects.filter(pk=int(customer_id), is_active=True).first()
+    try:
+        warnings = change_sale_to_credit(
+            sale=sale,
+            received=request.POST.get("received") or "0",
+            customer=customer,
+            reason=request.POST.get("reason"),
+            actor=request.user,
+        )
+    except (PaymentChangeRefused, ValueError) as exc:
+        messages.error(request, str(exc))
+        return redirect(f"{reverse('invoice', kwargs={'sale_id': sale.id})}#put-on-credit")
+    for warning in warnings:
+        messages.warning(request, warning)
+    sale.refresh_from_db()
+    messages.success(
+        request,
+        f"Sale {sale.display_number} is now on credit: {format_money(sale.balance_due)} added to {sale.customer.name}'s account.",
+    )
+    return redirect("invoice", sale_id=sale.id)
 
 
 def _pdf_currency_label(settings_obj):
@@ -1445,7 +1729,7 @@ def _pdf_currency_label(settings_obj):
 
 
 def _receipt_quantity(item):
-    unit = item.product.unit
+    unit = item.unit_label
     if not unit or unit == Product.UNIT_PIECE:
         return format_qty(item.quantity)
     return f"{format_qty(item.quantity)} {unit}"
@@ -1460,8 +1744,7 @@ def invoice_pdf(request, sale_id):
     items = list(sale.items.select_related("product"))
 
     subtotal = sum((item.line_total for item in items), Decimal("0"))
-    line_discount_total = sum((item.line_discount_amount for item in items), Decimal("0"))
-    discount_amount = quantize_money(subtotal * (_normalized_rate(sale.discount_rate) / Decimal("100")))
+    bill_discount = bill_discounts.sale_bill_discount(sale, subtotal)
     tax_amount = sale_tax_amount(sale, subtotal=subtotal, items=items)
     settings_obj = get_system_settings()
     tax_label_value = sale_tax_label(sale, settings_obj.tax_label)
@@ -1485,10 +1768,8 @@ def invoice_pdf(request, sale_id):
         total_lines += 1
     for item in items:
         total_lines += 2
-        if item.discount_percent > 0 or item.price != item.original_price:
-            total_lines += 1
-    if line_discount_total > 0:
-        total_lines += 1
+        # A changed price, a scheme and a discount each get their own line under the item.
+        total_lines += len(bill_discounts.receipt_item_notes(item, money))
     if sale.discount_rate > 0:
         total_lines += 1
     if tax_amount > 0:
@@ -1549,20 +1830,22 @@ def invoice_pdf(request, sale_id):
         pdf.drawString(left_margin, y, item.product.display_name[:24])
         y -= line_height
 
+        # A discounted line reads: quantity x rate = gross, then "Disc 10% = Rs 20.00" and the net amount.
+        has_line_discount = item.discount_percent > 0 and not getattr(item, "is_free", False)
         pdf.setFont("Helvetica", 6.8)
-        pdf.drawString(left_margin, y, f"{_receipt_quantity(item)} x {money(item.discounted_unit_price)}")
-        pdf.drawRightString(right_margin, y, money(item.line_total))
+        rate = item.price if has_line_discount else item.discounted_unit_price
+        pdf.drawString(left_margin, y, f"{_receipt_quantity(item)} x {money(rate)}")
+        pdf.drawRightString(right_margin, y, money(item.base_line_total if has_line_discount else item.line_total))
         y -= line_height
 
-        if item.discount_percent > 0 or item.price != item.original_price:
-            notes = []
-            if item.price != item.original_price:
-                notes.append(f"Custom {money(item.price)}")
-            if item.discount_percent > 0:
-                notes.append(f"Disc {item.discount_percent:.0f}%")
+        notes = bill_discounts.receipt_item_notes(item, money)
+        if notes:
             pdf.setFont("Helvetica", 6.2)
-            pdf.drawString(left_margin, y, " | ".join(notes)[:30])
-            y -= line_height
+            for note in notes:
+                pdf.drawString(left_margin, y, note[:34])
+                if has_line_discount and note.startswith("Disc "):
+                    pdf.drawRightString(right_margin, y, money(item.line_total))
+                y -= line_height
 
     pdf.line(left_margin, y, right_margin, y)
     y -= line_height
@@ -1572,14 +1855,10 @@ def invoice_pdf(request, sale_id):
     pdf.drawRightString(right_margin, y, money(subtotal))
     y -= line_height
 
-    if line_discount_total > 0:
-        pdf.drawString(left_margin, y, "Line disc")
-        pdf.drawRightString(right_margin, y, money(line_discount_total))
-        y -= line_height
-
     if sale.discount_rate > 0:
-        pdf.drawString(left_margin, y, f"Order disc {sale.discount_rate}%")
-        pdf.drawRightString(right_margin, y, money(discount_amount))
+        discount_left, discount_right = bill_discount.parts(money)
+        pdf.drawString(left_margin, y, discount_left)
+        pdf.drawRightString(right_margin, y, discount_right)
         y -= line_height
 
     if tax_amount > 0:
@@ -1649,31 +1928,25 @@ def sale_return_view(request, sale_id):
         return redirect("pos_screen")
 
     initial = {"refund_method": SaleReturn.RECEIVABLE if sale.is_credit and sale.customer else SaleReturn.CASH}
-    form = SaleReturnForm(request.POST or None, initial=initial)
+    form = SaleReturnForm(request.POST or None, request.FILES or None, initial=initial)
 
-    item_rows = []
-    for item in sale.items.all():
-        returned_qty = sum(return_item.quantity for return_item in item.return_items.all())
-        item_rows.append(
-            {
-                "item": item,
-                "returned_qty": returned_qty,
-                "returnable_qty": max(item.quantity - returned_qty, 0),
-            }
-        )
+    item_rows = [return_row(item) for item in sale.items.all()]
 
     if request.method == "POST" and form.is_valid():
         quantities = {row["item"].id: request.POST.get(f"qty_{row['item'].id}", "0") for row in item_rows}
+        units = {row["item"].id: request.POST.get(f"unit_{row['item'].id}", "") for row in item_rows}
         try:
             sale_return = create_sale_return(
                 sale=sale,
                 quantities=quantities,
+                units=units,
                 refund_method=form.cleaned_data["refund_method"],
                 bank_account=form.cleaned_data.get("bank_account"),
                 reason=form.cleaned_data["reason"],
                 notes=form.cleaned_data.get("notes") or "",
                 actor=request.user,
             )
+            attach_optional_receipt(request, sale_return, form.cleaned_data.get("bank_receipt"))
             messages.success(request, f"Sale return #{sale_return.id} recorded.")
             return redirect("invoice", sale_id=sale.id)
         except (ValueError, ValidationError) as exc:

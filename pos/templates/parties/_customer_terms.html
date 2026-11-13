@@ -1,0 +1,13 @@
+{% comment %}
+On the customer page, under the name: route, order booker, credit limit and how much of it is left.
+Needs: customer. Route and order booker show only while the field-sales module is on.
+{% endcomment %}
+{% load currency_tags field_sales_tags %}
+{% customer_credit customer as credit %}
+<ul class="fs-terms" aria-label="Route and credit">
+    {% if feature_modules.field_sales %}
+    <li>Route <strong>{{ customer.route.name|default:"Not set" }}</strong></li>
+    <li>Order booker <strong>{{ customer.order_booker.name|default:"Not set" }}</strong></li>
+    {% endif %}
+    <li>Credit limit <strong>{% if credit.has_limit %}{{ credit.limit|money }}{% else %}No limit{% endif %}</strong>{% if credit.has_limit %}{% if credit.is_over %} <strong class="fs-over">over by {{ credit.over|money }}</strong>{% else %}, <strong>{{ credit.left|money }}</strong> left{% endif %}{% endif %}</li>
+</ul>

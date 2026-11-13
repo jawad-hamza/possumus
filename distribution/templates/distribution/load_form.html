@@ -1,0 +1,34 @@
+{% extends "distribution/_base.html" %}
+{% block title %}{% if load %}Edit {{ load.display_number }}{% else %}New load{% endif %}{% endblock %}
+{% block page_title %}{% if load %}Edit load {{ load.display_number }}{% else %}New load{% endif %}{% endblock %}
+{% block page_help %}Who takes the load out, on which vehicle, on which route. The invoices go on it next.{% endblock %}
+{% block page_actions %}<a href="{% if load %}{% url 'distribution_load_detail' load.id %}{% else %}{{ back_url }}{% endif %}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>{% endblock %}
+
+{% block dist_content %}
+<div class="k-form">
+    <form method="post" novalidate>
+        {% csrf_token %}
+        {% if form.non_field_errors %}<div class="alert alert-danger">{{ form.non_field_errors }}</div>{% endif %}
+        <section class="k-section">
+            <div class="k-form-grid">
+                <div>{% include "pos/partials/_entry_field.html" with field=form.load_date %}</div>
+                {% if form.route %}<div>{% include "pos/partials/_entry_field.html" with field=form.route %}</div>{% endif %}
+                <div>
+                    {% include "pos/partials/_entry_field.html" with field=form.delivery_man %}
+                    {% if quick_add_kinds.delivery_man %}<div class="rf-add-row"><a class="rf-add" href="{% url 'distribution_delivery_man_add' %}?next={{ request.get_full_path|urlencode }}" data-rf-quick="delivery_man" data-rf-target="{{ form.delivery_man.id_for_label }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add delivery man</a></div>{% endif %}
+                </div>
+                <div>
+                    {% include "pos/partials/_entry_field.html" with field=form.vehicle %}
+                    {% if quick_add_kinds.vehicle %}<div class="rf-add-row"><a class="rf-add" href="{% url 'distribution_vehicle_add' %}?next={{ request.get_full_path|urlencode }}" data-rf-quick="vehicle" data-rf-target="{{ form.vehicle.id_for_label }}"><i class="bi bi-plus-lg" aria-hidden="true"></i> Add vehicle</a></div>{% endif %}
+                </div>
+                <div class="k-span-2">{% include "pos/partials/_entry_field.html" with field=form.notes %}</div>
+            </div>
+        </section>
+        <div class="k-form-actions">
+            <button type="submit" class="btn btn-primary">{% if load %}Save load{% else %}Open load{% endif %}</button>
+            <a href="{{ back_url }}" class="btn btn-outline-secondary">Cancel</a>
+        </div>
+    </form>
+</div>
+{% include "pos/partials/_quick_add_panel.html" %}
+{% endblock %}

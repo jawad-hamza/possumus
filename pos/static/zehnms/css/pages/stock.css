@@ -216,8 +216,27 @@ a.st-name:hover {
 #product-ledger.st-show-supplier .st-opt-supplier,
 #product-ledger.st-show-location .st-opt-location,
 #product-ledger.st-show-cost .st-opt-cost,
-#product-ledger.st-show-margin .st-opt-margin {
+#product-ledger.st-show-margin .st-opt-margin,
+#product-ledger.st-show-lastbuy .st-opt-lastbuy {
     display: table-cell;
+}
+
+/* "Stock in": the unit the list counts stock from */
+.st-stock-in {
+    display: flex;
+    align-items: center;
+    gap: var(--k-2);
+}
+
+.st-stock-in .form-label {
+    margin: 0;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    white-space: nowrap;
+}
+
+.st-stock-in .form-select {
+    width: auto;
 }
 
 .st-cols-menu {
@@ -399,6 +418,44 @@ tr.st-variant > td.st-cell-title {
 /* a switch lines up with the fields beside it */
 .k-form-grid > .st-switch-cell {
     align-self: end;
+}
+
+/* a quantity typed with its unit: the number, then Cartons / Boxes / Pieces */
+.st-qty-unit {
+    display: flex;
+    gap: var(--k-2);
+}
+
+.st-qty-unit > .form-control {
+    flex: 1 1 auto;
+    min-width: 0;
+}
+
+.st-qty-unit > .form-select {
+    flex: 0 0 auto;
+    width: auto;
+}
+
+.st-qty-unit > .form-select[hidden] {
+    display: none;
+}
+
+/* packing: "1 Ctn = 12 Box = 144 pcs", and what a box and a piece come to under a carton figure */
+.st-pack-line.is-empty {
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-weight: 400;
+}
+
+.st-pack-split {
+    margin-top: var(--k-1);
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-sm);
+    font-variant-numeric: tabular-nums lining-nums;
+}
+
+.st-pack-split[hidden] {
+    display: none;
 }
 
 .st-readout {
@@ -660,6 +717,46 @@ tr.st-variant > td.st-cell-title {
 
 .st-lines .form-text {
     margin-top: 4px;
+    font-size: var(--k-text-xs);
+}
+
+/* cartons and boxes: the unit beside the quantity, the packing under the product */
+.st-lines--packs th.st-col-qty { width: 212px; }
+.st-work.is-side-open .st-lines--packs th.st-col-qty { width: 164px; }
+
+.st-lines--packs .input-group > .form-select {
+    flex: 0 0 auto;
+    width: 5.75rem;
+    padding-right: 1.75rem;
+    background-position: right 0.4rem center;
+}
+
+.st-pack {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px var(--k-4);
+    margin-top: 6px;
+    color: var(--k-ink-soft);
+    font-size: var(--k-text-xs);
+}
+
+.st-pack[hidden] {
+    display: none;
+}
+
+.st-pack-part {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    margin: 0;
+    white-space: nowrap;
+}
+
+.st-pack-part .form-control {
+    width: 4.5rem;
+    min-height: 0;
+    padding-top: 2px;
+    padding-bottom: 2px;
     font-size: var(--k-text-xs);
 }
 
@@ -927,6 +1024,15 @@ tr.st-variant > td.st-cell-title {
     text-align: right;
 }
 
+.st-return-input--unit {
+    width: 190px;
+}
+
+.st-return-input--unit > .form-select {
+    flex: 0 0 auto;
+    width: 5rem;
+}
+
 tr.is-over > td {
     background: var(--k-out-wash) !important;
 }
@@ -1144,7 +1250,8 @@ form[data-st-entry] textarea[rows="10"],
 }
 
 @media (max-width: 575.98px) {
-    .st-cols {
+    /* the Columns menu goes on a phone; "Stock in" stays */
+    .st-cols > .dropdown {
         display: none;
     }
 }

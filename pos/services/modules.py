@@ -50,6 +50,14 @@ FEATURE_MODULES = (
         access_modules=("purchases",),
     ),
     FeatureModule(
+        "builty",
+        "Builty and freight",
+        "Add the transporter's freight bill (builty) to a day's purchases and share it over the goods, per box, carton, piece or by value, so their cost includes it.",
+        "Builty screens, the Add builty button and freight figures on purchases. Freight already added stays in the cost of the goods.",
+        icon="bi-truck-flatbed",
+        group="Back office",
+    ),
+    FeatureModule(
         "stock_control",
         "Stock control",
         "Stock adjustments, stock take and opening stock corrections.",
@@ -67,6 +75,23 @@ FEATURE_MODULES = (
         group="Back office",
         access_modules=("parties",),
         dependent_flags=("allow_credit_sales",),
+    ),
+    FeatureModule(
+        "field_sales",
+        "Routes and order bookers",
+        "Put customers on routes and record which order booker serves them and made each sale.",
+        "Routes and order bookers lists, their boxes on customers and the till, the Sales by Order Booker report. City and credit limit stay on customers.",
+        icon="bi-signpost-split",
+        group="Back office",
+    ),
+    FeatureModule(
+        "distribution",
+        "Distribution",
+        "Order booking, load forms, day-end settlement of each load, market and company returns, and recovery.",
+        "Distribution menu, sales orders, load forms, settlements, stock returns, recovery and the Distribution reports. Customers, invoices and their ledgers stay.",
+        icon="bi-truck-front",
+        group="Back office",
+        access_modules=("distribution",),
     ),
     FeatureModule(
         "returns",
@@ -122,6 +147,14 @@ FEATURE_MODULES = (
         settings_flags=("enable_product_expiry",),
     ),
     FeatureModule(
+        "packaging",
+        "Cartons and boxes",
+        "Buy, sell and count a product by the carton, the box or the piece.",
+        "Packing fields on products, the unit choice on purchases and at the till. Everything is counted in pieces.",
+        icon="bi-boxes",
+        group="Products",
+    ),
+    FeatureModule(
         "weights_units",
         "Weights and measures",
         "Sell by kg, gram, litre, metre or foot in fractions.",
@@ -143,6 +176,22 @@ FEATURE_MODULES = (
         "Sell one item in several sizes, each with its own price and stock.",
         "The sizes section on products, family rows in the product list and the size picker at the till. Sizes stay on sale as separate products.",
         icon="bi-collection",
+        group="Products",
+    ),
+    FeatureModule(
+        "price_lists",
+        "Trade price lists",
+        "Sell to some customers, or every customer on a route, at their own trade prices, and keep the retail price (MRP) on products.",
+        "Price lists screens and report, the retail price on products. Every customer buys at the product's own sale price.",
+        icon="bi-card-checklist",
+        group="Products",
+    ),
+    FeatureModule(
+        "schemes",
+        "Schemes and free goods",
+        "Trade offers such as 10+1 free, or a discount once a line reaches a quantity, with start and end dates.",
+        "Schemes screens and the Scheme Usage report. No free goods or scheme discounts are added to new bills.",
+        icon="bi-gift",
         group="Products",
     ),
     FeatureModule(
@@ -194,6 +243,16 @@ MODULE_KEYS = tuple(module.key for module in FEATURE_MODULES)
 # entry only needs the Reports module itself.
 REPORT_MODULES = {
     "sales-by-customer": "parties",
+    "receivables-by-area": "parties",
+    "sales-by-order-booker": "field_sales",
+    "order-booking": "distribution",
+    "load-sheets": "distribution",
+    "delivery-settlement": "distribution",
+    "recovery": "distribution",
+    "stock-returns": "distribution",
+    "damaged-claims": "distribution",
+    "price-lists": "price_lists",
+    "scheme-usage": "schemes",
     "tax-summary": "tax",
     "returns": "returns",
     "expiry": "expiry",
@@ -211,6 +270,7 @@ EDITION_ENTERPRISE = "enterprise"
 _BASIC_MODULES = ("reports", "price_control", "hold_sale", "backups")
 _STANDARD_MODULES = _BASIC_MODULES + (
     "purchases",
+    "builty",
     "stock_control",
     "parties",
     "returns",
@@ -228,7 +288,7 @@ EDITIONS = {
     },
     EDITION_STANDARD: {
         "label": "Standard",
-        "summary": "Basic plus purchases, parties, returns, expenses, stock control, tax, sizes and team.",
+        "summary": "Basic plus purchases with builty freight, parties, returns, expenses, stock control, tax, sizes and team.",
         "modules": _STANDARD_MODULES,
     },
     EDITION_ENTERPRISE: {
@@ -538,10 +598,14 @@ def allowed_unit_choices(current_unit=None):
     """
     from pos.models import Product
 
+    choices = list(Product.UNIT_CHOICES)
+    if module_enabled("packaging"):
+        # Boxes and cartons are set under Packing, so "Box" is not offered as the counting unit.
+        choices = [(value, label) for value, label in choices if value != "box" or value == current_unit]
     if module_enabled("weights_units"):
-        return list(Product.UNIT_CHOICES)
+        return choices
     return [
         (value, label)
-        for value, label in Product.UNIT_CHOICES
+        for value, label in choices
         if value not in Product.FRACTIONAL_UNITS or value == current_unit
     ]

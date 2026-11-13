@@ -71,10 +71,11 @@
                     <td class="k-num b-bal" data-label="Balance">{{ opening_balance|money }} <span class="b-drcr">{{ opening_side }}</span></td>
                 </tr>
                 {% endif %}
+                {% load bank_receipt_tags %}{% mark_ledger_receipts ledger %}
                 {% for row in ledger %}
                 <tr>
                     <td data-label="Date">{{ row.date }}</td>
-                    <td data-label="Voucher">#{{ row.voucher.id }} &middot; {{ row.voucher.get_voucher_type_display }}</td>
+                    <td data-label="Voucher">#{{ row.voucher.id }} &middot; {{ row.voucher.get_voucher_type_display }}{% bank_receipt_link row.receipt %}</td>
                     <td data-label="Narration">{{ row.narration|default:"-" }}</td>
                     <td class="k-num" data-label="Debit">{% if row.debit %}{{ row.debit|money }}{% endif %}</td>
                     <td class="k-num" data-label="Credit">{% if row.credit %}{{ row.credit|money }}{% endif %}</td>

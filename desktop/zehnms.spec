@@ -15,7 +15,7 @@ import rest_framework
 from PyInstaller.utils.hooks import collect_data_files, collect_submodules
 
 PROJECT_ROOT = Path(SPECPATH).resolve().parent
-PROJECT_PACKAGES = ["possumus", "pos", "accounts", "api"]
+PROJECT_PACKAGES = ["possumus", "pos", "accounts", "api", "distribution", "pricing", "review"]
 SKIPPED_DIRS = {"__pycache__"}
 
 

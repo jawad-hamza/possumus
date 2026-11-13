@@ -19,8 +19,24 @@ def _kinds():
     from accounts.forms import BankAccountForm, ExpenseCategoryForm
 
     from ..forms import QuickBrandForm, QuickCategoryForm, QuickProductForm, SupplierForm
+    from ..forms_field_sales import QuickOrderBookerForm, QuickRouteForm
+    from .field_sales import field_sales_enabled
 
     return {
+        "route": {
+            "title": "Add route",
+            "save": "Save route",
+            "url": "quick_create_route",
+            "form": lambda: QuickRouteForm(prefix="quick_route"),
+            "allowed": lambda user: field_sales_enabled() and _can_manage(user, "parties"),
+        },
+        "order_booker": {
+            "title": "Add order booker",
+            "save": "Save order booker",
+            "url": "quick_create_order_booker",
+            "form": lambda: QuickOrderBookerForm(prefix="quick_order_booker"),
+            "allowed": lambda user: field_sales_enabled() and _can_manage(user, "parties"),
+        },
         "brand": {
             "title": "Add brand",
             "save": "Save brand",

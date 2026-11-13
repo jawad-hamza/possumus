@@ -1,0 +1,49 @@
+{% extends "distribution/_base.html" %}
+{% load currency_tags %}
+{% block title %}Stock return {{ stock_return.display_number }}{% endblock %}
+{% block page_title %}{{ stock_return.get_kind_display }} {{ stock_return.display_number }}{% endblock %}
+{% block page_help %}The goods, their condition and the voucher this return posted.{% endblock %}
+{% block page_actions %}<a href="{{ back_url }}" class="btn btn-outline-secondary"><i class="bi bi-arrow-left" aria-hidden="true"></i> Back</a>{% endblock %}
+
+{% block dist_content %}
+<section class="k-section" aria-labelledby="return-facts">
+    <div class="k-section-head"><h2 class="k-section-title" id="return-facts">{{ stock_return.party_name }}</h2></div>
+    <dl class="dist-facts">
+        <div><dt>Date</dt><dd>{{ stock_return.return_date|date:"d M Y" }}</dd></div>
+        <div><dt>Settled by</dt><dd>{{ stock_return.get_settlement_display }}{% if stock_return.bank_account %} ({{ stock_return.bank_account.display_name }}){% endif %}</dd></div>
+        <div><dt>Amount</dt><dd>{{ stock_return.total_amount|money }}</dd></div>
+        <div><dt>Stock value</dt><dd>{{ stock_return.cost_amount|money }}</dd></div>
+        <div><dt>Reason</dt><dd>{{ stock_return.reason }}</dd></div>
+        {% if stock_return.load_form %}<div><dt>Came back on</dt><dd><a href="{% url 'distribution_load_detail' stock_return.load_form.id %}">{{ stock_return.load_form.display_number }}</a></dd></div>{% endif %}
+        {% if stock_return.notes %}<div><dt>Notes</dt><dd>{{ stock_return.notes }}</dd></div>{% endif %}
+        <div><dt>Recorded by</dt><dd>{{ stock_return.created_by.username|default:"-" }}, {{ stock_return.created_at|date:"d M Y H:i" }}</dd></div>
+    </dl>
+</section>
+
+<section class="k-section" aria-labelledby="return-items">
+    <div class="k-section-head"><h2 class="k-section-title" id="return-items">Items</h2></div>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack">
+            <thead><tr><th scope="col">Product</th><th scope="col" class="k-num">Quantity</th><th scope="col">Condition</th><th scope="col" class="k-num">Rate</th><th scope="col" class="k-num">Amount</th><th scope="col" class="k-num">Stock value</th></tr></thead>
+            <tbody>
+                {% for item in items %}
+                <tr><td>{{ item.product.display_name }}</td><td class="k-num" data-label="Quantity">{{ item.quantity_display }}</td><td data-label="Condition">{% if item.condition == "damaged" %}<span class="k-badge k-badge--red">Damaged</span>{% else %}<span class="k-badge k-badge--green">Good</span>{% endif %}</td><td class="k-num" data-label="Rate">{{ item.rate|money }}</td><td class="k-num" data-label="Amount">{{ item.line_amount|money }}</td><td class="k-num" data-label="Stock value">{{ item.cost_amount|money }}</td></tr>
+                {% endfor %}
+            </tbody>
+            <tfoot><tr class="k-total"><td colspan="4">Total</td><td class="k-num">{{ stock_return.total_amount|money }}</td><td class="k-num">{{ stock_return.cost_amount|money }}</td></tr></tfoot>
+        </table>
+    </div>
+</section>
+
+{% if voucher_lines %}
+<section class="k-section" aria-labelledby="return-voucher">
+    <div class="k-section-head"><h2 class="k-section-title" id="return-voucher">Voucher #{{ stock_return.voucher.id }}</h2></div>
+    <div class="table-responsive">
+        <table class="k-table k-ledger--stack">
+            <thead><tr><th scope="col">Account</th><th scope="col" class="k-num">Debit</th><th scope="col" class="k-num">Credit</th></tr></thead>
+            <tbody>{% for line in voucher_lines %}<tr><td>{{ line.account.title }}</td><td class="k-num" data-label="Debit">{% if line.debit %}{{ line.debit|money }}{% endif %}</td><td class="k-num" data-label="Credit">{% if line.credit %}{{ line.credit|money }}{% endif %}</td></tr>{% endfor %}</tbody>
+        </table>
+    </div>
+</section>
+{% endif %}
+{% endblock %}

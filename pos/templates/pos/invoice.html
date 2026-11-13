@@ -1,5 +1,6 @@
 {% extends "pos/base.html" %}
 {% load static currency_tags %}
+{% load discount_tags %}
 
 {% block title %}Receipt {{ sale.display_number }}{% endblock %}
 {% block page_title %}Receipt {{ sale.display_number }}{% endblock %}
@@ -30,10 +31,32 @@
             <div><dt>{{ sale.customer.name }} before this sale</dt><dd>{{ previous_balance|money }}</dd></div>
             <div><dt>{{ sale.customer.name }} now</dt><dd>{{ new_balance|money }}</dd></div>
             {% endif %}
+            {% load bank_receipt_tags %}{% bank_receipt_panel sale "fact" %}
         </dl>
 
         {% if sale.returns.exists %}
         <p class="k-note k-note--out mb-0">Items from this sale have been returned.{% if feature_modules.returns %}{% if request.user.is_staff or request.user.is_superuser %} <a href="{% url 'sale_return' sale.id %}">See the returns</a>{% endif %}{% endif %}</p>
+        {% endif %}
+
+        {% if can_put_on_credit %}
+        <details class="k-paper-credit d-print-none" id="put-on-credit">
+            <summary>Not paid? Put on credit</summary>
+            <form method="post" action="{% url 'sale_change_to_credit' sale.id %}" class="k-paper-credit-form">
+                {% csrf_token %}
+                {% if not sale.customer_id %}
+                <label class="form-label" for="creditCustomer">Customer who owes it</label>
+                <select class="form-select" id="creditCustomer" name="customer_id" required>
+                    <option value="">Choose a customer</option>
+                    {% for customer in credit_customers %}<option value="{{ customer.id }}">{{ customer.name }}</option>{% endfor %}
+                </select>
+                {% endif %}
+                <label class="form-label" for="creditReceived">Amount actually received <span class="k-tip"><button type="button" class="k-tip-btn" aria-label="About amount received" aria-describedby="tipCreditReceived" aria-expanded="false"><i class="bi bi-info-circle" aria-hidden="true"></i></button><span class="k-tip-body" id="tipCreditReceived" role="tooltip" hidden>0 puts the whole bill on the customer's account. The rest of the {{ paid_amount|money }} recorded as paid comes off {% if sale.payment_method == 'bank' %}the bank ledger{% else %}cash{% endif %}.</span></span></label>
+                <input class="form-control" type="number" id="creditReceived" name="received" value="0" min="0" step="0.01" max="{{ paid_amount|floatformat:2 }}" inputmode="decimal">
+                <label class="form-label" for="creditReason">Reason</label>
+                <input class="form-control" type="text" id="creditReason" name="reason" maxlength="150" required placeholder="The shop did not pay">
+                <button type="submit" class="btn btn-outline-secondary">Put on credit</button>
+            </form>
+        </details>
         {% endif %}
 
         <fieldset class="k-paper-choice">
@@ -72,12 +95,25 @@
             {% for item in items %}
             <div class="r-item">
                 <p class="r-item-name">{{ item.product.display_name }}</p>
+                {% if item.discount_percent > 0 and not item.is_free %}
                 <div class="r-row">
-                    <span>{{ item.quantity|qty_short:item.product.unit }} x {{ item.discounted_unit_price|money }}</span>
+                    <span>{{ item.quantity|qty_short:item.unit_label }} x {{ item.price|money }}</span>
+                    <span>{{ item.base_line_total|money }}</span>
+                </div>
+                <div class="r-row r-item-disc">
+                    <span>Disc {{ item.discount_percent|discount_equals:item.line_discount_amount }}</span>
                     <span>{{ item.line_total|money }}</span>
                 </div>
-                {% if item.price != item.original_price or item.discount_percent > 0 %}
-                <p class="r-item-note">{% if item.price != item.original_price %}Custom price{% endif %}{% if item.price != item.original_price and item.discount_percent > 0 %}, {% endif %}{% if item.discount_percent > 0 %}Discount {{ item.discount_percent|floatformat:2 }}%{% endif %}</p>
+                {% else %}
+                <div class="r-row">
+                    <span>{{ item.quantity|qty_short:item.unit_label }} x {{ item.discounted_unit_price|money }}</span>
+                    <span>{{ item.line_total|money }}</span>
+                </div>
+                {% endif %}
+                {% if item.is_free %}
+                <p class="r-item-note">Free{% if item.scheme_name %}, {{ item.scheme_name }}{% endif %}</p>
+                {% elif item.rate_note %}
+                <p class="r-item-note">{{ item.rate_note }}</p>
                 {% endif %}
             </div>
             {% endfor %}
@@ -85,8 +121,7 @@
             <hr class="r-rule">
 
             <div class="r-row"><span>Subtotal</span><span>{{ subtotal|money }}</span></div>
-            {% if line_discount_total > 0 %}<div class="r-row"><span>Line discounts, included</span><span>{{ line_discount_total|money }}</span></div>{% endif %}
-            {% if discount_amount > 0 %}<div class="r-row"><span>Order discount</span><span>{{ discount_amount|money }}</span></div>{% endif %}
+            {% if discount_amount > 0 %}<div class="r-row"><span>{{ bill_discount.left }}</span><span>{{ bill_discount.right }}</span></div>{% endif %}
             {% if tax_amount > 0 %}<div class="r-row"><span>{{ tax_label_value }}</span><span>{{ tax_amount|money }}</span></div>{% endif %}
             {% if show_payment_method_totals %}
                 {% for option in payment_method_totals %}
@@ -135,7 +170,9 @@
                         <th scope="col" class="a-n">No</th>
                         <th scope="col">Item</th>
                         <th scope="col" class="a-num">Qty</th>
+                        {% if show_mrp %}<th scope="col" class="a-num">MRP</th>{% endif %}
                         <th scope="col" class="a-num">Rate</th>
+                        {% if line_discount_total > 0 %}<th scope="col" class="a-num">Disc</th>{% endif %}
                         <th scope="col" class="a-num">Amount</th>
                     </tr>
                 </thead>
@@ -143,9 +180,11 @@
                     {% for item in items %}
                     <tr>
                         <td class="a-n">{{ forloop.counter }}</td>
-                        <td>{{ item.product.display_name }}{% if item.price != item.original_price or item.discount_percent > 0 %}<span class="a-item-note">{% if item.price != item.original_price %}Custom price{% endif %}{% if item.price != item.original_price and item.discount_percent > 0 %}, {% endif %}{% if item.discount_percent > 0 %}Discount {{ item.discount_percent|floatformat:2 }}%{% endif %}</span>{% endif %}</td>
-                        <td class="a-num">{{ item.quantity|qty_short:item.product.unit }}</td>
-                        <td class="a-num">{{ item.discounted_unit_price|money }}</td>
+                        <td>{{ item.product.display_name }}{% if item.is_free %}<span class="a-item-note">Free{% if item.scheme_name %}, {{ item.scheme_name }}{% endif %}</span>{% elif item.rate_note %}<span class="a-item-note">{{ item.rate_note }}</span>{% endif %}</td>
+                        <td class="a-num">{{ item.quantity|qty_short:item.unit_label }}</td>
+                        {% if show_mrp %}<td class="a-num">{% if item.retail_price_each is not None %}{{ item.retail_price_each|money }}{% endif %}</td>{% endif %}
+                        <td class="a-num">{% if item.is_free %}Free{% elif line_discount_total > 0 %}{{ item.price|money }}{% else %}{{ item.discounted_unit_price|money }}{% endif %}</td>
+                        {% if line_discount_total > 0 %}<td class="a-num a-disc">{% if item.discount_percent > 0 and not item.is_free %}{{ item.discount_percent|floatformat:"-2" }}%<span class="a-disc-amt">{{ item.line_discount_amount|money }}</span>{% endif %}</td>{% endif %}
                         <td class="a-num a-amt">{{ item.line_total|money }}</td>
                     </tr>
                     {% endfor %}
@@ -154,8 +193,7 @@
 
             <div class="a-sums">
                 <div class="r-row"><span>Subtotal</span><span>{{ subtotal|money }}</span></div>
-                {% if line_discount_total > 0 %}<div class="r-row"><span>Line discounts, included</span><span>{{ line_discount_total|money }}</span></div>{% endif %}
-                {% if discount_amount > 0 %}<div class="r-row"><span>Order discount</span><span>{{ discount_amount|money }}</span></div>{% endif %}
+                {% if discount_amount > 0 %}<div class="r-row"><span>{{ bill_discount.left }}</span><span>{{ bill_discount.right }}</span></div>{% endif %}
                 {% if tax_amount > 0 %}<div class="r-row"><span>{{ tax_label_value }}</span><span>{{ tax_amount|money }}</span></div>{% endif %}
                 {% if show_payment_method_totals %}
                     {% for option in payment_method_totals %}
