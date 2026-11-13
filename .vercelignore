@@ -20,3 +20,8 @@ docs/
 licensing/private_key.pem
 __pycache__/
 *.pyc
+
+# Local tool folders (agent worktrees, browser test output)
+.claude/
+.playwright-cli/
+.vercel/
