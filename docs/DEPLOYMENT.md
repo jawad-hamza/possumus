@@ -7,7 +7,8 @@ One install or deployment serves **one shop**. Pick the target that fits:
 | Local development | Developers | SQLite | `manage.py runserver` | [1](#1-local-development) |
 | Windows desktop installer | A shop with one PC (plus optional extra tills on the LAN), offline | SQLite in `%LOCALAPPDATA%\ZehnMS` | waitress, started by `ZehnMS.exe` | [2](#2-windows-desktop-installer) |
 | Vercel | A shop that wants the app online without running a server | Hosted Postgres (Neon, Supabase) | Vercel Functions (Django preset) | [3](#3-vercel) |
-| VPS | Full control, in-app backups, local media | PostgreSQL | gunicorn behind nginx | [4](#4-vps-gunicorn--postgresql--nginx) |
+| VPS with Docker (recommended for a VPS) | Full control, in-app backups, next to other apps on the same server | PostgreSQL 17 container | gunicorn container behind the host's nginx | [4](#4-vps-with-docker) |
+| VPS without Docker | Full control on a dedicated server | PostgreSQL | gunicorn behind nginx | [5](#5-vps-gunicorn--postgresql--nginx) |
 
 All configuration is done with environment variables. `.env.example` lists every one of them,
 grouped, with defaults. A file named `.env` next to `manage.py` is read automatically
@@ -199,7 +200,160 @@ Remove-Item Env:ZEHNMS_ENV_FILE
 
 ---
 
-## 4. VPS (gunicorn + PostgreSQL + nginx)
+## 4. VPS with Docker
+
+The app and its own PostgreSQL run as two containers (`compose.yaml`, `Dockerfile`). The app
+listens on `127.0.0.1:3400` only, and the host's nginx publishes it with a Let's Encrypt
+certificate: the same pattern as the other sites on a shared VPS. Tested with Docker 29 and
+Compose v5; the target server runs Ubuntu 26.04.
+
+| File | Role |
+| --- | --- |
+| `Dockerfile` | Python 3.14 slim image: requirements, `collectstatic`, `pg_dump` for in-app backups, non-root user, health check |
+| `compose.yaml` | `web` (gunicorn) + `db` (`postgres:17-alpine`); read-only app filesystem, no capabilities, the database on an internal network with no outside access, named volumes for data |
+| `deploy/vps-deploy.sh` | On the server: first-run `.env` / `db.env` with random secrets, backup, build, start, wait until healthy |
+| `deploy/upload.ps1` | On Windows: `git archive` of the last commit, upload, run `vps-deploy.sh` |
+| `deploy/backup.sh` | Database dump + uploads archive into `/srv/zehnms/backups`, 14 days kept |
+| `deploy/nginx/zehnms.conf` | nginx site (http to https, TLS, Cloudflare real IP, access log without query strings) |
+| `deploy/gunicorn.conf.py` | gunicorn settings (workers, threads, timeouts, logging to stdout) |
+| `deploy/env.vps.example` | Template of `/srv/zehnms/.env` |
+
+Layout on the server:
+
+```
+/srv/zehnms/app/        the code (replaced on every upload; holds no data)
+/srv/zehnms/.env        app settings, mode 600 (secret key, domain, SMTP, DB password)
+/srv/zehnms/db.env      POSTGRES_PASSWORD, mode 600
+/srv/zehnms/backups/    nightly and pre-deploy dumps
+Docker volumes          zehnms_pgdata (database), zehnms_media (uploads), zehnms_appbackups (in-app backups)
+```
+
+Django serves `/media/` itself in this setup (`DJANGO_SERVE_MEDIA=true` in `compose.yaml`): that
+view keeps bank receipts behind a sign-in, so nginx never needs access to the files.
+
+### First deployment
+
+1. DNS: point an `A` record for the shop's domain at the server.
+2. On the server, once (your user must be in the `docker` group):
+   ```bash
+   sudo install -d -o $USER -g $USER -m 750 /srv/zehnms
+   ```
+3. On Windows, commit your work, then:
+   ```powershell
+   powershell -ExecutionPolicy Bypass -File deploy\upload.ps1 -Domain shop.example.com
+   ```
+   (`-SshHost` defaults to `hostinger-vps`, the `~/.ssh/config` entry.) This uploads the
+   committed code, writes `/srv/zehnms/.env` and `db.env`, builds the image, starts both
+   containers (the app migrates on start) and waits for `/healthz/`.
+4. On the server, put the SMTP settings into `/srv/zehnms/.env`, then
+   `cd /srv/zehnms/app && docker compose up -d`.
+5. nginx and https (the deploy script prints these lines with your domain filled in):
+   ```bash
+   sudo certbot certonly --nginx -d shop.example.com
+   sed "s|__DOMAIN__|shop.example.com|g" /srv/zehnms/app/deploy/nginx/zehnms.conf | sudo tee /etc/nginx/sites-available/zehnms
+   sudo ln -s /etc/nginx/sites-available/zehnms /etc/nginx/sites-enabled/zehnms
+   sudo nginx -t && sudo systemctl reload nginx
+   curl -s https://shop.example.com/healthz/
+   ```
+   Behind Cloudflare, the HTTP-01 challenge needs plain http to reach the server for
+   `/.well-known/acme-challenge/` ("Always Use HTTPS" off, or that path exempt), and the SSL
+   mode must be "Full (strict)".
+6. Nightly backups (as your user, no sudo):
+   ```bash
+   (crontab -l 2>/dev/null; echo '30 2 * * * bash /srv/zehnms/app/deploy/backup.sh nightly >> /srv/zehnms/backups/backup.log 2>&1') | crontab -
+   ```
+7. Open the site, create the owner account, set up the business.
+
+Without Windows, clone or copy the repository to `/srv/zehnms/app` and run
+`bash /srv/zehnms/app/deploy/vps-deploy.sh --domain shop.example.com`.
+
+### Without a domain (IP address only, plain http)
+
+Until a domain exists, ZehnMS can be reached at `http://<server-ip>:<port>`. There is no
+certificate, so passwords and business data cross the network unencrypted: use it for setup and
+testing, and move to a domain + https before real use. Port 80 on the IP usually belongs to the
+server's existing default site, so ZehnMS gets its own port (8090 below).
+
+1. Run the first deployment with the IP as the "domain":
+   `bash /srv/zehnms/app/deploy/vps-deploy.sh --domain 203.0.113.5`
+2. In `/srv/zehnms/.env`, edit these lines in place (do not add second copies) to use the http address and switch the https-only settings off:
+   ```ini
+   DJANGO_ALLOWED_HOSTS=203.0.113.5
+   DJANGO_CSRF_TRUSTED_ORIGINS=http://203.0.113.5:8090
+   PUBLIC_APP_DOMAIN=http://203.0.113.5:8090
+   DJANGO_SECURE_SSL_REDIRECT=false
+   DJANGO_SESSION_COOKIE_SECURE=false
+   DJANGO_CSRF_COOKIE_SECURE=false
+   DJANGO_SECURE_HSTS_SECONDS=0
+   ```
+   then `cd /srv/zehnms/app && docker compose up -d`. (`check --deploy` now warns about https;
+   that is expected in this mode.)
+3. nginx on its own port, and open that port (ufw, and the provider's firewall panel if it has one):
+   ```bash
+   sed "s|__PORT__|8090|g" /srv/zehnms/app/deploy/nginx/zehnms-ip.conf | sudo tee /etc/nginx/sites-available/zehnms
+   sudo ln -s /etc/nginx/sites-available/zehnms /etc/nginx/sites-enabled/zehnms
+   sudo nginx -t && sudo systemctl reload nginx
+   sudo ufw allow 8090/tcp
+   curl -s http://203.0.113.5:8090/healthz/
+   ```
+   Never publish the container port itself on `0.0.0.0`: Docker's port publishing bypasses ufw.
+
+Moving to a domain later: point its DNS at the server, put the domain into
+`DJANGO_ALLOWED_HOSTS` / `DJANGO_CSRF_TRUSTED_ORIGINS` / `PUBLIC_APP_DOMAIN` (https), remove the
+four https overrides (or set them back to true / 31536000), `docker compose up -d`, then follow step 5 above with `zehnms.conf`
+(replacing the IP site) and close port 8090 again.
+
+### Updates
+
+Commit, then run `deploy\upload.ps1` again (no `-Domain`). Every deploy dumps the database
+first (`zehnms-db-<time>-pre-deploy.dump`), keeps the running image as `zehnms:previous`,
+builds the new one and migrates on start.
+
+### Day-to-day commands (in `/srv/zehnms/app`)
+
+```bash
+docker compose ps                         # state and health
+docker compose logs -f web                # app + gunicorn log
+docker compose exec web python manage.py check --deploy
+docker compose up -d                      # after editing /srv/zehnms/.env
+bash deploy/backup.sh manual              # backup now
+```
+
+### Rolling back
+
+Code only (no migration ran, or the migration is backwards compatible):
+
+```bash
+cd /srv/zehnms/app
+docker tag zehnms:previous zehnms:latest
+docker compose up -d --no-build web
+```
+
+Code and database: restore the pre-deploy dump as well (below), then roll the code back.
+
+### Restoring a backup
+
+```bash
+cd /srv/zehnms/app
+docker compose stop web
+docker compose exec -T db pg_restore -U zehnms -d zehnms --clean --if-exists --no-owner < /srv/zehnms/backups/zehnms-db-<time>.dump
+docker compose run --rm --no-deps -T --entrypoint tar web -C /data -xzf - < /srv/zehnms/backups/zehnms-media-<time>.tar.gz
+docker compose start web
+```
+
+Copy `/srv/zehnms/backups` off the server as well (rclone, restic or your provider's
+snapshots): a backup on the same disk does not survive the disk.
+
+### Sizing
+
+The app container uses about 160 MB with 2 gunicorn workers x 4 threads and is capped at
+768 MB; PostgreSQL idles at about 50 MB. Change `GUNICORN_WORKERS` / `GUNICORN_THREADS` in
+`/srv/zehnms/.env`. To use another port, export `ZEHNMS_PORT` before `docker compose` and
+change the `upstream` in the nginx site to match.
+
+---
+
+## 5. VPS (gunicorn + PostgreSQL + nginx)
 
 Example for Ubuntu 24.04; adapt names and paths.
 
@@ -273,6 +427,11 @@ server {
     server_name shop.example.com;
     client_max_body_size 210m;   # in-app backup uploads
 
+    # Bank receipts are private; only the app hands them out, after a sign-in check.
+    location ^~ /media/bank_receipts/ {
+        return 404;
+    }
+
     location /media/ {
         alias /srv/zehnms/data/media/;
     }
@@ -281,7 +440,8 @@ server {
         proxy_pass http://127.0.0.1:8000;
         proxy_set_header Host $host;
         proxy_set_header X-Forwarded-Host $host;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        # Overwrite, never append: sign-in lockout trusts the first address in this header.
+        proxy_set_header X-Forwarded-For $remote_addr;
         proxy_set_header X-Forwarded-Proto $scheme;
     }
 }

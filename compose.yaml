@@ -1,0 +1,86 @@
+# ZehnMS on a VPS: the app (gunicorn) and its own PostgreSQL, behind the host's nginx.
+#
+# Server layout (deploy/vps-deploy.sh creates it):
+#   /srv/zehnms/app/       this repository        /srv/zehnms/.env      app settings (600)
+#   /srv/zehnms/backups/   nightly dumps           /srv/zehnms/db.env    database password (600)
+#
+# The app answers only on 127.0.0.1:${ZEHNMS_PORT:-3400}; nginx (deploy/nginx/zehnms.conf)
+# publishes it. Database, uploads and in-app backups live in named Docker volumes.
+# Full guide: docs/DEPLOYMENT.md, "VPS with Docker".
+
+name: zehnms
+
+services:
+  db:
+    image: postgres:17-alpine
+    restart: unless-stopped
+    env_file: ${ZEHNMS_HOME:-..}/db.env
+    environment:
+      POSTGRES_DB: zehnms
+      POSTGRES_USER: zehnms
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    networks: [internal]
+    shm_size: 128mb
+    security_opt: ["no-new-privileges:true"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U zehnms -d zehnms"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+    logging: &logging
+      driver: json-file
+      options: { max-size: "10m", max-file: "5" }
+
+  web:
+    build: .
+    image: zehnms:latest
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    env_file: ${ZEHNMS_HOME:-..}/.env
+    # Pinned here so a typo in .env cannot switch them off.
+    environment:
+      DEPLOYMENT_MODE: cloud
+      DJANGO_DEBUG: "false"
+      DB_ENGINE: postgresql
+      DB_HOST: db
+      DB_PORT: "5432"
+      DB_NAME: zehnms
+      DB_USER: zehnms
+      ZEHNMS_DATA_DIR: /data
+      DJANGO_FILE_LOGGING: "false"
+      # nginx sets X-Forwarded-*; the port below is reachable from this host only.
+      TRUST_PROXY: "true"
+      CACHE_BACKEND: db
+      # Django serves /media/ itself: it keeps bank receipts behind a sign-in and lets
+      # public logos through. Upload traffic is tiny, so nginx does not need the files.
+      DJANGO_SERVE_MEDIA: "true"
+      GUNICORN_BIND: 0.0.0.0:8000
+      GUNICORN_FORWARDED_ALLOW_IPS: "*"
+    ports:
+      - "127.0.0.1:${ZEHNMS_PORT:-3400}:8000"
+    volumes:
+      - media:/data/media
+      - appbackups:/data/backups
+    networks: [internal, egress]
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop: [ALL]
+    security_opt: ["no-new-privileges:true"]
+    mem_limit: 768m
+    logging: *logging
+
+networks:
+  # The database has no route to the outside world.
+  internal:
+    internal: true
+  # The app needs outbound access for SMTP, Google sign-in and billing webhooks.
+  egress: {}
+
+volumes:
+  pgdata:
+  media:
+  appbackups:

@@ -25,3 +25,9 @@ __pycache__/
 .claude/
 .playwright-cli/
 .vercel/
+
+# Docker / VPS deployment files
+Dockerfile
+compose.yaml
+.dockerignore
+deploy/

@@ -36,3 +36,7 @@
 *.sqlite3 binary
 *.dump  binary
 *.exe   binary
+
+# Files that run on the Linux server must keep LF even in a Windows working tree
+# (systemd and bash choke on CRLF when the folder is uploaded with scp/rsync).
+deploy/** text eol=lf

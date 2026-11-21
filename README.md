@@ -51,7 +51,8 @@ python -m pyflakes pos accounts api possumus desktop scripts
 | --- | --- | --- |
 | Windows installer (offline, one shop) | `powershell -ExecutionPolicy Bypass -File desktop\build.ps1` | [desktop/README.md](desktop/README.md) |
 | Vercel + hosted Postgres | `vercel deploy --prod` | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#3-vercel) |
-| VPS (gunicorn, PostgreSQL, nginx) | `pip install -r requirements-server.txt` | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#4-vps-gunicorn--postgresql--nginx) |
+| VPS with Docker (app + PostgreSQL containers behind nginx) | `powershell -File deploy\upload.ps1 -Domain shop.example.com` | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#4-vps-with-docker) |
+| VPS without Docker (gunicorn, PostgreSQL, nginx) | `pip install -r requirements-server.txt` | [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md#5-vps-gunicorn--postgresql--nginx) |
 
 `GET /healthz/` answers `{"status": "ok", "db": "ok"}` on every target.
 
@@ -65,6 +66,7 @@ python -m pyflakes pos accounts api possumus desktop scripts
 | `possumus/` | Django project package: `settings.py` (environment driven), `urls.py`, `wsgi.py` |
 | `desktop/` | Windows launcher, PyInstaller spec, Inno Setup script, build script |
 | `scripts/vercel_build.py`, `vercel.json`, `.python-version`, `.vercelignore` | Vercel deployment |
+| `Dockerfile`, `compose.yaml`, `deploy/` | VPS deployment with Docker: image, app + PostgreSQL stack, upload / deploy / backup scripts, nginx site |
 | `licensing/` | Licence key pair location (`public_key.pem` is bundled; `private_key.pem` is git-ignored and must never be shipped) |
 | `docs/` | User guide, tutorial, full documentation, deployment guide |
 
@@ -97,7 +99,7 @@ accounts is created when the business is set up.
 - [docs/HOW_TO_USE.md](docs/HOW_TO_USE.md): operator guide
 - [docs/TUTORIAL.md](docs/TUTORIAL.md): step-by-step training walkthrough
 - [docs/FULL_DOCUMENTATION.md](docs/FULL_DOCUMENTATION.md): business and technical reference
-- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): local, desktop installer, Vercel, VPS
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md): local, desktop installer, Vercel, VPS (Docker or plain)
 - [desktop/README.md](desktop/README.md): building and supporting the Windows installer
 - `.env.example`: every configuration variable
 
